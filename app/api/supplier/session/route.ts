@@ -11,8 +11,8 @@ import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { encrypt } from '@/lib/encrypt';
 
-// Allow up to 10 minutes for the user to log in manually
-export const maxDuration = 600;
+// Max allowed on Vercel Hobby plan (local-only flow anyway — Chrome on macOS)
+export const maxDuration = 300;
 
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
