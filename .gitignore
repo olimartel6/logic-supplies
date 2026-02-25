@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+*.db
+*.db-shm
+*.db-wal
+
+# debug screenshots
+public/debug-*.png
+public/debug-*.html
+
+# ad-hoc test scripts
+test-*.mjs
+test-*.js
