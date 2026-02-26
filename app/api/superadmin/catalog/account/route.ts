@@ -25,8 +25,14 @@ export async function POST(req: NextRequest) {
   const ctx = await requireSuperAdmin();
   if ('error' in ctx) return ctx.error;
 
-  const { supplier, username, password } = await req.json();
-  if (!supplier || !username || !SUPPLIERS.includes(supplier)) {
+  let body: { supplier?: string; username?: string; password?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Corps de requête invalide' }, { status: 400 });
+  }
+  const { supplier, username, password } = body;
+  if (!supplier || !username || !(SUPPLIERS as ReadonlyArray<string>).includes(supplier)) {
     return NextResponse.json({ error: 'Champs manquants' }, { status: 400 });
   }
 
@@ -47,10 +53,11 @@ export async function POST(req: NextRequest) {
     if (!password) {
       return NextResponse.json({ error: 'Mot de passe requis pour le premier enregistrement' }, { status: 400 });
     }
-    db.prepare('INSERT INTO supplier_accounts (supplier, username, password_encrypted, company_id) VALUES (?, ?, ?, ?)')
-      .run(supplier, username, encrypt(password), SUPERADMIN_COMPANY_ID);
-    // Seed categories for super admin on first account creation
-    seedSuperadminCategories(db);
+    db.transaction(() => {
+      db.prepare('INSERT INTO supplier_accounts (supplier, username, password_encrypted, company_id) VALUES (?, ?, ?, ?)')
+        .run(supplier, username, encrypt(password), SUPERADMIN_COMPANY_ID);
+      seedSuperadminCategories(db);
+    })();
   }
 
   return NextResponse.json({ ok: true });
