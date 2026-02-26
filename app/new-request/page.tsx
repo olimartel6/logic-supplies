@@ -82,13 +82,17 @@ export default function NewRequestPage() {
   }, [router]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
         setFilterOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const doSearch = useCallback(async (q: string, siteId?: string) => {
@@ -598,11 +602,19 @@ export default function NewRequestPage() {
 
             {!searching && results.length > 0 && (
               <>
-                <p className="text-xs text-gray-500 mb-3 font-medium">
-                  {results.length} résultat{results.length > 1 ? 's' : ''} pour &laquo; {query} &raquo;
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {results.map((p, i) => {
+                {selectedSuppliers.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="font-medium text-gray-600">Aucun fournisseur sélectionné</p>
+                    <p className="text-sm mt-1">Activez au moins un fournisseur dans les filtres</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3 font-medium">
+                      {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''} pour &laquo; {query} &raquo;
+                      {activeFilterCount > 0 && <span className="ml-1 text-yellow-600">({activeFilterCount} fournisseur{activeFilterCount > 1 ? 's' : ''} masqué{activeFilterCount > 1 ? 's' : ''})</span>}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {filteredResults.map((p, i) => {
                     const b = supplierBadge(p.supplier);
                     return (
                       <button
@@ -648,8 +660,10 @@ export default function NewRequestPage() {
                         </div>
                       </button>
                     );
-                  })}
-                </div>
+                      })}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </>
