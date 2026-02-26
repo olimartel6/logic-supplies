@@ -102,53 +102,73 @@ export default function SuperAdminPage() {
   async function startImport(supplier: string) {
     setImportingSupplier(supplier);
     setImportProgress('');
-    const res = await fetch(`/api/superadmin/catalog/import?supplier=${supplier}`, { method: 'POST' });
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const ev = JSON.parse(line.slice(6));
-        if (ev.category) setImportProgress(`${supplier} — ${ev.category}`);
-        if (ev.done) {
-          setImportProgress('');
-          setImportingSupplier(null);
-          loadCatalogData();
+    try {
+      const res = await fetch(`/api/superadmin/catalog/import?supplier=${supplier}`, { method: 'POST' });
+      if (!res.ok || !res.body) {
+        setImportingSupplier(null);
+        setImportProgress('');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const ev = JSON.parse(line.slice(6));
+          if (ev.category) setImportProgress(`${supplier} — ${ev.category}`);
+          if (ev.done) {
+            setImportProgress('');
+            setImportingSupplier(null);
+            loadCatalogData();
+          }
         }
       }
+    } finally {
+      setImportingSupplier(null);
+      setImportProgress('');
     }
   }
 
   async function startImportAll() {
     setImportAllRunning(true);
     setImportProgress('');
-    const res = await fetch('/api/superadmin/catalog/import-all', { method: 'POST' });
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const ev = JSON.parse(line.slice(6));
-        if (ev.supplier && ev.category) setImportProgress(`${ev.supplier} — ${ev.category}`);
-        if (ev.supplier && ev.started) setImportProgress(`${ev.supplier}...`);
-        if (ev.done) {
-          setImportProgress('');
-          setImportAllRunning(false);
-          loadCatalogData();
+    try {
+      const res = await fetch('/api/superadmin/catalog/import-all', { method: 'POST' });
+      if (!res.ok || !res.body) {
+        setImportAllRunning(false);
+        setImportProgress('');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const ev = JSON.parse(line.slice(6));
+          if (ev.supplier && ev.category) setImportProgress(`${ev.supplier} — ${ev.category}`);
+          if (ev.supplier && ev.started) setImportProgress(`${ev.supplier}...`);
+          if (ev.done) {
+            setImportProgress('');
+            setImportAllRunning(false);
+            loadCatalogData();
+          }
         }
       }
+    } finally {
+      setImportAllRunning(false);
+      setImportProgress('');
     }
   }
 
