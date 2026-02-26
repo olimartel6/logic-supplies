@@ -59,6 +59,9 @@ export default function NewRequestPage() {
   const [cheaperModal, setCheaperModal] = useState<{ selected: Product; cheaper: Product } | null>(null);
   const [nearestBranch, setNearestBranch] = useState<{ name: string; address: string; distanceKm?: number } | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(['lumen', 'canac', 'homedepot', 'guillevin']);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -75,6 +78,16 @@ export default function NewRequestPage() {
       if (d?.preference) setPreference(d.preference);
     });
   }, [router]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const doSearch = useCallback(async (q: string, siteId?: string) => {
     if (q.trim().length < 2) { setResults([]); setHasSearched(false); return; }
@@ -217,6 +230,9 @@ export default function NewRequestPage() {
       </div>
     </div>
   );
+
+  const filteredResults = results.filter(p => selectedSuppliers.includes(p.supplier));
+  const activeFilterCount = selectedSuppliers.length < 4 ? 4 - selectedSuppliers.length : 0;
 
   const pendingBadge = pendingProduct ? supplierBadge(pendingProduct.supplier) : null;
   const pendingTotal = pendingProduct?.price != null && parseInt(pendingQty) > 0
