@@ -291,6 +291,22 @@ function initDb(db: Database.Database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS product_favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      supplier TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      name TEXT NOT NULL,
+      image_url TEXT,
+      price REAL,
+      unit TEXT,
+      category TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, supplier, sku)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_product_favorites_user ON product_favorites(user_id);
   `);
 
   // Inventory feature flag
