@@ -66,6 +66,22 @@ export default function NewRequestPage() {
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  const [activeTab, setActiveTab] = useState<'favoris' | 'recherche'>('favoris');
+  const [favorites, setFavorites] = useState<Product[]>([]);
+  const [favoriteSKUs, setFavoriteSKUs] = useState<Set<string>>(new Set());
+
+  const loadFavorites = useCallback(async () => {
+    try {
+      const res = await fetch('/api/favorites');
+      if (!res.ok) return;
+      const data: Product[] = await res.json();
+      setFavorites(data);
+      setFavoriteSKUs(new Set(data.map(p => `${p.supplier}:${p.sku}`)));
+    } catch {
+      setFavorites([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
       if (!r.ok) { router.push('/'); return; }
@@ -79,7 +95,8 @@ export default function NewRequestPage() {
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { preference: 'cheapest' | 'fastest' }) => {
       if (d?.preference) setPreference(d.preference);
     });
-  }, [router]);
+    loadFavorites();
+  }, [router, loadFavorites]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
@@ -94,6 +111,17 @@ export default function NewRequestPage() {
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
+
+  async function toggleFavorite(p: Product) {
+    const key = `${p.supplier}:${p.sku}`;
+    const isFav = favoriteSKUs.has(key);
+    await fetch('/api/favorites', {
+      method: isFav ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ supplier: p.supplier, sku: p.sku, name: p.name, image_url: p.image_url, price: p.price, unit: p.unit, category: p.category }),
+    });
+    loadFavorites();
+  }
 
   const doSearch = useCallback(async (q: string, siteId?: string) => {
     if (q.trim().length < 2) { setResults([]); setHasSearched(false); return; }
