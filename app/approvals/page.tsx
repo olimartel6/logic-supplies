@@ -39,6 +39,9 @@ function ApprovalsContent() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmOrder, setConfirmOrder] = useState(false);
   const [largeOrderThreshold, setLargeOrderThreshold] = useState<number>(2000);
+  const [deliveryOverride, setDeliveryOverride] = useState<'office' | 'jobsite' | null>(null);
+  const [paymentConfigured, setPaymentConfigured] = useState(false);
+  const [defaultDelivery, setDefaultDelivery] = useState<'office' | 'jobsite'>('office');
 
   // "Finaliser la commande" modal state
   const [orderModal, setOrderModal] = useState<Request | null>(null);
@@ -77,9 +80,14 @@ function ApprovalsContent() {
       setUser(u);
     });
     loadRequests();
-    fetch('/api/supplier/preference').then(r => r.json()).then((d: { largeOrderThreshold?: number }) => {
+    fetch('/api/supplier/preference').then(r => r.json()).then((d: { largeOrderThreshold?: number; defaultDelivery?: string }) => {
       if (d.largeOrderThreshold != null) setLargeOrderThreshold(d.largeOrderThreshold);
+      if (d.defaultDelivery) {
+        setDefaultDelivery(d.defaultDelivery as 'office' | 'jobsite');
+        setDeliveryOverride(d.defaultDelivery as 'office' | 'jobsite');
+      }
     }).catch(() => {});
+    fetch('/api/settings/payment').then(r => r.json()).then((d: any) => setPaymentConfigured(d.configured)).catch(() => {});
   }, [router, loadRequests]);
 
   async function handleDelete(id: number) {
@@ -97,7 +105,7 @@ function ApprovalsContent() {
     await fetch(`/api/requests/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, office_comment: comment }),
+      body: JSON.stringify({ status, office_comment: comment, delivery_override: deliveryOverride }),
     });
     await loadRequests();
     setSelected(null);
@@ -402,6 +410,27 @@ function ApprovalsContent() {
                     rows={2}
                   />
                 </div>
+                {paymentConfigured && (
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-1.5">Livraison</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryOverride('office')}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
+                      >
+                        Bureau
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryOverride('jobsite')}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
+                      >
+                        Chantier
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleDecision('rejected')}
