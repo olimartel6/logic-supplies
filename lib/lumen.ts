@@ -23,6 +23,13 @@ export interface ConnectionResult {
   error?: string;
 }
 
+export interface PaymentInfo {
+  cardHolder: string;
+  cardNumber: string;  // full card number, no spaces, decrypted
+  cardExpiry: string;  // "MM/YY"
+  cardCvv: string;
+}
+
 // Creates a browser context that minimises bot-detection signals
 async function createStealthPage(browser: any) {
   const context = await browser.newContext({
@@ -160,7 +167,9 @@ export async function placeLumenOrder(
   username: string,
   password: string,
   product: string,
-  quantity: number
+  quantity: number,
+  deliveryAddress?: string,
+  payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
   const browser = await createBrowserbaseBrowser();
   try {
@@ -229,6 +238,61 @@ export async function placeLumenOrder(
     // HTTP 302 redirect to homepage = success; any other status = failure
     if (addToCartStatus !== 0 && addToCartStatus !== 302) {
       return { success: false, error: `Erreur ajout au panier (HTTP ${addToCartStatus})` };
+    }
+
+    // ── Checkout automatique si adresse et paiement fournis ──
+    if (deliveryAddress && payment) {
+      try {
+        // Navigate to cart then checkout
+        await page.goto('https://www.lumen.ca/en/cart', { waitUntil: 'networkidle' });
+        await page.click('text=Checkout', { timeout: 10000 });
+        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+
+        // Delivery address
+        const addressField = page.locator('input[name="address1"], input[placeholder*="Address"], input[placeholder*="adresse"]').first();
+        if (await addressField.isVisible({ timeout: 5000 })) {
+          await addressField.fill(deliveryAddress);
+        }
+
+        // Continue to payment
+        const continueBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Continuer")').first();
+        if (await continueBtn.isVisible({ timeout: 5000 })) {
+          await continueBtn.click();
+          await page.waitForTimeout(2000);
+        }
+
+        // Enter card details
+        const cardNumberField = page.locator('input[name*="card"], input[placeholder*="card number"], iframe[title*="Card Number"]').first();
+        if (await cardNumberField.isVisible({ timeout: 8000 })) {
+          await cardNumberField.fill(payment.cardNumber);
+        }
+        const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[placeholder*="expiry"]').first();
+        if (await expiryField.isVisible({ timeout: 3000 })) {
+          await expiryField.fill(payment.cardExpiry);
+        }
+        const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"], input[placeholder*="CVC"]').first();
+        if (await cvvField.isVisible({ timeout: 3000 })) {
+          await cvvField.fill(payment.cardCvv);
+        }
+
+        // Submit the order
+        const submitBtn = page.locator('button[type="submit"]:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order")').first();
+        if (await submitBtn.isVisible({ timeout: 5000 })) {
+          await submitBtn.click();
+          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+        }
+
+        // Capture order number
+        const confirmationText = await page.textContent('body');
+        const orderMatch = confirmationText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
+        const orderId = orderMatch?.[1];
+
+        return { success: true, orderId: orderId || undefined };
+      } catch (checkoutErr: any) {
+        // Checkout failed — return inCart: true for manual notification
+        console.error('[Lumen] Checkout error:', checkoutErr.message);
+        return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+      }
     }
 
     // Product is now in the Lumen cart — admin must complete checkout manually
