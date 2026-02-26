@@ -432,6 +432,20 @@ export default function SettingsPage() {
 
   const [billingLoading, setBillingLoading] = useState(false);
 
+  // Paiement
+  const [payment, setPayment] = useState<{ configured: boolean; card_holder?: string; card_last4?: string; card_expiry?: string } | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ card_holder: '', card_number: '', card_expiry: '', card_cvv: '' });
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentSaved, setPaymentSaved] = useState(false);
+  const [deletingPayment, setDeletingPayment] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+
+  // Adresse bureau + livraison par défaut
+  const [officeAddress, setOfficeAddress] = useState('');
+  const [defaultDelivery, setDefaultDelivery] = useState<'office' | 'jobsite'>('office');
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  const [deliverySaved, setDeliverySaved] = useState(false);
+
   // Accordion open/close state
   const [openSection, setOpenSection] = useState<string | null>(null);
 
@@ -460,11 +474,14 @@ export default function SettingsPage() {
       setEnabledIds(cats.filter(c => c.enabled).map(c => c.id));
     });
     fetch('/api/supplier/import').then(r => r.json()).then(setStats);
-    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number }) => {
+    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite' }) => {
       if (data?.preference) setPreference(data.preference);
       if (data?.lumenRepEmail !== undefined) setLumenRepEmail(data.lumenRepEmail);
       if (data?.largeOrderThreshold !== undefined) setLargeOrderThreshold(String(data.largeOrderThreshold));
+      if (data?.officeAddress !== undefined) setOfficeAddress(data.officeAddress);
+      if (data?.defaultDelivery !== undefined) setDefaultDelivery(data.defaultDelivery);
     });
+    fetch('/api/settings/payment').then(r => r.json()).then(setPayment).catch(() => {});
   }, [router]);
 
   async function handleSave(e: React.FormEvent) {
@@ -603,6 +620,45 @@ export default function SettingsPage() {
       }
     }
     setImporting(false);
+  }
+
+  async function handleSavePayment(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingPayment(true);
+    setPaymentSaved(false);
+    const res = await fetch('/api/settings/payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentForm),
+    });
+    if (res.ok) {
+      setPaymentSaved(true);
+      setPaymentForm(f => ({ ...f, card_number: '', card_cvv: '' }));
+      fetch('/api/settings/payment').then(r => r.json()).then(setPayment);
+      setTimeout(() => setPaymentSaved(false), 3000);
+    }
+    setSavingPayment(false);
+  }
+
+  async function handleDeletePayment() {
+    setDeletingPayment(true);
+    await fetch('/api/settings/payment', { method: 'DELETE' });
+    setPayment({ configured: false });
+    setDeletingPayment(false);
+  }
+
+  async function handleSaveDelivery(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingDelivery(true);
+    setDeliverySaved(false);
+    await fetch('/api/supplier/preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ officeAddress, defaultDelivery }),
+    });
+    setSavingDelivery(false);
+    setDeliverySaved(true);
+    setTimeout(() => setDeliverySaved(false), 3000);
   }
 
   async function handleManageSubscription() {
@@ -929,6 +985,122 @@ export default function SettingsPage() {
                 />
               </button>
             </div>
+          </div>
+        </AccordionSection>
+
+        {/* ─── Moyen de paiement ─── */}
+        <AccordionSection
+          title="Moyen de paiement"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 21Z" /></svg>}
+          isOpen={paymentOpen}
+          onToggle={() => setPaymentOpen(o => !o)}
+        >
+          {payment?.configured ? (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-800">{payment.card_holder}</p>
+                <p className="text-xs text-green-600 font-mono">•••• •••• •••• {payment.card_last4} · {payment.card_expiry}</p>
+              </div>
+              <button
+                onClick={handleDeletePayment}
+                disabled={deletingPayment}
+                className="text-xs text-red-500 hover:text-red-700 underline disabled:opacity-50"
+              >
+                {deletingPayment ? '...' : 'Supprimer'}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic mb-4">Aucune carte configurée.</p>
+          )}
+
+          <form onSubmit={handleSavePayment} className="space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {payment?.configured ? 'Modifier la carte' : 'Ajouter une carte'}
+            </p>
+            <input
+              type="text"
+              placeholder="Nom sur la carte"
+              value={paymentForm.card_holder}
+              onChange={e => setPaymentForm(f => ({ ...f, card_holder: e.target.value }))}
+              required
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+            <input
+              type="text"
+              placeholder="Numéro de carte (16 chiffres)"
+              value={paymentForm.card_number}
+              onChange={e => setPaymentForm(f => ({ ...f, card_number: e.target.value }))}
+              required
+              maxLength={19}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="MM/YY"
+                value={paymentForm.card_expiry}
+                onChange={e => setPaymentForm(f => ({ ...f, card_expiry: e.target.value }))}
+                required
+                maxLength={5}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+              <input
+                type="password"
+                placeholder="CVV"
+                value={paymentForm.card_cvv}
+                onChange={e => setPaymentForm(f => ({ ...f, card_cvv: e.target.value }))}
+                required
+                maxLength={4}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={savingPayment}
+              className="w-full bg-yellow-400 text-slate-900 font-semibold py-2.5 rounded-xl text-sm hover:bg-yellow-300 disabled:opacity-50 transition"
+            >
+              {savingPayment ? 'Sauvegarde...' : paymentSaved ? '✅ Sauvegardé' : 'Sauvegarder la carte'}
+            </button>
+          </form>
+
+          {/* Adresse du bureau + livraison par défaut */}
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Livraison</p>
+            <form onSubmit={handleSaveDelivery} className="space-y-3">
+              <input
+                type="text"
+                placeholder="Adresse du bureau (ex: 123 rue Principale, Montréal, QC)"
+                value={officeAddress}
+                onChange={e => setOfficeAddress(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Livraison par défaut</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDefaultDelivery('office')}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  >
+                    Bureau
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDefaultDelivery('jobsite')}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  >
+                    Chantier
+                  </button>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={savingDelivery}
+                className="w-full bg-gray-900 text-white font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-700 disabled:opacity-50 transition"
+              >
+                {savingDelivery ? 'Sauvegarde...' : deliverySaved ? '✅ Sauvegardé' : 'Sauvegarder'}
+              </button>
+            </form>
           </div>
         </AccordionSection>
 
