@@ -1,5 +1,6 @@
 import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
+import type { PaymentInfo } from './lumen';
 
 export interface Branch {
   name: string;
@@ -162,7 +163,9 @@ export async function placeCanacOrder(
   username: string,
   password: string,
   product: string,
-  quantity: number
+  quantity: number,
+  deliveryAddress?: string,
+  payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
   const browser = await createBrowserbaseBrowser();
   try {
@@ -215,6 +218,54 @@ export async function placeCanacOrder(
         await addBtn.click({ force: true });
         await page.waitForTimeout(3000);
         console.error('[Canac] Ajouté au panier depuis page produit');
+
+        if (deliveryAddress && payment) {
+          try {
+            await page.goto('https://www.canac.ca/fr/panier', { waitUntil: 'networkidle' });
+            const checkoutBtn = page.locator('a:has-text("Commander"), button:has-text("Passer la commande")').first();
+            if (await checkoutBtn.isVisible({ timeout: 8000 })) {
+              await checkoutBtn.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const addressField = page.locator('input[name="address1"], input[formcontrolname*="address"]').first();
+            if (await addressField.isVisible({ timeout: 5000 })) {
+              await addressField.fill(deliveryAddress);
+            }
+            const continueBtn = page.locator('button[type="submit"]:has-text("Continuer"), cx-place-order button').first();
+            if (await continueBtn.isVisible({ timeout: 5000 })) {
+              await continueBtn.click();
+              await page.waitForTimeout(2000);
+            }
+
+            const cardField = page.locator('input[name*="card"], input[placeholder*="carte"]').first();
+            if (await cardField.isVisible({ timeout: 8000 })) {
+              await cardField.fill(payment.cardNumber);
+            }
+            const expiryField = page.locator('input[name*="expir"]').first();
+            if (await expiryField.isVisible({ timeout: 3000 })) {
+              await expiryField.fill(payment.cardExpiry);
+            }
+            const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"]').first();
+            if (await cvvField.isVisible({ timeout: 3000 })) {
+              await cvvField.fill(payment.cardCvv);
+            }
+
+            const submitBtn = page.locator('cx-place-order button[type="submit"], button:has-text("Confirmer la commande")').first();
+            if (await submitBtn.isVisible({ timeout: 5000 })) {
+              await submitBtn.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const bodyText = await page.textContent('body');
+            const orderMatch = bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
+            return { success: true, orderId: orderMatch?.[1] };
+          } catch (err: any) {
+            console.error('[Canac] Checkout error:', err.message);
+            return { success: false, inCart: true, error: `Checkout: ${err.message}` };
+          }
+        }
+
         return { success: false, inCart: true };
       }
       console.error('[Canac] Bouton "Ajouter au panier" introuvable sur page produit');
@@ -230,6 +281,54 @@ export async function placeCanacOrder(
       await directAddBtn.click({ force: true });
       await page.waitForTimeout(3000);
       console.error('[Canac] Ajouté au panier depuis résultats (fallback)');
+
+      if (deliveryAddress && payment) {
+        try {
+          await page.goto('https://www.canac.ca/fr/panier', { waitUntil: 'networkidle' });
+          const checkoutBtn = page.locator('a:has-text("Commander"), button:has-text("Passer la commande")').first();
+          if (await checkoutBtn.isVisible({ timeout: 8000 })) {
+            await checkoutBtn.click();
+            await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+          }
+
+          const addressField = page.locator('input[name="address1"], input[formcontrolname*="address"]').first();
+          if (await addressField.isVisible({ timeout: 5000 })) {
+            await addressField.fill(deliveryAddress);
+          }
+          const continueBtn = page.locator('button[type="submit"]:has-text("Continuer"), cx-place-order button').first();
+          if (await continueBtn.isVisible({ timeout: 5000 })) {
+            await continueBtn.click();
+            await page.waitForTimeout(2000);
+          }
+
+          const cardField = page.locator('input[name*="card"], input[placeholder*="carte"]').first();
+          if (await cardField.isVisible({ timeout: 8000 })) {
+            await cardField.fill(payment.cardNumber);
+          }
+          const expiryField = page.locator('input[name*="expir"]').first();
+          if (await expiryField.isVisible({ timeout: 3000 })) {
+            await expiryField.fill(payment.cardExpiry);
+          }
+          const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"]').first();
+          if (await cvvField.isVisible({ timeout: 3000 })) {
+            await cvvField.fill(payment.cardCvv);
+          }
+
+          const submitBtn = page.locator('cx-place-order button[type="submit"], button:has-text("Confirmer la commande")').first();
+          if (await submitBtn.isVisible({ timeout: 5000 })) {
+            await submitBtn.click();
+            await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+          }
+
+          const bodyText = await page.textContent('body');
+          const orderMatch = bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
+          return { success: true, orderId: orderMatch?.[1] };
+        } catch (err: any) {
+          console.error('[Canac] Checkout error:', err.message);
+          return { success: false, inCart: true, error: `Checkout: ${err.message}` };
+        }
+      }
+
       return { success: false, inCart: true };
     }
 

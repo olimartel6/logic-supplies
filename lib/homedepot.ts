@@ -1,5 +1,6 @@
 import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
+import type { PaymentInfo } from './lumen';
 import type { Branch } from './canac';
 import { getDb } from './db';
 import { encrypt, decrypt } from './encrypt';
@@ -243,7 +244,9 @@ export async function placeHomeDepotOrder(
   username: string,
   password: string,
   product: string,
-  quantity: number
+  quantity: number,
+  deliveryAddress?: string,
+  payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
   const browser = await createBrowserbaseBrowser();
   try {
@@ -311,6 +314,60 @@ export async function placeHomeDepotOrder(
 
     // Save updated cookies after successful cart add
     await saveHDCookies(context, username);
+
+    if (deliveryAddress && payment) {
+      try {
+        await page.goto('https://www.homedepot.ca/en/home/cart.html', { waitUntil: 'networkidle' });
+        const checkoutBtn = page.locator('button:has-text("Checkout"), button:has-text("Passer à la caisse")').first();
+        if (await checkoutBtn.isVisible({ timeout: 8000 })) {
+          await checkoutBtn.click();
+          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+        }
+
+        const addressField = page.locator('input[id*="address"], input[name*="address"]').first();
+        if (await addressField.isVisible({ timeout: 8000 })) {
+          await addressField.fill(deliveryAddress);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(2000);
+        }
+
+        const continueBtn = page.locator('button:has-text("Continue"), button:has-text("Continuer")').first();
+        if (await continueBtn.isVisible({ timeout: 5000 })) {
+          await continueBtn.click();
+          await page.waitForTimeout(2000);
+        }
+
+        const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[name*="card"]').first();
+        const cardInput = cardFrame.locator('input').first();
+        if (await cardInput.isVisible({ timeout: 8000 }).catch(() => false)) {
+          await cardInput.fill(payment.cardNumber);
+        } else {
+          const directCard = page.locator('input[id*="cardNumber"], input[name*="cardNumber"]').first();
+          if (await directCard.isVisible({ timeout: 3000 })) {
+            await directCard.fill(payment.cardNumber);
+          }
+        }
+
+        const expiryField = page.locator('input[id*="expiry"], input[name*="expiry"]').first();
+        if (await expiryField.isVisible({ timeout: 3000 })) await expiryField.fill(payment.cardExpiry);
+
+        const cvvField = page.locator('input[id*="cvv"], input[name*="cvv"]').first();
+        if (await cvvField.isVisible({ timeout: 3000 })) await cvvField.fill(payment.cardCvv);
+
+        const placeOrderBtn = page.locator('button:has-text("Place Order"), button:has-text("Passer la commande")').first();
+        if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
+          await placeOrderBtn.click();
+          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+        }
+
+        const bodyText = await page.textContent('body');
+        const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
+        return { success: true, orderId: orderMatch?.[1] };
+      } catch (err: any) {
+        console.error('[HomeDepot] Checkout error:', err.message);
+        return { success: false, inCart: true, error: `Checkout: ${err.message}` };
+      }
+    }
 
     return { success: false, inCart: true };
   } catch (err: any) {

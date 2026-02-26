@@ -1,5 +1,6 @@
 import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
+import type { PaymentInfo } from './lumen';
 import type { Branch } from './canac';
 
 export const GUILLEVIN_BRANCHES: Branch[] = [
@@ -120,7 +121,9 @@ export async function placeGuillevinOrder(
   username: string,
   password: string,
   product: string,
-  quantity: number
+  quantity: number,
+  deliveryAddress?: string,
+  payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
   const browser = await createBrowserbaseBrowser();
   try {
@@ -163,6 +166,58 @@ export async function placeGuillevinOrder(
         await addToCartBtn.click();
         await page.waitForTimeout(2000);
         console.error(`[Guillevin] Added to cart: ${product}`);
+
+        if (deliveryAddress && payment) {
+          try {
+            await page.goto('https://www.guillevin.com/cart', { waitUntil: 'networkidle' });
+            const checkoutBtn = page.locator('button[name="checkout"], input[name="checkout"]').first();
+            if (await checkoutBtn.isVisible({ timeout: 8000 })) {
+              await checkoutBtn.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const addressField = page.locator('#checkout_shipping_address_address1').first();
+            if (await addressField.isVisible({ timeout: 8000 })) {
+              await addressField.fill(deliveryAddress);
+            }
+
+            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping")').first();
+            if (await continueBtn.isVisible({ timeout: 5000 })) {
+              await continueBtn.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const shippingContinue = page.locator('button:has-text("Continue to payment")').first();
+            if (await shippingContinue.isVisible({ timeout: 5000 })) {
+              await shippingContinue.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const cardFrame = page.frameLocator('iframe[id*="card-fields-number"]').first();
+            const cardInput = cardFrame.locator('input[placeholder*="Card number"]');
+            if (await cardInput.isVisible({ timeout: 8000 }).catch(() => false)) {
+              await cardInput.fill(payment.cardNumber);
+              const expiryFrame = page.frameLocator('iframe[id*="card-fields-expiry"]').first();
+              await expiryFrame.locator('input').first().fill(payment.cardExpiry);
+              const cvvFrame = page.frameLocator('iframe[id*="card-fields-verification"]').first();
+              await cvvFrame.locator('input').first().fill(payment.cardCvv);
+            }
+
+            const payBtn = page.locator('button[id="continue_button"]:has-text("Pay"), button:has-text("Complete order")').first();
+            if (await payBtn.isVisible({ timeout: 5000 })) {
+              await payBtn.click();
+              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+            }
+
+            const bodyText = await page.textContent('body');
+            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
+            return { success: true, orderId: orderMatch?.[1] };
+          } catch (err: any) {
+            console.error('[Guillevin] Checkout error:', err.message);
+            return { success: false, inCart: true, error: `Checkout: ${err.message}` };
+          }
+        }
+
         return { success: false, inCart: true };
       }
     }
