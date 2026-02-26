@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
-import { encrypt, decrypt } from '@/lib/encrypt';
+import { encrypt } from '@/lib/encrypt';
 
 export async function GET() {
   const ctx = await getTenantContext();
@@ -12,18 +12,15 @@ export async function GET() {
 
   const db = getDb();
   const pm = db.prepare(
-    'SELECT card_holder, card_number_encrypted, card_expiry, updated_at FROM company_payment_methods WHERE company_id = ?'
-  ).get(ctx.companyId) as { card_holder: string; card_number_encrypted: string; card_expiry: string; updated_at: string } | undefined;
+    'SELECT card_holder, card_last4, card_expiry, updated_at FROM company_payment_methods WHERE company_id = ?'
+  ).get(ctx.companyId) as { card_holder: string; card_last4: string; card_expiry: string; updated_at: string } | undefined;
 
   if (!pm) return NextResponse.json({ configured: false });
-
-  const fullNumber = decrypt(pm.card_number_encrypted);
-  const card_last4 = fullNumber.replace(/\s/g, '').slice(-4);
 
   return NextResponse.json({
     configured: true,
     card_holder: pm.card_holder,
-    card_last4,
+    card_last4: pm.card_last4,
     card_expiry: pm.card_expiry,
     updated_at: pm.updated_at,
   });
@@ -58,15 +55,16 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
   db.prepare(`
-    INSERT INTO company_payment_methods (company_id, card_holder, card_number_encrypted, card_expiry, card_cvv_encrypted, updated_at)
-    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO company_payment_methods (company_id, card_holder, card_number_encrypted, card_expiry, card_last4, card_cvv_encrypted, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(company_id) DO UPDATE SET
       card_holder = excluded.card_holder,
       card_number_encrypted = excluded.card_number_encrypted,
       card_expiry = excluded.card_expiry,
+      card_last4 = excluded.card_last4,
       card_cvv_encrypted = excluded.card_cvv_encrypted,
       updated_at = CURRENT_TIMESTAMP
-  `).run(ctx.companyId, card_holder, encrypt(digits), card_expiry, encrypt(card_cvv));
+  `).run(ctx.companyId, card_holder, encrypt(digits), card_expiry, digits.slice(-4), encrypt(card_cvv));
 
   return NextResponse.json({ ok: true });
 }

@@ -354,6 +354,7 @@ function initDb(db: Database.Database) {
       card_holder TEXT NOT NULL,
       card_number_encrypted TEXT NOT NULL,
       card_expiry TEXT NOT NULL,
+      card_last4 TEXT NOT NULL DEFAULT '',
       card_cvv_encrypted TEXT NOT NULL,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -366,6 +367,11 @@ function initDb(db: Database.Database) {
   }
   if (!csColsDelivery.find(c => c.name === 'default_delivery')) {
     db.exec(`ALTER TABLE company_settings ADD COLUMN default_delivery TEXT DEFAULT 'office' CHECK(default_delivery IN ('office', 'jobsite'))`);
+  }
+
+  const pmCols = db.pragma('table_info(company_payment_methods)') as { name: string }[];
+  if (!pmCols.find(c => c.name === 'card_last4')) {
+    db.exec(`ALTER TABLE company_payment_methods ADD COLUMN card_last4 TEXT NOT NULL DEFAULT ''`);
   }
 
   // Inventory feature flag
