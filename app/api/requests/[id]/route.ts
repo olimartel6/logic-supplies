@@ -4,6 +4,8 @@ import { getTenantContext } from '@/lib/tenant';
 import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail } from '@/lib/email';
 import { selectAndOrder } from '@/lib/supplier-router';
 import { randomUUID } from 'crypto';
+import { decrypt } from '@/lib/encrypt';
+import type { PaymentInfo } from '@/lib/lumen';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
@@ -13,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const { status, office_comment } = await req.json();
+  const { status, office_comment, delivery_override } = await req.json();
   const db = getDb();
 
   db.prepare(`
@@ -117,8 +119,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // If approved, trigger multi-supplier order async
   if (status === 'approved') {
-    const settings = db.prepare('SELECT supplier_preference FROM company_settings WHERE company_id = ?').get(ctx.companyId) as any;
+    const settings = db.prepare('SELECT supplier_preference, office_address, default_delivery FROM company_settings WHERE company_id = ?').get(ctx.companyId) as any;
     const preference: 'cheapest' | 'fastest' = settings?.supplier_preference || 'cheapest';
+
+    // Resolve delivery address
+    const deliveryMode: 'office' | 'jobsite' = delivery_override || settings?.default_delivery || 'office';
+    const deliveryAddress: string =
+      deliveryMode === 'office'
+        ? (settings?.office_address || '')
+        : (request.job_site_address || settings?.office_address || '');
+
+    // Retrieve and decrypt credit card
+    let payment: PaymentInfo | undefined;
+    const pm = db.prepare('SELECT card_holder, card_number_encrypted, card_expiry, card_last4, card_cvv_encrypted FROM company_payment_methods WHERE company_id = ?').get(ctx.companyId) as any;
+    if (pm) {
+      payment = {
+        cardHolder: pm.card_holder,
+        cardNumber: decrypt(pm.card_number_encrypted),
+        cardExpiry: pm.card_expiry,
+        cardCvv: decrypt(pm.card_cvv_encrypted),
+      };
+    }
 
     ;(async () => {
       try {
@@ -129,6 +150,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           request.quantity,
           request.supplier || undefined,
           ctx.companyId,
+          deliveryAddress || undefined,
+          payment,
         );
 
         const cancelToken = randomUUID();

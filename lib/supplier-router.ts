@@ -1,4 +1,4 @@
-import type { LumenOrderResult } from './lumen';
+import type { LumenOrderResult, PaymentInfo } from './lumen';
 import type { Branch } from './canac';
 import { CANAC_BRANCHES, placeCanacOrder, getCanacPrice } from './canac';
 import { HOME_DEPOT_BRANCHES, placeHomeDepotOrder, getHomeDepotPrice } from './homedepot';
@@ -61,12 +61,12 @@ function supplierLabel(s: SupplierKey): string {
   return s === 'lumen' ? 'Lumen' : s === 'canac' ? 'Canac' : s === 'guillevin' ? 'Guillevin' : 'Home Depot';
 }
 
-async function placeOrder(account: SupplierAccount, product: string, quantity: number): Promise<LumenOrderResult> {
+async function placeOrder(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo): Promise<LumenOrderResult> {
   switch (account.supplier) {
-    case 'lumen': return placeLumenOrder(account.username, account.password, product, quantity);
-    case 'canac': return placeCanacOrder(account.username, account.password, product, quantity);
-    case 'homedepot': return placeHomeDepotOrder(account.username, account.password, product, quantity);
-    case 'guillevin': return placeGuillevinOrder(account.username, account.password, product, quantity);
+    case 'lumen': return placeLumenOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'canac': return placeCanacOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'homedepot': return placeHomeDepotOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'guillevin': return placeGuillevinOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
   }
 }
 
@@ -157,6 +157,8 @@ export async function selectAndOrder(
   quantity: number,
   preferredSupplier?: string,
   companyId?: number | null,
+  deliveryAddress?: string,
+  payment?: PaymentInfo,
 ): Promise<{ result: LumenOrderResult; supplier: string; reason: string }> {
   const allAccounts = getActiveAccounts(companyId ?? null);
 
@@ -199,7 +201,7 @@ export async function selectAndOrder(
 
   for (let i = 0; i < orderedAccounts.length; i++) {
     const acc = orderedAccounts[i];
-    const result = await placeOrder(acc, product, quantity);
+    const result = await placeOrder(acc, product, quantity, deliveryAddress, payment);
     if (result.success || result.inCart) {
       const reason =
         i === 0
