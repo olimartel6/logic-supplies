@@ -347,7 +347,26 @@ function initDb(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_product_favorites_user ON product_favorites(user_id);
+
+    CREATE TABLE IF NOT EXISTS company_payment_methods (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+      card_holder TEXT NOT NULL,
+      card_number_encrypted TEXT NOT NULL,
+      card_expiry TEXT NOT NULL,
+      card_cvv_encrypted TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  // Auto-checkout delivery columns
+  const csColsDelivery = db.pragma('table_info(company_settings)') as { name: string }[];
+  if (!csColsDelivery.find(c => c.name === 'office_address')) {
+    db.exec(`ALTER TABLE company_settings ADD COLUMN office_address TEXT`);
+  }
+  if (!csColsDelivery.find(c => c.name === 'default_delivery')) {
+    db.exec(`ALTER TABLE company_settings ADD COLUMN default_delivery TEXT DEFAULT 'office' CHECK(default_delivery IN ('office', 'jobsite'))`);
+  }
 
   // Inventory feature flag
   const csColumns = db.pragma('table_info(company_settings)') as { name: string }[];
