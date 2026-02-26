@@ -18,7 +18,12 @@ export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
 
-  const body = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Corps invalide' }, { status: 400 });
+  }
   const { supplier, sku, name, image_url, price, unit, category } = body;
 
   if (!supplier || !sku || !name) {
@@ -39,7 +44,15 @@ export async function DELETE(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
 
-  const { supplier, sku } = await req.json();
+  let supplier: unknown, sku: unknown;
+  try {
+    ({ supplier, sku } = await req.json());
+  } catch {
+    return NextResponse.json({ error: 'Corps invalide' }, { status: 400 });
+  }
+  if (!supplier || !sku) {
+    return NextResponse.json({ error: 'Champs manquants' }, { status: 400 });
+  }
   const db = getDb();
   db.prepare(
     'DELETE FROM product_favorites WHERE user_id = ? AND supplier = ? AND sku = ?'
