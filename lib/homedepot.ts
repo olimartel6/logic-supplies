@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
 import type { Branch } from './canac';
 import { getDb } from './db';
@@ -26,10 +26,6 @@ export const HOME_DEPOT_BRANCHES: Branch[] = [
   { name: 'Home Depot Terrebonne',               address: '1003 Boul. Moody, Terrebonne, QC',                        lat: 45.7023, lng: -73.6449 },
   { name: 'Home Depot Ottawa (Gloucester)',       address: '2525 Boul. Ogilvie, Ottawa, ON',                          lat: 45.4215, lng: -75.6919 },
 ];
-
-// homedepot.ca is protected by Cloudflare Bot Fight Mode which blocks Playwright's bundled
-// Chromium via TLS fingerprint (JA3/JA4). System Chrome has a legitimate fingerprint.
-export const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 // --- Cookie persistence helpers ---
 
@@ -175,11 +171,7 @@ export async function loginToHomeDepot(page: any, username: string, password: st
 }
 
 export async function testHomeDepotConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-  });
+  const browser = await createBrowserbaseBrowser();
 
   let captchaDetected = false;
 
@@ -219,11 +211,7 @@ export async function testHomeDepotConnection(username: string, password: string
 }
 
 export async function getHomeDepotPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const context = await createHDContext(browser);
     const page = await context.newPage();
@@ -257,11 +245,7 @@ export async function placeHomeDepotOrder(
   product: string,
   quantity: number
 ): Promise<LumenOrderResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const context = await createHDContext(browser);
     const page = await context.newPage();

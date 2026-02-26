@@ -1,6 +1,5 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
-import { CHROME_PATH } from './homedepot';
 
 // HD internal search API — JSON endpoint, no login required.
 // Strategy: trigger one UI search to satisfy Akamai's JavaScript challenge,
@@ -35,11 +34,7 @@ export async function importHomeDepotCatalog(
     .all(companyId ?? null) as any[];
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-  });
+  const browser = await createBrowserbaseBrowser();
 
   const upsert = db.prepare(`
     INSERT INTO products (supplier, sku, name, image_url, price, unit, category, last_synced)
