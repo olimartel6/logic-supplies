@@ -260,22 +260,76 @@ export default function NewRequestPage() {
               {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}{s.address ? ` — ${s.address}` : ''}</option>)}
             </select>
           )}
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <input
-              type="text"
-              value={query}
-              onChange={handleQueryChange}
-              placeholder="Rechercher du matériel électrique..."
-              autoComplete="off"
-              className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-            <button
-              type="submit"
-              className="bg-yellow-400 text-slate-900 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-yellow-300 transition flex-shrink-0"
-            >
-              Chercher
-            </button>
-          </form>
+          <div className="flex gap-2">
+            <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-0">
+              <input
+                type="text"
+                value={query}
+                onChange={handleQueryChange}
+                placeholder="Rechercher du matériel électrique..."
+                autoComplete="off"
+                className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+              <button
+                type="submit"
+                className="bg-yellow-400 text-slate-900 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-yellow-300 transition flex-shrink-0"
+              >
+                Chercher
+              </button>
+            </form>
+
+            {/* Bouton Filtrer */}
+            <div ref={filterRef} className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterOpen(o => !o)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition flex-shrink-0 ${
+                  activeFilterCount > 0
+                    ? 'bg-yellow-400 text-slate-900'
+                    : 'bg-slate-700 text-white hover:bg-slate-600'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+                </svg>
+                Filtrer
+                {activeFilterCount > 0 && (
+                  <span className="bg-slate-900 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Dropdown */}
+              {filterOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-200 p-3 min-w-[160px] z-20">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fournisseurs</p>
+                  {[
+                    { key: 'lumen', label: 'Lumen', cls: 'text-blue-600' },
+                    { key: 'canac', label: 'Canac', cls: 'text-green-600' },
+                    { key: 'homedepot', label: 'Home Depot', cls: 'text-orange-600' },
+                    { key: 'guillevin', label: 'Guillevin', cls: 'text-purple-600' },
+                  ].map(s => (
+                    <label key={s.key} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-gray-50 rounded-lg px-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedSuppliers.includes(s.key)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedSuppliers(prev => [...prev, s.key]);
+                          } else {
+                            setSelectedSuppliers(prev => prev.filter(x => x !== s.key));
+                          }
+                        }}
+                        className="w-4 h-4 rounded accent-yellow-400"
+                      />
+                      <span className={`text-sm font-medium ${s.cls}`}>{s.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           {query.length >= 2 && !pendingProduct && (
             <p className="text-center text-xs text-slate-400">
               {preference === 'cheapest'
