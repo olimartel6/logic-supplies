@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
 import { decrypt } from './encrypt';
 import { createCanacPage, loginToCanac } from './canac';
@@ -32,10 +32,7 @@ export async function importCanacCatalog(
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
   const password = decrypt(account.password_encrypted);
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   let totalImported = 0;
 
   const upsert = db.prepare(`

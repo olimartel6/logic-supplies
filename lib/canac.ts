@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
 
 export interface Branch {
@@ -110,10 +110,7 @@ export async function loginToCanac(page: any, username: string, password: string
 }
 
 export async function testCanacConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
@@ -133,10 +130,7 @@ export async function testCanacConnection(username: string, password: string): P
 }
 
 export async function getCanacPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
@@ -170,10 +164,7 @@ export async function placeCanacOrder(
   product: string,
   quantity: number
 ): Promise<LumenOrderResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
