@@ -115,12 +115,16 @@ export default function NewRequestPage() {
   async function toggleFavorite(p: Product) {
     const key = `${p.supplier}:${p.sku}`;
     const isFav = favoriteSKUs.has(key);
-    await fetch('/api/favorites', {
-      method: isFav ? 'DELETE' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ supplier: p.supplier, sku: p.sku, name: p.name, image_url: p.image_url, price: p.price, unit: p.unit, category: p.category }),
-    });
-    loadFavorites();
+    try {
+      const res = await fetch('/api/favorites', {
+        method: isFav ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplier: p.supplier, sku: p.sku, name: p.name, image_url: p.image_url, price: p.price, unit: p.unit, category: p.category }),
+      });
+      if (res.ok) loadFavorites();
+    } catch {
+      // network error — silently ignore, state stays consistent
+    }
   }
 
   const doSearch = useCallback(async (q: string, siteId?: string) => {
@@ -620,7 +624,7 @@ export default function NewRequestPage() {
                 {favorites.map((p, i) => {
                   const b = supplierBadge(p.supplier);
                   return (
-                    <div key={i} className="relative">
+                    <div key={`${p.supplier}:${p.sku}`} className="relative">
                       <button
                         type="button"
                         onClick={() => pickProduct(p)}
@@ -735,7 +739,7 @@ export default function NewRequestPage() {
                     const b = supplierBadge(p.supplier);
                     const isFav = favoriteSKUs.has(`${p.supplier}:${p.sku}`);
                     return (
-                      <div key={i} className="relative">
+                      <div key={`${p.supplier}:${p.sku}`} className="relative">
                         <button
                           type="button"
                           onClick={() => pickProduct(p)}
