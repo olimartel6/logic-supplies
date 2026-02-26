@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import type { LumenOrderResult, ConnectionResult } from './lumen';
 import type { Branch } from './canac';
 
@@ -70,7 +70,7 @@ async function loginToGuillevin(page: any, username: string, password: string): 
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);
@@ -88,7 +88,7 @@ export async function getGuillevinPrice(
   password: string,
   product: string
 ): Promise<number | null> {
-  const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);
@@ -122,7 +122,7 @@ export async function placeGuillevinOrder(
   product: string,
   quantity: number
 ): Promise<LumenOrderResult> {
-  const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);

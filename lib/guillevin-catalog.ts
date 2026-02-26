@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
 import { decrypt } from './encrypt';
 
@@ -43,7 +43,7 @@ export async function importGuillevinCatalog(
       last_synced = CURRENT_TIMESTAMP
   `);
 
-  const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] });
+  const browser = await createBrowserbaseBrowser();
   let totalImported = 0;
 
   try {
