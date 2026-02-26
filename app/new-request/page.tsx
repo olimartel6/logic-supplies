@@ -34,6 +34,8 @@ function supplierColor(supplier: string) {
 }
 
 export default function NewRequestPage() {
+  const ALL_SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin'] as const;
+
   const [user, setUser] = useState<User | null>(null);
   const [jobSites, setJobSites] = useState<JobSite[]>([]);
   const [query, setQuery] = useState('');
@@ -59,7 +61,7 @@ export default function NewRequestPage() {
   const [cheaperModal, setCheaperModal] = useState<{ selected: Product; cheaper: Product } | null>(null);
   const [nearestBranch, setNearestBranch] = useState<{ name: string; address: string; distanceKm?: number } | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(['lumen', 'canac', 'homedepot', 'guillevin']);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([...ALL_SUPPLIERS]);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -232,7 +234,7 @@ export default function NewRequestPage() {
   );
 
   const filteredResults = results.filter(p => selectedSuppliers.includes(p.supplier));
-  const activeFilterCount = selectedSuppliers.length < 4 ? 4 - selectedSuppliers.length : 0;
+  const activeFilterCount = ALL_SUPPLIERS.length - selectedSuppliers.length;
 
   const pendingBadge = pendingProduct ? supplierBadge(pendingProduct.supplier) : null;
   const pendingTotal = pendingProduct?.price != null && parseInt(pendingQty) > 0
