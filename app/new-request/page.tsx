@@ -20,6 +20,8 @@ interface CartItem {
   unit: string;
 }
 
+const ALL_SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin'] as const;
+
 function supplierBadge(supplier: string) {
   if (supplier === 'canac') return { label: 'Canac', cls: 'bg-green-100 text-green-700' };
   if (supplier === 'homedepot') return { label: 'Home Depot', cls: 'bg-orange-100 text-orange-700' };
@@ -34,8 +36,6 @@ function supplierColor(supplier: string) {
 }
 
 export default function NewRequestPage() {
-  const ALL_SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin'] as const;
-
   const [user, setUser] = useState<User | null>(null);
   const [jobSites, setJobSites] = useState<JobSite[]>([]);
   const [query, setQuery] = useState('');
@@ -613,6 +613,12 @@ export default function NewRequestPage() {
                       {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''} pour &laquo; {query} &raquo;
                       {activeFilterCount > 0 && <span className="ml-1 text-yellow-600">({activeFilterCount} fournisseur{activeFilterCount > 1 ? 's' : ''} masqué{activeFilterCount > 1 ? 's' : ''})</span>}
                     </p>
+                    {filteredResults.length === 0 ? (
+                      <div className="text-center py-12 text-gray-400">
+                        <p className="font-medium text-gray-600">Aucun résultat avec ces filtres</p>
+                        <p className="text-sm mt-1">Essayez d&apos;activer d&apos;autres fournisseurs</p>
+                      </div>
+                    ) : (
                     <div className="grid grid-cols-2 gap-3">
                       {filteredResults.map((p, i) => {
                     const b = supplierBadge(p.supplier);
@@ -662,6 +668,7 @@ export default function NewRequestPage() {
                     );
                       })}
                     </div>
+                    )}
                   </>
                 )}
               </>
