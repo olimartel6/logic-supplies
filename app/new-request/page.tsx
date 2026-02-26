@@ -362,6 +362,31 @@ export default function NewRequestPage() {
               )}
             </div>
           </div>
+          {/* Onglets Favoris / Rechercher */}
+          <div className="flex gap-1 bg-slate-700 rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('favoris')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'favoris'
+                  ? 'bg-yellow-400 text-slate-900'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              ⭐ Favoris {favorites.length > 0 && `(${favorites.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('recherche')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'recherche'
+                  ? 'bg-yellow-400 text-slate-900'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              🔍 Rechercher
+            </button>
+          </div>
           {query.length >= 2 && !pendingProduct && (
             <p className="text-center text-xs text-slate-400">
               {preference === 'cheapest'
@@ -581,8 +606,66 @@ export default function NewRequestPage() {
           </form>
         )}
 
-        {/* ─── Résultats de recherche (masqués quand un produit est en cours de config) ─── */}
-        {!pendingProduct && (
+        {/* ─── Onglet Favoris ─── */}
+        {!pendingProduct && activeTab === 'favoris' && (
+          <>
+            {favorites.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <p className="text-3xl mb-3">⭐</p>
+                <p className="font-medium text-gray-600">Aucun favori</p>
+                <p className="text-sm mt-1">Allez dans Rechercher et appuyez sur ☆ pour ajouter un produit</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {favorites.map((p, i) => {
+                  const b = supplierBadge(p.supplier);
+                  return (
+                    <div key={i} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => pickProduct(p)}
+                        className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-yellow-300 active:scale-[0.98] transition-all flex flex-col w-full"
+                      >
+                        <div className="w-full bg-gray-50 flex items-center justify-center p-3" style={{ aspectRatio: '1' }}>
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="p-2.5 flex flex-col gap-1 flex-1">
+                          <p className="text-xs font-medium text-gray-900 leading-snug line-clamp-2">{p.name}</p>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium self-start ${b.cls}`}>{b.label}</span>
+                          {p.price != null ? (
+                            <p className="text-sm font-bold text-gray-900 mt-auto">
+                              {p.price.toFixed(2)} $
+                              {p.unit !== 'units' && <span className="text-xs font-normal text-gray-400 ml-1">/{p.unit}</span>}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-gray-400 italic mt-auto">Prix sur demande</p>
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(p)}
+                        className="absolute top-1.5 right-1.5 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 shadow-sm text-base leading-none hover:scale-110 transition-transform"
+                        title="Retirer des favoris"
+                      >
+                        ⭐
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ─── Résultats de recherche ─── */}
+        {!pendingProduct && activeTab === 'recherche' && (
           <>
             {searching && (
               <div className="text-center py-16 text-gray-400">
@@ -650,49 +733,59 @@ export default function NewRequestPage() {
                     <div className="grid grid-cols-2 gap-3">
                       {filteredResults.map((p, i) => {
                     const b = supplierBadge(p.supplier);
+                    const isFav = favoriteSKUs.has(`${p.supplier}:${p.sku}`);
                     return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => pickProduct(p)}
-                        className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-yellow-300 active:scale-[0.98] transition-all flex flex-col"
-                      >
-                        <div className="w-full bg-gray-50 flex items-center justify-center p-3" style={{ aspectRatio: '1' }}>
-                          {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" />
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="p-3 flex flex-col flex-1 gap-1.5">
-                          <p className="text-xs text-gray-800 font-medium leading-snug" style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}>
-                            {p.name}
-                          </p>
-                          <span className={`self-start text-xs px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>
-                            {b.label}
-                          </span>
-                          {p.price != null ? (
-                            <div className="mt-auto pt-1">
-                              <p className="text-base font-bold text-gray-900 leading-none">{p.price.toFixed(2)} $</p>
-                              {p.unit !== 'units' && <p className="text-xs text-gray-400 mt-0.5">/{p.unit}</p>}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-gray-400 italic mt-auto pt-1">Prix sur demande</p>
-                          )}
-                        </div>
-                        <div className="px-3 pb-3">
-                          <div className="w-full bg-yellow-400 text-slate-900 py-2 rounded-xl text-xs font-bold text-center">
-                            Choisir
+                      <div key={i} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => pickProduct(p)}
+                          className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-yellow-300 active:scale-[0.98] transition-all flex flex-col w-full"
+                        >
+                          <div className="w-full bg-gray-50 flex items-center justify-center p-3" style={{ aspectRatio: '1' }}>
+                            {p.image_url ? (
+                              <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" />
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                              </svg>
+                            )}
                           </div>
-                        </div>
-                      </button>
+                          <div className="p-3 flex flex-col flex-1 gap-1.5">
+                            <p className="text-xs text-gray-800 font-medium leading-snug" style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}>
+                              {p.name}
+                            </p>
+                            <span className={`self-start text-xs px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>
+                              {b.label}
+                            </span>
+                            {p.price != null ? (
+                              <div className="mt-auto pt-1">
+                                <p className="text-base font-bold text-gray-900 leading-none">{p.price.toFixed(2)} $</p>
+                                {p.unit !== 'units' && <p className="text-xs text-gray-400 mt-0.5">/{p.unit}</p>}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-400 italic mt-auto pt-1">Prix sur demande</p>
+                            )}
+                          </div>
+                          <div className="px-3 pb-3">
+                            <div className="w-full bg-yellow-400 text-slate-900 py-2 rounded-xl text-xs font-bold text-center">
+                              Choisir
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(p)}
+                          className="absolute top-1.5 right-1.5 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 shadow-sm text-base leading-none hover:scale-110 transition-transform"
+                          title={isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                        >
+                          {isFav ? '⭐' : '☆'}
+                        </button>
+                      </div>
                     );
                       })}
                     </div>
