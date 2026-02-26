@@ -95,6 +95,46 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
   seed();
 }
 
+export function seedSuperadminCategories(db: Database.Database) {
+  // Utilise company_id = 0 comme sentinelle super admin
+  // SQLite n'enforce pas les FK par défaut (pas de PRAGMA foreign_keys = ON)
+  const seed = db.transaction(() => {
+    const allCategories: Array<{ supplier: string; name: string; url: string }> = [
+      // Lumen
+      { supplier: 'lumen', name: 'Fils et câbles',           url: '/en/products/28-wire-cords-cables' },
+      { supplier: 'lumen', name: 'Disjoncteurs et panneaux', url: '/en/products/20-power-distribution' },
+      { supplier: 'lumen', name: 'Boîtes et conduits',       url: '/en/products/11-conduit-raceway-strut' },
+      { supplier: 'lumen', name: 'Éclairage',                url: '/en/products/18-lighting' },
+      { supplier: 'lumen', name: 'Automatisation',           url: '/en/products/12-control-automation' },
+      { supplier: 'lumen', name: 'Outils',                   url: '/en/products/25-tools-instruments' },
+      // Canac
+      { supplier: 'canac', name: 'Fils et câbles',           url: '/canac/fr/2/c/EL25' },
+      { supplier: 'canac', name: 'Disjoncteurs et panneaux', url: '/canac/fr/2/c/EL45' },
+      { supplier: 'canac', name: 'Boîtes et conduits',       url: '/canac/fr/2/c/EL20' },
+      { supplier: 'canac', name: 'Interrupteurs et prises',  url: '/canac/fr/2/c/EL55' },
+      { supplier: 'canac', name: 'Éclairage',                url: '/canac/fr/2/c/EL35' },
+      // Home Depot
+      { supplier: 'homedepot', name: 'Fils et câbles',           url: '/fr/b/Électricité-Câbles-et-câblage/N-5yc1vZbmg1' },
+      { supplier: 'homedepot', name: 'Disjoncteurs et panneaux', url: '/fr/b/Électricité-Disjoncteurs/N-5yc1vZc86v' },
+      { supplier: 'homedepot', name: 'Boîtes électriques',       url: '/fr/b/Électricité-Boîtes-électriques/N-5yc1vZbmde' },
+      { supplier: 'homedepot', name: 'Interrupteurs et prises',  url: '/fr/b/Électricité-Prises-et-interrupteurs/N-5yc1vZc7md' },
+      { supplier: 'homedepot', name: 'Éclairage',                url: '/fr/b/Éclairage/N-5yc1vZbq6g' },
+      // Guillevin
+      { supplier: 'guillevin', name: 'Fils et câbles',           url: '/collections/wire-cable' },
+      { supplier: 'guillevin', name: 'Disjoncteurs et panneaux', url: '/collections/breakers-load-centres' },
+      { supplier: 'guillevin', name: 'Boîtes et conduits',       url: '/collections/conduit-fittings-boxes' },
+      { supplier: 'guillevin', name: 'Luminaires',               url: '/collections/lighting' },
+      { supplier: 'guillevin', name: 'Outils',                   url: '/collections/tools' },
+    ];
+    for (const c of allCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES (?, ?, ?, 1, 0)"
+      ).run(c.supplier, c.name, c.url);
+    }
+  });
+  seed();
+}
+
 function initDb(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS companies (
