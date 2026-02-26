@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
 import { decrypt } from './encrypt';
 
@@ -27,7 +27,7 @@ export async function importLumenCatalog(
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
   const password = decrypt(account.password_encrypted);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await createBrowserbaseBrowser();
   let totalImported = 0;
 
   try {

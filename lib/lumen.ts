@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { createBrowserbaseBrowser } from './browser';
 import type { Branch } from './canac';
 
 export const LUMEN_BRANCHES: Branch[] = [
@@ -95,10 +95,7 @@ async function loginToLumen(page: any, username: string, password: string): Prom
 }
 
 export async function testLumenConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createStealthPage(browser);
 
@@ -165,10 +162,7 @@ export async function placeLumenOrder(
   product: string,
   quantity: number
 ): Promise<LumenOrderResult> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createStealthPage(browser);
 
@@ -247,10 +241,7 @@ export async function placeLumenOrder(
 }
 
 export async function getLumenPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createStealthPage(browser);
     const loggedIn = await loginToLumen(page, username, password);
@@ -283,10 +274,7 @@ export async function cancelLumenOrder(
   password: string,
   orderId: string
 ): Promise<boolean> {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-  });
+  const browser = await createBrowserbaseBrowser();
   try {
     const page = await createStealthPage(browser);
     const loggedIn = await loginToLumen(page, username, password);
