@@ -15,8 +15,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { status, office_comment, delivery_override } = await req.json();
   const db = getDb();
 
+  if (!ctx.companyId) {
+    return NextResponse.json({ error: 'Contexte entreprise manquant' }, { status: 400 });
+  }
+
   if (status === 'approved') {
-    await triggerApproval(parseInt(id), ctx.companyId ?? 0, db, delivery_override, office_comment);
+    await triggerApproval(parseInt(id, 10), ctx.companyId, db, delivery_override, office_comment);
   } else {
     // rejected
     db.prepare(`
