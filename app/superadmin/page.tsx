@@ -47,6 +47,7 @@ export default function SuperAdminPage() {
   const [configForm, setConfigForm] = useState<Record<string, { username: string; password: string }>>({});
   const [savingAccount, setSavingAccount] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(u => {
@@ -117,11 +118,11 @@ export default function SuperAdminPage() {
   async function startImport(supplier: string) {
     setImportingSupplier(supplier);
     setImportProgress('');
+    setImportError(null);
     try {
       const res = await fetch(`/api/superadmin/catalog/import?supplier=${supplier}`, { method: 'POST' });
       if (!res.ok || !res.body) {
-        setImportingSupplier(null);
-        setImportProgress('');
+        setImportError(`Erreur ${res.status}`);
         return;
       }
       const reader = res.body.getReader();
@@ -138,6 +139,7 @@ export default function SuperAdminPage() {
           const ev = JSON.parse(line.slice(6));
           if (ev.category) setImportProgress(`${supplier} — ${ev.category}`);
           if (ev.done) {
+            if (ev.error) setImportError(`${supplier}: ${ev.error}`);
             setImportProgress('');
             setImportingSupplier(null);
             loadCatalogData();
@@ -423,6 +425,11 @@ export default function SuperAdminPage() {
                 <span className="animate-spin">⏳</span>
                 <span>{importProgress}</span>
               </div>
+            </div>
+          )}
+          {importError && (
+            <div className="mb-4 bg-red-900/40 border border-red-700 rounded-xl px-4 py-3 text-sm text-red-300">
+              {importError}
             </div>
           )}
 
