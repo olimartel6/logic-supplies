@@ -66,7 +66,7 @@ export default function NewRequestPage() {
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'favoris' | 'recherche'>('favoris');
+  const [activeTab, setActiveTab] = useState<'favoris' | 'recherche'>('recherche');
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [favoriteSKUs, setFavoriteSKUs] = useState<Set<string>>(new Set());
 
@@ -283,7 +283,7 @@ export default function NewRequestPage() {
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
 
       {/* Sticky search bar */}
-      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-[56px] z-10 shadow-md">
+      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-[56px] z-20 shadow-md">
         <div className="max-w-lg mx-auto space-y-2">
           {/* Chantier */}
           {jobSites.length > 0 && (
@@ -370,17 +370,6 @@ export default function NewRequestPage() {
           <div className="flex gap-1 bg-slate-700 rounded-xl p-1">
             <button
               type="button"
-              onClick={() => setActiveTab('favoris')}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'favoris'
-                  ? 'bg-yellow-400 text-slate-900'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              ⭐ Favoris {favorites.length > 0 && `(${favorites.length})`}
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab('recherche')}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
                 activeTab === 'recherche'
@@ -389,6 +378,17 @@ export default function NewRequestPage() {
               }`}
             >
               🔍 Rechercher
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('favoris')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'favoris'
+                  ? 'bg-yellow-400 text-slate-900'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              ⭐ Favoris {favorites.length > 0 && `(${favorites.length})`}
             </button>
           </div>
           {query.length >= 2 && !pendingProduct && (
