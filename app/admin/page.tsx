@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 
-interface User { id: number; name: string; email: string; role: string; }
+interface User { id: number; name: string; email: string; role: string; auto_approve: number; }
 interface JobSite { id: number; name: string; address: string; }
 interface CurrentUser { name: string; role: string; inventoryEnabled?: boolean; }
 
@@ -55,6 +55,15 @@ export default function AdminPage() {
     await fetch(`/api/users/${id}`, { method: 'DELETE' });
     loadUsers();
     setDeletingUserId(null);
+  }
+
+  async function handleToggleAutoApprove(id: number, current: number) {
+    await fetch(`/api/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auto_approve: !current }),
+    });
+    loadUsers();
   }
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -170,6 +179,19 @@ export default function AdminPage() {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColor[u.role]}`}>
                         {roleLabel[u.role]}
                       </span>
+                      {u.role === 'electrician' && (
+                        <button
+                          onClick={() => handleToggleAutoApprove(u.id, u.auto_approve)}
+                          title={u.auto_approve ? 'Auto-approuvé — cliquer pour désactiver' : 'Cliquer pour activer auto-approbation'}
+                          className={`text-xs px-2 py-1 rounded-full font-medium transition ${
+                            u.auto_approve
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                          }`}
+                        >
+                          {u.auto_approve ? 'Auto ✓' : 'Auto'}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteUser(u.id)}
                         disabled={deletingUserId === u.id}
