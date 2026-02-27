@@ -46,6 +46,7 @@ export default function SuperAdminPage() {
   const [configOpen, setConfigOpen] = useState<string | null>(null);
   const [configForm, setConfigForm] = useState<Record<string, { username: string; password: string }>>({});
   const [savingAccount, setSavingAccount] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(u => {
@@ -87,16 +88,30 @@ export default function SuperAdminPage() {
 
   async function saveCatalogAccount(supplier: string) {
     const f = configForm[supplier] || { username: '', password: '' };
-    if (!f.username) return;
+    if (!f.username) {
+      setAccountError('Le nom d\'utilisateur est requis');
+      return;
+    }
+    setAccountError(null);
     setSavingAccount(supplier);
-    await fetch('/api/superadmin/catalog/account', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ supplier, username: f.username, password: f.password || undefined }),
-    });
-    setSavingAccount(null);
-    setConfigOpen(null);
-    loadCatalogData();
+    try {
+      const res = await fetch('/api/superadmin/catalog/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplier, username: f.username, password: f.password || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAccountError(data.error || `Erreur ${res.status}`);
+        return;
+      }
+      setConfigOpen(null);
+      loadCatalogData();
+    } catch (err: any) {
+      setAccountError(err.message || 'Erreur réseau');
+    } finally {
+      setSavingAccount(null);
+    }
   }
 
   async function startImport(supplier: string) {
@@ -474,9 +489,12 @@ export default function SuperAdminPage() {
                         onChange={e => setConfigForm(f => ({ ...f, [s.key]: { ...cf, password: e.target.value } }))}
                         className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-white/30"
                       />
+                      {accountError && (
+                        <p className="text-xs text-red-400">{accountError}</p>
+                      )}
                       <div className="flex gap-1.5">
                         <button
-                          onClick={() => setConfigOpen(null)}
+                          onClick={() => { setConfigOpen(null); setAccountError(null); }}
                           className="flex-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg py-1.5 transition"
                         >
                           Annuler
