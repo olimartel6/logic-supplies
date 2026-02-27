@@ -386,6 +386,9 @@ function initDb(db: Database.Database) {
     db.exec(`ALTER TABLE users ADD COLUMN supplier_preference TEXT DEFAULT NULL`);
   }
 
+  // Sentinel company id=0 for superadmin operations (needed when FK constraints are enforced)
+  db.prepare("INSERT OR IGNORE INTO companies (id, name, subscription_status) VALUES (0, '_superadmin', 'active')").run();
+
   // Stripe fields on companies
   const compCols = db.pragma('table_info(companies)') as { name: string }[];
   if (!compCols.find(c => c.name === 'stripe_customer_id'))
