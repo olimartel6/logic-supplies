@@ -3,6 +3,8 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'sparky.db');
+console.log('[db] DATABASE_PATH env:', process.env.DATABASE_PATH);
+console.log('[db] Using DB_PATH:', DB_PATH);
 
 let db: Database.Database;
 
