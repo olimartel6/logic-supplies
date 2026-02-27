@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
   if (ctx.role !== 'electrician') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
+  if (!ctx.companyId) {
+    return NextResponse.json({ error: 'Contexte entreprise manquant' }, { status: 400 });
+  }
 
   const { product, quantity, unit, job_site_id, urgency, note, supplier } = await req.json();
   const db = getDb();
@@ -53,21 +56,29 @@ export async function POST(req: NextRequest) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).run(ctx.companyId, product, quantity, unit, job_site_id, ctx.userId, urgency ? 1 : 0, note || '', supplier || null);
 
-  // Send email to all office/admin users in the same company
-  const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(ctx.companyId) as { email: string }[];
-  const jobSite = db.prepare('SELECT name FROM job_sites WHERE id = ?').get(job_site_id) as { name: string } | undefined;
+  const requestId = result.lastInsertRowid;
 
-  for (const u of officeUsers) {
-    sendNewRequestEmail(u.email, {
-      product,
-      quantity,
-      unit,
-      jobSite: jobSite?.name || '',
-      electrician: '',
-      urgency: !!urgency,
-      note: note || '',
-    }).catch(console.error);
+  // Check if this electrician has auto_approve enabled
+  const userRow = db.prepare('SELECT auto_approve FROM users WHERE id = ? AND company_id = ?').get(ctx.userId, ctx.companyId) as any;
+
+  if (userRow?.auto_approve) {
+    // Auto-approve: skip pending, trigger approval immediately (fire-and-forget)
+    const { triggerApproval } = await import('@/lib/approval');
+    triggerApproval(requestId, ctx.companyId, db).catch(console.error);
+  } else {
+    // Normal flow: notify office of pending request
+    const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(ctx.companyId) as { email: string }[];
+    const jobSite = db.prepare('SELECT name FROM job_sites WHERE id = ?').get(job_site_id) as { name: string } | undefined;
+    for (const u of officeUsers) {
+      sendNewRequestEmail(u.email, {
+        product, quantity, unit,
+        jobSite: jobSite?.name || '',
+        electrician: '',
+        urgency: !!urgency,
+        note: note || '',
+      }).catch(console.error);
+    }
   }
 
-  return NextResponse.json({ id: result.lastInsertRowid });
+  return NextResponse.json({ id: requestId });
 }
