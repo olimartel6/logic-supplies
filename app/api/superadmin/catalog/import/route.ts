@@ -31,6 +31,11 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
+      // Send keepalive pings every 20s to prevent Railway proxy 502 timeout
+      const heartbeat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(': ping\n\n')); } catch {}
+      }, 20000);
+
       try {
         let result: { total: number; error?: string };
         let stats: { count: number; lastSync: string | null };
@@ -53,6 +58,7 @@ export async function POST(req: NextRequest) {
       } catch (err: any) {
         send({ done: true, total: 0, error: err.message });
       } finally {
+        clearInterval(heartbeat);
         controller.close();
       }
     },
