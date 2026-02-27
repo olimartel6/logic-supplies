@@ -36,28 +36,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Champs manquants' }, { status: 400 });
   }
 
-  const db = getDb();
-  const existing = db.prepare(
-    'SELECT id FROM supplier_accounts WHERE supplier = ? AND company_id = ? LIMIT 1'
-  ).get(supplier, SUPERADMIN_COMPANY_ID) as { id: number } | undefined;
+  try {
+    const db = getDb();
+    const existing = db.prepare(
+      'SELECT id FROM supplier_accounts WHERE supplier = ? AND company_id = ? LIMIT 1'
+    ).get(supplier, SUPERADMIN_COMPANY_ID) as { id: number } | undefined;
 
-  if (existing) {
-    if (password) {
-      db.prepare('UPDATE supplier_accounts SET username = ?, password_encrypted = ?, active = 1 WHERE id = ?')
-        .run(username, encrypt(password), existing.id);
+    if (existing) {
+      if (password) {
+        db.prepare('UPDATE supplier_accounts SET username = ?, password_encrypted = ?, active = 1 WHERE id = ?')
+          .run(username, encrypt(password), existing.id);
+      } else {
+        db.prepare('UPDATE supplier_accounts SET username = ?, active = 1 WHERE id = ?')
+          .run(username, existing.id);
+      }
     } else {
-      db.prepare('UPDATE supplier_accounts SET username = ?, active = 1 WHERE id = ?')
-        .run(username, existing.id);
-    }
-  } else {
-    if (!password) {
-      return NextResponse.json({ error: 'Mot de passe requis pour le premier enregistrement' }, { status: 400 });
-    }
-    db.transaction(() => {
+      if (!password) {
+        return NextResponse.json({ error: 'Mot de passe requis pour le premier enregistrement' }, { status: 400 });
+      }
       db.prepare('INSERT INTO supplier_accounts (supplier, username, password_encrypted, company_id) VALUES (?, ?, ?, ?)')
         .run(supplier, username, encrypt(password), SUPERADMIN_COMPANY_ID);
       seedSuperadminCategories(db);
-    })();
+    }
+  } catch (err: any) {
+    console.error('[catalog/account POST]', err);
+    return NextResponse.json({ error: err.message || 'Erreur serveur' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
