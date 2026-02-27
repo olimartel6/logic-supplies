@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { sendNewRequestEmail } from '@/lib/email';
+import { triggerApproval } from '@/lib/approval';
 
 export async function GET() {
   const ctx = await getTenantContext();
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
   if (!ctx.companyId) {
     return NextResponse.json({ error: 'Contexte entreprise manquant' }, { status: 400 });
   }
+  const companyId = ctx.companyId;
 
   const { product, quantity, unit, job_site_id, urgency, note, supplier } = await req.json();
   const db = getDb();
@@ -54,20 +56,19 @@ export async function POST(req: NextRequest) {
   const result = db.prepare(`
     INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, urgency, note, status, supplier)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-  `).run(ctx.companyId, product, quantity, unit, job_site_id, ctx.userId, urgency ? 1 : 0, note || '', supplier || null);
+  `).run(companyId, product, quantity, unit, job_site_id, ctx.userId, urgency ? 1 : 0, note || '', supplier || null);
 
   const requestId = result.lastInsertRowid;
 
   // Check if this electrician has auto_approve enabled
-  const userRow = db.prepare('SELECT auto_approve FROM users WHERE id = ? AND company_id = ?').get(ctx.userId, ctx.companyId) as any;
+  const userRow = db.prepare('SELECT auto_approve FROM users WHERE id = ? AND company_id = ?').get(ctx.userId, companyId) as any;
 
   if (userRow?.auto_approve) {
     // Auto-approve: skip pending, trigger approval immediately (fire-and-forget)
-    const { triggerApproval } = await import('@/lib/approval');
-    triggerApproval(requestId, ctx.companyId, db).catch(console.error);
+    triggerApproval(requestId, companyId, db).catch(console.error);
   } else {
     // Normal flow: notify office of pending request
-    const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(ctx.companyId) as { email: string }[];
+    const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string }[];
     const jobSite = db.prepare('SELECT name FROM job_sites WHERE id = ?').get(job_site_id) as { name: string } | undefined;
     for (const u of officeUsers) {
       sendNewRequestEmail(u.email, {
