@@ -4,7 +4,7 @@ import { requireSuperAdmin } from '@/lib/tenant';
 import { encrypt } from '@/lib/encrypt';
 
 const SUPERADMIN_COMPANY_ID = 0;
-const SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin'] as const;
+const SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr', 'rona'] as const;
 
 export async function GET() {
   const ctx = await requireSuperAdmin();
