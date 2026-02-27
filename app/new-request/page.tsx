@@ -280,10 +280,10 @@ export default function NewRequestPage() {
 
   return (
     <div className="pb-24">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} hideTopOnMobile />
 
       {/* Sticky search bar */}
-      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-[56px] z-20 shadow-md">
+      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-0 sm:top-[56px] z-20 shadow-md">
         <div className="max-w-lg mx-auto space-y-2">
           {/* Chantier */}
           {jobSites.length > 0 && (

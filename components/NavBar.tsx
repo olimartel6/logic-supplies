@@ -6,6 +6,7 @@ interface NavBarProps {
   role: string;
   name: string;
   inventoryEnabled?: boolean;
+  hideTopOnMobile?: boolean;
 }
 
 const IconPlus = () => (
@@ -63,7 +64,7 @@ const IconCreditCard = () => (
   </svg>
 );
 
-export default function NavBar({ role, name, inventoryEnabled }: NavBarProps) {
+export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }: NavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
@@ -93,7 +94,7 @@ export default function NavBar({ role, name, inventoryEnabled }: NavBarProps) {
   return (
     <>
       {/* Top bar */}
-      <div className="bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md">
+      <div className={`bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md ${hideTopOnMobile ? 'hidden sm:flex' : ''}`}>
         <div className="flex items-center gap-2.5">
           <img src="/logo-shield.svg" className="h-8 w-auto flex-shrink-0" alt="LogicSupplies" />
           <div className="flex flex-col leading-none gap-0.5">
