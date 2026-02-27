@@ -42,15 +42,23 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   });
   await page.waitForTimeout(2000);
 
-  // Auth0 Universal Login: email field is input#username (type="text", autocomplete="email")
-  const emailField = page.locator('input#username').first();
-  await emailField.waitFor({ timeout: 10000 });
+  // Auth0 Universal Login (selectors may vary by deployment)
+  const emailField = page.locator([
+    'input#username',
+    'input[name="username"]',
+    'input[type="email"]',
+    'input[name="email"]',
+  ].join(', ')).first();
+  await emailField.waitFor({ timeout: 15000 });
   await emailField.click();
   await emailField.type(username, { delay: 60 });
   await page.waitForTimeout(300);
 
-  // Password field is already visible on the same page
-  const passwordField = page.locator('input#password').first();
+  const passwordField = page.locator([
+    'input#password',
+    'input[name="password"]',
+    'input[type="password"]',
+  ].join(', ')).first();
   await passwordField.waitFor({ timeout: 10000 });
   await passwordField.click();
   await passwordField.type(password, { delay: 60 });
