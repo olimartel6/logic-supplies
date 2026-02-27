@@ -290,7 +290,7 @@ export default function NewRequestPage() {
             <select
               value={jobSiteId}
               onChange={e => handleJobSiteChange(e.target.value)}
-              className="w-full rounded-xl px-3 py-2 text-sm bg-slate-700 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              className="w-full rounded-xl px-3 py-2 text-base bg-slate-700 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400"
             >
               <option value="">Sélectionner un chantier</option>
               {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}{s.address ? ` — ${s.address}` : ''}</option>)}
@@ -304,7 +304,7 @@ export default function NewRequestPage() {
                 onChange={handleQueryChange}
                 placeholder="Rechercher du matériel électrique..."
                 autoComplete="off"
-                className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-base bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
               <button
                 type="submit"
