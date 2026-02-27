@@ -4,10 +4,17 @@ import { CANAC_BRANCHES, placeCanacOrder, getCanacPrice } from './canac';
 import { HOME_DEPOT_BRANCHES, placeHomeDepotOrder, getHomeDepotPrice } from './homedepot';
 import { LUMEN_BRANCHES, placeLumenOrder, getLumenPrice } from './lumen';
 import { GUILLEVIN_BRANCHES, placeGuillevinOrder, getGuillevinPrice } from './guillevin';
+import { JSV_BRANCHES, placeJsvOrder, getJsvPrice } from './jsv';
+import { WESTBURNE_BRANCHES, placeWestburneOrder, getWestburnePrice } from './westburne';
+import { NEDCO_BRANCHES, placeNedcoOrder, getNedcoPrice } from './nedco';
+import { FUTECH_BRANCHES, placeFutechOrder, getFutechPrice } from './futech';
+import { DESCHENES_BRANCHES, placeDeschemesOrder, getDeschenesPrice } from './deschenes';
+import { BMR_BRANCHES, placeBmrOrder, getBmrPrice } from './bmr';
+import { RONA_BRANCHES, placeRonaOrder, getRonaPrice } from './rona';
 import { decrypt } from './encrypt';
 import { getDb } from './db';
 
-type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin';
+type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin' | 'jsv' | 'westburne' | 'nedco' | 'futech' | 'deschenes' | 'bmr' | 'rona';
 
 interface SupplierAccount {
   supplier: SupplierKey;
@@ -58,15 +65,27 @@ function getActiveAccounts(companyId: number | null): SupplierAccount[] {
 }
 
 function supplierLabel(s: SupplierKey): string {
-  return s === 'lumen' ? 'Lumen' : s === 'canac' ? 'Canac' : s === 'guillevin' ? 'Guillevin' : 'Home Depot';
+  const labels: Record<SupplierKey, string> = {
+    lumen: 'Lumen', canac: 'Canac', homedepot: 'Home Depot', guillevin: 'Guillevin',
+    jsv: 'JSV', westburne: 'Westburne', nedco: 'Nedco', futech: 'Futech',
+    deschenes: 'Deschênes', bmr: 'BMR', rona: 'Rona',
+  };
+  return labels[s] ?? s;
 }
 
 async function placeOrder(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo): Promise<LumenOrderResult> {
   switch (account.supplier) {
-    case 'lumen': return placeLumenOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
-    case 'canac': return placeCanacOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'lumen':     return placeLumenOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'canac':     return placeCanacOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'homedepot': return placeHomeDepotOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'guillevin': return placeGuillevinOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'jsv':       return placeJsvOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'westburne': return placeWestburneOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'nedco':     return placeNedcoOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'futech':    return placeFutechOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'deschenes': return placeDeschemesOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'bmr':       return placeBmrOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'rona':      return placeRonaOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
   }
 }
 
@@ -80,10 +99,17 @@ async function selectCheapest(
     accounts.map(async (acc) => {
       let price: number | null = null;
       try {
-        if (acc.supplier === 'lumen') price = await getLumenPrice(acc.username, acc.password, product);
-        else if (acc.supplier === 'canac') price = await getCanacPrice(acc.username, acc.password, product);
+        if (acc.supplier === 'lumen')     price = await getLumenPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'canac')     price = await getCanacPrice(acc.username, acc.password, product);
         else if (acc.supplier === 'homedepot') price = await getHomeDepotPrice(acc.username, acc.password, product);
         else if (acc.supplier === 'guillevin') price = await getGuillevinPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'jsv')       price = await getJsvPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'westburne') price = await getWestburnePrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'nedco')     price = await getNedcoPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'futech')    price = await getFutechPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'deschenes') price = await getDeschenesPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'bmr')       price = await getBmrPrice(acc.username, acc.password, product);
+        else if (acc.supplier === 'rona')      price = await getRonaPrice(acc.username, acc.password, product);
       } catch { /* ignore */ }
       return { account: acc, price };
     }),
@@ -130,10 +156,10 @@ async function selectFastest(
   }
 
   const branchMap: Record<SupplierKey, Branch[]> = {
-    lumen: LUMEN_BRANCHES,
-    canac: CANAC_BRANCHES,
-    homedepot: HOME_DEPOT_BRANCHES,
-    guillevin: GUILLEVIN_BRANCHES,
+    lumen: LUMEN_BRANCHES, canac: CANAC_BRANCHES, homedepot: HOME_DEPOT_BRANCHES,
+    guillevin: GUILLEVIN_BRANCHES, jsv: JSV_BRANCHES, westburne: WESTBURNE_BRANCHES,
+    nedco: NEDCO_BRANCHES, futech: FUTECH_BRANCHES, deschenes: DESCHENES_BRANCHES,
+    bmr: BMR_BRANCHES, rona: RONA_BRANCHES,
   };
 
   const distances = accounts.map(acc => {

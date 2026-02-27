@@ -90,6 +90,96 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
         "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('guillevin', ?, ?, ?, ?)"
       ).run(c.name, c.url, c.enabled, companyId);
     }
+
+    // Catégories JSV
+    const jsvCategories = [
+      { name: 'Outils électriques',  url: '/collections/power-tools',          enabled: 1 },
+      { name: 'Matériel électrique', url: '/collections/electrical',            enabled: 1 },
+      { name: 'Sécurité',            url: '/collections/safety',                enabled: 0 },
+      { name: 'Fixation',            url: '/collections/fasteners',             enabled: 0 },
+    ];
+    for (const c of jsvCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('jsv', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories Westburne
+    const westburneCategories = [
+      { name: 'Fils et câbles',           url: '/cwr/c/WIRE/products?pageSize=100',     enabled: 1 },
+      { name: 'Disjoncteurs et panneaux', url: '/cwr/c/BREAKERS/products?pageSize=100', enabled: 1 },
+      { name: 'Boîtes et conduits',       url: '/cwr/c/CONDUIT/products?pageSize=100',  enabled: 0 },
+      { name: 'Éclairage',                url: '/cwr/c/LIGHTING/products?pageSize=100', enabled: 0 },
+    ];
+    for (const c of westburneCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('westburne', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories Nedco
+    const nedcoCategories = [
+      { name: 'Fils et câbles',           url: '/cnd/c/WIRE/products?pageSize=100',     enabled: 1 },
+      { name: 'Disjoncteurs et panneaux', url: '/cnd/c/BREAKERS/products?pageSize=100', enabled: 1 },
+      { name: 'Boîtes et conduits',       url: '/cnd/c/CONDUIT/products?pageSize=100',  enabled: 0 },
+      { name: 'Éclairage',                url: '/cnd/c/LIGHTING/products?pageSize=100', enabled: 0 },
+    ];
+    for (const c of nedcoCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('nedco', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories Futech
+    const futechCategories = [
+      { name: 'Distribution électrique', url: '/fr/c/distribution-electrique',  enabled: 1 },
+      { name: 'Automatisation',          url: '/fr/c/automatisation',            enabled: 1 },
+      { name: 'Éclairage',               url: '/fr/c/eclairage',                 enabled: 0 },
+      { name: 'Outils',                  url: '/fr/c/outils',                    enabled: 0 },
+    ];
+    for (const c of futechCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('futech', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories Deschênes
+    const deschemesCategories = [
+      { name: 'Électricité',       url: '/s/electricite',        enabled: 1 },
+      { name: 'Plomberie',         url: '/s/plomberie',          enabled: 0 },
+      { name: 'CVC',               url: '/s/cvc',                enabled: 0 },
+    ];
+    for (const c of deschemesCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('deschenes', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories BMR
+    const bmrCategories = [
+      { name: 'Électricité',             url: '/fr/electricite',              enabled: 1 },
+      { name: 'Fils et câbles',          url: '/fr/electricite/fils-cables',  enabled: 1 },
+      { name: 'Disjoncteurs',            url: '/fr/electricite/disjoncteurs', enabled: 0 },
+      { name: 'Éclairage',               url: '/fr/electricite/eclairage',    enabled: 0 },
+    ];
+    for (const c of bmrCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('bmr', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
+
+    // Catégories Rona
+    const ronaCategories = [
+      { name: 'Électricité',             url: '/fr/electricite',                            enabled: 1 },
+      { name: 'Fils et câbles',          url: '/fr/electricite/fils-et-cables',             enabled: 1 },
+      { name: 'Disjoncteurs',            url: '/fr/electricite/disjoncteurs-et-panneaux',   enabled: 0 },
+      { name: 'Éclairage',               url: '/fr/eclairage',                              enabled: 0 },
+    ];
+    for (const c of ronaCategories) {
+      db.prepare(
+        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('rona', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, companyId);
+    }
   });
   seed();
 }
@@ -124,6 +214,40 @@ export function seedSuperadminCategories(db: Database.Database) {
       { supplier: 'guillevin', name: 'Boîtes et conduits',       url: '/collections/conduit-fittings-boxes' },
       { supplier: 'guillevin', name: 'Luminaires',               url: '/collections/lighting' },
       { supplier: 'guillevin', name: 'Outils',                   url: '/collections/tools' },
+      // JSV
+      { supplier: 'jsv', name: 'Outils électriques',  url: '/collections/power-tools' },
+      { supplier: 'jsv', name: 'Matériel électrique', url: '/collections/electrical' },
+      { supplier: 'jsv', name: 'Sécurité',            url: '/collections/safety' },
+      { supplier: 'jsv', name: 'Fixation',            url: '/collections/fasteners' },
+      // Westburne
+      { supplier: 'westburne', name: 'Fils et câbles',           url: '/cwr/c/WIRE/products?pageSize=100' },
+      { supplier: 'westburne', name: 'Disjoncteurs et panneaux', url: '/cwr/c/BREAKERS/products?pageSize=100' },
+      { supplier: 'westburne', name: 'Boîtes et conduits',       url: '/cwr/c/CONDUIT/products?pageSize=100' },
+      { supplier: 'westburne', name: 'Éclairage',                url: '/cwr/c/LIGHTING/products?pageSize=100' },
+      // Nedco
+      { supplier: 'nedco', name: 'Fils et câbles',           url: '/cnd/c/WIRE/products?pageSize=100' },
+      { supplier: 'nedco', name: 'Disjoncteurs et panneaux', url: '/cnd/c/BREAKERS/products?pageSize=100' },
+      { supplier: 'nedco', name: 'Boîtes et conduits',       url: '/cnd/c/CONDUIT/products?pageSize=100' },
+      { supplier: 'nedco', name: 'Éclairage',                url: '/cnd/c/LIGHTING/products?pageSize=100' },
+      // Futech
+      { supplier: 'futech', name: 'Distribution électrique', url: '/fr/c/distribution-electrique' },
+      { supplier: 'futech', name: 'Automatisation',          url: '/fr/c/automatisation' },
+      { supplier: 'futech', name: 'Éclairage',               url: '/fr/c/eclairage' },
+      { supplier: 'futech', name: 'Outils',                  url: '/fr/c/outils' },
+      // Deschênes
+      { supplier: 'deschenes', name: 'Électricité', url: '/s/electricite' },
+      { supplier: 'deschenes', name: 'Plomberie',   url: '/s/plomberie' },
+      { supplier: 'deschenes', name: 'CVC',         url: '/s/cvc' },
+      // BMR
+      { supplier: 'bmr', name: 'Électricité',    url: '/fr/electricite' },
+      { supplier: 'bmr', name: 'Fils et câbles', url: '/fr/electricite/fils-cables' },
+      { supplier: 'bmr', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs' },
+      { supplier: 'bmr', name: 'Éclairage',      url: '/fr/electricite/eclairage' },
+      // Rona
+      { supplier: 'rona', name: 'Électricité',    url: '/fr/electricite' },
+      { supplier: 'rona', name: 'Fils et câbles', url: '/fr/electricite/fils-et-cables' },
+      { supplier: 'rona', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs-et-panneaux' },
+      { supplier: 'rona', name: 'Éclairage',      url: '/fr/eclairage' },
     ];
     for (const c of allCategories) {
       db.prepare(
