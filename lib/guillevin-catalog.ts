@@ -57,26 +57,25 @@ export async function importGuillevinCatalog(
     });
     const page = await context.newPage();
 
-    // Login
+    // Login — Auth0 Universal Login: email (input#username) + password on same page
     await page.goto('https://www.guillevin.com/account/login', {
       waitUntil: 'domcontentloaded', timeout: 30000,
     });
     await page.waitForTimeout(2000);
 
-    const emailField = page.locator('input[type="email"], input[name="email"]').first();
+    const emailField = page.locator('input#username').first();
     await emailField.waitFor({ timeout: 10000 });
+    await emailField.click();
     await emailField.type(account.username, { delay: 60 });
     await page.waitForTimeout(300);
 
-    const continueBtn = page.locator('button[type="submit"]').first();
-    await continueBtn.click();
-    await page.waitForTimeout(1500);
-
-    const passwordField = page.locator('input[type="password"]').first();
+    const passwordField = page.locator('input#password').first();
     await passwordField.waitFor({ timeout: 10000 });
+    await passwordField.click();
     await passwordField.type(password, { delay: 60 });
+    await page.waitForTimeout(300);
 
-    await page.locator('button[type="submit"]:visible').last().click();
+    await passwordField.press('Enter');
     await page.waitForFunction(
       () => window.location.hostname.includes('guillevin.com'),
       { timeout: 20000 }
