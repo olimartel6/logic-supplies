@@ -144,12 +144,12 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
     }
 
     // Catégories Deschênes
-    const deschemesCategories = [
+    const deschenesCategories = [
       { name: 'Électricité',       url: '/s/electricite',        enabled: 1 },
       { name: 'Plomberie',         url: '/s/plomberie',          enabled: 0 },
       { name: 'CVC',               url: '/s/cvc',                enabled: 0 },
     ];
-    for (const c of deschemesCategories) {
+    for (const c of deschenesCategories) {
       db.prepare(
         "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('deschenes', ?, ?, ?, ?)"
       ).run(c.name, c.url, c.enabled, companyId);
