@@ -32,8 +32,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
 
   const db = getDb();
-  const user = db.prepare('SELECT id FROM users WHERE id = ? AND company_id = ?').get(userId, ctx.companyId);
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ? AND company_id = ?').get(userId, ctx.companyId) as { id: number; role: string } | undefined;
   if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 });
+  if (user.role !== 'electrician') {
+    return NextResponse.json({ error: "auto_approve ne s'applique qu'aux électriciens" }, { status: 400 });
+  }
 
   if (typeof body.auto_approve !== 'boolean') {
     return NextResponse.json({ error: 'Champ auto_approve manquant ou invalide' }, { status: 400 });

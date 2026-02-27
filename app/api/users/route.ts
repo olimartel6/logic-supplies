@@ -9,7 +9,7 @@ export async function GET() {
   if (ctx.role !== 'admin') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   const db = getDb();
   const users = db.prepare(
-    'SELECT id, name, email, role, created_at FROM users WHERE company_id = ? ORDER BY name'
+    'SELECT id, name, email, role, auto_approve, created_at FROM users WHERE company_id = ? ORDER BY name'
   ).all(ctx.companyId);
   return NextResponse.json(users);
 }
