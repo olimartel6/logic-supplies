@@ -93,7 +93,7 @@ export default function NavBar({ role, name, inventoryEnabled }: NavBarProps) {
   return (
     <>
       {/* Top bar */}
-      <div className="bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-md">
+      <div className="bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-2.5">
           <img src="/logo-shield.svg" className="h-8 w-auto flex-shrink-0" alt="LogicSupplies" />
           <div className="flex flex-col leading-none gap-0.5">
