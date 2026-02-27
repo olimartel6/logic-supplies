@@ -61,15 +61,33 @@ export async function loginToCanac(page: any, username: string, password: string
   }
 
   // Step 1: Click the header "Se connecter" button → opens account dialog
-  const headerBtn = page.locator('button.canac-login__btn').first();
-  await headerBtn.waitFor({ timeout: 8000 });
+  // Use flexible selectors in case Canac updates class names
+  const headerBtn = page.locator([
+    'button.canac-login__btn',
+    'button[class*="login__btn"]',
+    'button[class*="login-btn"]',
+    'button:has-text("Se connecter")',
+    'a:has-text("Se connecter")',
+  ].join(', ')).first();
+  await headerBtn.waitFor({ timeout: 12000 });
   await headerBtn.click();
   await page.waitForTimeout(1500);
 
   // Step 2: Click "Se connecter ou créer un compte" inside the dialog → redirects to Auth0 (login.canac.ca)
-  const dialogLoginBtn = page.locator('button.canac-my-account-dialog__login-btn').first();
-  await dialogLoginBtn.waitFor({ timeout: 8000 });
-  await dialogLoginBtn.click();
+  // If Auth0 already opened (some flows skip the dialog), skip this step
+  const alreadyOnAuth0 = page.url().includes('login.canac.ca');
+  if (!alreadyOnAuth0) {
+    const dialogLoginBtn = page.locator([
+      'button.canac-my-account-dialog__login-btn',
+      'button[class*="my-account-dialog__login"]',
+      'button[class*="dialog__login"]',
+      'button:has-text("Se connecter ou créer")',
+      'button:has-text("Connexion")',
+    ].join(', ')).first();
+    if (await dialogLoginBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await dialogLoginBtn.click();
+    }
+  }
 
   // Wait for Auth0 redirect to login.canac.ca
   await page.waitForFunction(
