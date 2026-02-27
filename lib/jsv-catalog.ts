@@ -59,7 +59,7 @@ export async function importJsvCatalog(
               const image_url = p.images?.[0]?.src || '';
               const name = p.title || '';
               if (name.length >= 3) {
-                parsed.push({ sku, name, image_url, price, unit: 'unité' });
+                parsed.push({ sku, name, image_url, price, unit: 'units' });
               }
             }
             products = parsed;

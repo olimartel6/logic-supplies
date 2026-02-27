@@ -90,8 +90,8 @@ export async function getJsvPrice(username: string, password: string, product: s
     if (items.length === 0) return null;
     const price = items[0]?.price;
     if (!price) return null;
-    // Shopify prices are in cents as strings
-    return typeof price === 'number' ? price / 100 : parseFloat(String(price).replace(',', '.')) / 100;
+    // Shopify suggest.json returns prices as decimal strings (e.g., "24.99")
+    return typeof price === 'number' ? price : parseFloat(String(price).replace(',', '.'));
   } catch {
     return null;
   }
@@ -131,6 +131,7 @@ export async function placeJsvOrder(
       if (await qtyInput.isVisible({ timeout: 2000 }).catch(() => false)) {
         await qtyInput.click({ clickCount: 3 });
         await qtyInput.type(quantity.toString(), { delay: 50 });
+        await page.waitForTimeout(300);
       }
 
       const addToCartBtn = page.locator(
