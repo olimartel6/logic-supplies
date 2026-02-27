@@ -25,56 +25,16 @@ async function createJsvPage(browser: any) {
   return context.newPage();
 }
 
-async function loginToJsv(page: any, username: string, password: string): Promise<boolean> {
-  await page.goto('https://groupejsv.com/account/login', {
-    waitUntil: 'domcontentloaded', timeout: 30000,
-  });
-  await page.waitForTimeout(2000);
-
-  const emailField = page.locator([
-    'input#customer_email',
-    'input[name="customer[email]"]',
-    'input[type="email"]',
-    'input#username',
-    'input[name="username"]',
-  ].join(', ')).first();
-  await emailField.waitFor({ timeout: 15000 });
-  await emailField.click();
-  await emailField.type(username, { delay: 60 });
-  await page.waitForTimeout(300);
-
-  const passwordField = page.locator([
-    'input#customer_password',
-    'input[name="customer[password]"]',
-    'input[type="password"]',
-  ].join(', ')).first();
-  await passwordField.waitFor({ timeout: 10000 });
-  await passwordField.click();
-  await passwordField.type(password, { delay: 60 });
-  await page.waitForTimeout(300);
-
-  await passwordField.press('Enter');
-  await page.waitForFunction(
-    () => !window.location.pathname.includes('/login'),
-    { timeout: 20000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
-
-  const url = page.url();
-  return !url.includes('/login') && !url.includes('/account/login');
-}
-
 export async function testJsvConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await createBrowserbaseBrowser();
+  // JSV uses Shopify Customer Accounts with email OTP — no password.
+  // We can only verify the site is reachable and an email was provided.
+  if (!username) return { success: false, error: 'Adresse email requise' };
   try {
-    const page = await createJsvPage(browser);
-    const loggedIn = await loginToJsv(page, username, password);
-    if (loggedIn) return { success: true };
-    return { success: false, error: 'Identifiants JSV invalides' };
+    const res = await fetch('https://groupejsv.com', { method: 'HEAD' });
+    if (res.ok || res.status < 500) return { success: true };
+    return { success: false, error: `JSV inaccessible (${res.status})` };
   } catch (err: any) {
     return { success: false, error: err.message };
-  } finally {
-    await browser.close();
   }
 }
 
@@ -105,11 +65,10 @@ export async function placeJsvOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
+  // JSV uses email OTP — no automated login possible. Add to cart as guest.
   const browser = await createBrowserbaseBrowser();
   try {
     const page = await createJsvPage(browser);
-    const loggedIn = await loginToJsv(page, username, password);
-    if (!loggedIn) return { success: false, error: 'Login JSV échoué' };
 
     await page.goto(
       `https://groupejsv.com/search?type=product&q=${encodeURIComponent(product)}`,
