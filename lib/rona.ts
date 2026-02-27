@@ -30,28 +30,38 @@ async function createRonaPage(browser: any) {
 }
 
 async function loginToRona(page: any, username: string, password: string): Promise<boolean> {
+  // networkidle waits for the React SPA to finish rendering the login form
   await page.goto('https://www.rona.ca/fr/connexion', {
+    waitUntil: 'networkidle', timeout: 45000,
+  }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
     waitUntil: 'domcontentloaded', timeout: 30000,
-  });
-  await page.waitForTimeout(3000);
+  }));
+  await page.waitForTimeout(4000);
 
-  // Dismiss cookie banner
-  const cookieBtn = page.locator(
-    '#onetrust-accept-btn-handler, button:has-text("Accepter tout"), button:has-text("Accept All")'
-  ).first();
-  if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  // Dismiss OneTrust cookie banner — must happen before interacting with form
+  const cookieBtn = page.locator([
+    '#onetrust-accept-btn-handler',
+    'button:has-text("Accepter tout")',
+    'button:has-text("Accept All")',
+    'button:has-text("Tout accepter")',
+    'button:has-text("J\'accepte")',
+  ].join(', ')).first();
+  if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
     await cookieBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
   }
 
   const emailField = page.locator([
     'input[name="email"]',
     'input[id="email"]',
+    'input[autocomplete="email"]',
     'input[type="email"]',
-    'input[id*="logon"]',
     'input[name="logonId"]',
+    'input[id*="logon"]',
+    'input[placeholder*="courriel"]',
+    'input[placeholder*="email"]',
   ].join(', ')).first();
-  await emailField.waitFor({ timeout: 15000 });
+  await emailField.waitFor({ timeout: 20000 });
   await emailField.click();
   await emailField.type(username, { delay: 60 });
   await page.waitForTimeout(300);
