@@ -76,10 +76,17 @@ export default function SuperAdminPage() {
       fetch('/api/superadmin/catalog/import?supplier=canac'),
       fetch('/api/superadmin/catalog/import?supplier=homedepot'),
       fetch('/api/superadmin/catalog/import?supplier=guillevin'),
+      fetch('/api/superadmin/catalog/import?supplier=jsv'),
+      fetch('/api/superadmin/catalog/import?supplier=westburne'),
+      fetch('/api/superadmin/catalog/import?supplier=nedco'),
+      fetch('/api/superadmin/catalog/import?supplier=futech'),
+      fetch('/api/superadmin/catalog/import?supplier=deschenes'),
+      fetch('/api/superadmin/catalog/import?supplier=bmr'),
+      fetch('/api/superadmin/catalog/import?supplier=rona'),
     ]);
     const accounts: CatalogAccount[] = await accountsRes.json();
     setCatalogAccounts(accounts);
-    const suppliers = ['lumen', 'canac', 'homedepot', 'guillevin'];
+    const suppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr', 'rona'];
     const stats: Record<string, CatalogStats> = {};
     for (let i = 0; i < suppliers.length; i++) {
       stats[suppliers[i]] = await statsRes[i].json();
@@ -439,6 +446,13 @@ export default function SuperAdminPage() {
               { key: 'canac',      label: 'Canac',       cls: 'bg-green-900/40 text-green-300 border-green-800' },
               { key: 'homedepot',  label: 'Home Depot',  cls: 'bg-orange-900/40 text-orange-300 border-orange-800' },
               { key: 'guillevin',  label: 'Guillevin',   cls: 'bg-purple-900/40 text-purple-300 border-purple-800' },
+              { key: 'jsv',        label: 'JSV',         cls: 'bg-yellow-900/40 text-yellow-300 border-yellow-800' },
+              { key: 'westburne',  label: 'Westburne',   cls: 'bg-red-900/40 text-red-300 border-red-800' },
+              { key: 'nedco',      label: 'Nedco',       cls: 'bg-pink-900/40 text-pink-300 border-pink-800' },
+              { key: 'futech',     label: 'Futech',      cls: 'bg-indigo-900/40 text-indigo-300 border-indigo-800' },
+              { key: 'deschenes',  label: 'Deschênes',   cls: 'bg-teal-900/40 text-teal-300 border-teal-800' },
+              { key: 'bmr',        label: 'BMR',         cls: 'bg-lime-900/40 text-lime-300 border-lime-800' },
+              { key: 'rona',       label: 'Rona',        cls: 'bg-cyan-900/40 text-cyan-300 border-cyan-800' },
             ].map(s => {
               const acc = catalogAccounts.find(a => a.supplier === s.key);
               const stats = catalogStats[s.key];
