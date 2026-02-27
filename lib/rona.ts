@@ -51,6 +51,13 @@ async function loginToRona(page: any, username: string, password: string): Promi
     await page.waitForTimeout(1000);
   }
 
+  // Log page state for debugging
+  const pageUrl = page.url();
+  const pageTitle = await page.title().catch(() => '?');
+  const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
+  console.error(`[Rona] login page: url=${pageUrl} title="${pageTitle}" visible-inputs=${inputCount}`);
+
+  // Try to find ANY visible text/email input on the page
   const emailField = page.locator([
     'input[name="email"]',
     'input[id="email"]',
@@ -60,6 +67,7 @@ async function loginToRona(page: any, username: string, password: string): Promi
     'input[id*="logon"]',
     'input[placeholder*="courriel"]',
     'input[placeholder*="email"]',
+    'input[type="text"]',
   ].join(', ')).first();
   await emailField.waitFor({ timeout: 20000 });
   await emailField.click();

@@ -44,25 +44,45 @@ export async function importRonaCatalog(
     });
     const page = await context.newPage();
 
-    // Login
-    await page.goto('https://www.rona.ca/fr/connexion', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(2000);
+    // Login — Rona is a React SPA; networkidle needed to render form fields
+    await page.goto('https://www.rona.ca/fr/connexion', {
+      waitUntil: 'networkidle', timeout: 45000,
+    }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    }));
+    await page.waitForTimeout(4000);
 
-    // Dismiss cookie banner
-    const cookieBtn = page.locator(
-      '#onetrust-accept-btn-handler, button:has-text("Accepter tout")'
-    ).first();
-    if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    // Dismiss OneTrust cookie banner
+    const cookieBtn = page.locator([
+      '#onetrust-accept-btn-handler',
+      'button:has-text("Accepter tout")',
+      'button:has-text("Accept All")',
+      'button:has-text("Tout accepter")',
+      'button:has-text("J\'accepte")',
+    ].join(', ')).first();
+    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await cookieBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(1000);
     }
+
+    // Log page state for debugging
+    const pageUrl = page.url();
+    const pageTitle = await page.title().catch(() => '?');
+    const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
+    console.error(`[Rona catalog] login page: url=${pageUrl} title="${pageTitle}" visible-inputs=${inputCount}`);
 
     const emailField = page.locator([
       'input[name="email"]',
       'input[id="email"]',
+      'input[autocomplete="email"]',
       'input[type="email"]',
+      'input[name="logonId"]',
+      'input[id*="logon"]',
+      'input[placeholder*="courriel"]',
+      'input[placeholder*="email"]',
+      'input[type="text"]',
     ].join(', ')).first();
-    await emailField.waitFor({ timeout: 15000 });
+    await emailField.waitFor({ timeout: 20000 });
     await emailField.fill(account.username);
     await page.waitForTimeout(300);
 
