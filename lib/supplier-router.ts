@@ -8,7 +8,7 @@ import { JSV_BRANCHES, placeJsvOrder, getJsvPrice } from './jsv';
 import { WESTBURNE_BRANCHES, placeWestburneOrder, getWestburnePrice } from './westburne';
 import { NEDCO_BRANCHES, placeNedcoOrder, getNedcoPrice } from './nedco';
 import { FUTECH_BRANCHES, placeFutechOrder, getFutechPrice } from './futech';
-import { DESCHENES_BRANCHES, placeDeschemesOrder, getDeschenesPrice } from './deschenes';
+import { DESCHENES_BRANCHES, placeDeschenesOrder, getDeschenesPrice } from './deschenes';
 import { BMR_BRANCHES, placeBmrOrder, getBmrPrice } from './bmr';
 import { RONA_BRANCHES, placeRonaOrder, getRonaPrice } from './rona';
 import { decrypt } from './encrypt';
@@ -83,7 +83,7 @@ async function placeOrder(account: SupplierAccount, product: string, quantity: n
     case 'westburne': return placeWestburneOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'nedco':     return placeNedcoOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'futech':    return placeFutechOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
-    case 'deschenes': return placeDeschemesOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'deschenes': return placeDeschenesOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'bmr':       return placeBmrOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'rona':      return placeRonaOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
   }
