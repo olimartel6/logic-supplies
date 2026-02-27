@@ -11,9 +11,7 @@ interface User {
   superadminCreated?: boolean;
 }
 interface Account { username: string; active: number; }
-interface Category { id: number; category_name: string; category_url: string; enabled: number; }
-interface CatalogStats { count: number; lastSync: string | null; }
-interface ImportProgress { category: string; imported: number; total: number; done: boolean; error?: string; }
+interface SupplierVisibility { supplier: string; visible: boolean; }
 
 type SectionTheme = {
   bg: string;
@@ -116,23 +114,10 @@ function SupplierSection({
   const [manualSessionResult, setManualSessionResult] = useState<boolean | null>(null);
   const [manualSessionError, setManualSessionError] = useState<string | null>(null);
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [enabledIds, setEnabledIds] = useState<number[]>([]);
-  const [savingCats, setSavingCats] = useState(false);
-  const [stats, setStats] = useState<CatalogStats | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState<ImportProgress[]>([]);
-  const [importDone, setImportDone] = useState(false);
-
   useEffect(() => {
     fetch(`/api/supplier/account?supplier=${supplierKey}`).then(r => r.json()).then((a: Account | null) => {
       if (a) { setAccount(a); setUsername(a.username); }
     });
-    fetch(`/api/supplier/categories?supplier=${supplierKey}`).then(r => r.json()).then((cats: Category[]) => {
-      setCategories(cats);
-      setEnabledIds(cats.filter(c => c.enabled).map(c => c.id));
-    });
-    fetch(`/api/supplier/import?supplier=${supplierKey}`).then(r => r.json()).then(setStats);
   }, [supplierKey]);
 
   async function handleSave(e: React.FormEvent) {
@@ -163,9 +148,6 @@ function SupplierSection({
     setTestResult(data.success);
     setTestError(data.error || null);
     setTesting(false);
-    if (data.success) {
-      handleImport();
-    }
   }
 
   async function handleManualSession() {
@@ -181,221 +163,85 @@ function SupplierSection({
     setManualSessionResult(data.success);
     setManualSessionError(data.error || null);
     setManualSession(false);
-    if (data.success) {
-      setTestResult(null);
-      handleImport();
-    }
-  }
-
-  async function handleSaveCategories() {
-    setSavingCats(true);
-    await fetch('/api/supplier/categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabledIds, supplier: supplierKey }),
-    });
-    setSavingCats(false);
-  }
-
-  function toggleCategory(id: number) {
-    setEnabledIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
-  async function handleImport() {
-    if (importing) return;
-    setImporting(true);
-    setImportProgress([]);
-    setImportDone(false);
-
-    const res = await fetch(`/api/supplier/import?supplier=${supplierKey}`, { method: 'POST' });
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    if (!reader) { setImporting(false); return; }
-
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              setImportDone(true);
-              if (data.stats) setStats(data.stats);
-              if (data.error) {
-                setImportProgress(prev => [...prev, { category: '⚠️ Erreur', imported: 0, total: 0, done: true, error: data.error }]);
-              }
-            } else {
-              setImportProgress(prev => {
-                const idx = prev.findIndex(p => p.category === data.category);
-                if (idx >= 0) { const u = [...prev]; u[idx] = data; return u; }
-                return [...prev, data];
-              });
-            }
-          } catch { /* ignore */ }
-        }
-      }
-    }
-    setImporting(false);
   }
 
   const cardClass = `${theme.bg} rounded-2xl border ${theme.border} shadow-sm p-5 mb-4`;
 
   return (
-    <>
-      {/* Credentials */}
-      <div className={cardClass}>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
-          </span>
-          <div>
-            <h2 className={`font-semibold ${theme.heading}`}>{label}</h2>
-            <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
-              {account ? '● Compte configuré' : '● Non connecté'}
-            </p>
-          </div>
+    <div className={cardClass}>
+      <div className="flex items-center gap-3 mb-4">
+        <span className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
+        </span>
+        <div>
+          <h2 className={`font-semibold ${theme.heading}`}>{label}</h2>
+          <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
+            {account ? '● Compte configuré' : '● Non connecté'}
+          </p>
         </div>
-
-        <form onSubmit={handleSave} className="space-y-3">
-          <div>
-            <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Nom d&apos;utilisateur {label}</label>
-            <input
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              required
-              className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="ton@email.com"
-            />
-          </div>
-          <div>
-            <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Mot de passe {label}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required={!account}
-              className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder={account ? '••••••• (laisser vide pour conserver)' : '••••••••'}
-            />
-          </div>
-          {saved && <p className="text-green-600 text-sm">✅ Sauvegardé avec succès</p>}
-          {testError && testResult === false && <p className="text-red-600 text-sm">❌ {testError}</p>}
-          {manualSessionResult === true && <p className="text-green-600 text-sm">✅ Session enregistrée — connexion automatique activée</p>}
-          {manualSessionError && manualSessionResult === false && <p className="text-red-600 text-sm">❌ {manualSessionError}</p>}
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleTest}
-              disabled={testing || !account}
-              className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
-            >
-              {testing ? '⏳ Test...' : testResult === true ? '✅ Connecté' : testResult === false ? '❌ Échec' : 'Tester la connexion'}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={`flex-1 ${buttonClass} text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition`}
-            >
-              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-            </button>
-          </div>
-          {showManualSession && account && (
-            <div className="pt-2 border-t border-gray-200 mt-2">
-              <p className="text-xs text-gray-500 mb-2">
-                Home Depot bloque les connexions automatiques. Une fenêtre Chrome normale s&apos;ouvre — connectez-vous, puis <strong>fermez la fenêtre Chrome</strong> quand vous avez terminé.
-              </p>
-              <button
-                type="button"
-                onClick={handleManualSession}
-                disabled={manualSession}
-                className="w-full border border-orange-300 text-orange-700 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-orange-50 disabled:opacity-50 transition"
-              >
-                {manualSession ? '⏳ Chrome ouvert — connectez-vous puis fermez la fenêtre...' : '🔑 Connexion manuelle Home Depot (ouvre Chrome)'}
-              </button>
-            </div>
-          )}
-        </form>
       </div>
 
-      {/* Catalog import */}
-      <div className={cardClass}>
-        <h2 className={`font-semibold ${theme.heading} mb-1 flex items-center gap-2`}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg>
-          Catalogue produits {label}
-        </h2>
-        {stats && (
-          <p className="text-xs text-gray-500 mb-4">
-            {stats.count} produits importés
-            {stats.lastSync ? ` · Dernière sync: ${new Date(stats.lastSync).toLocaleDateString('fr-CA')}` : ''}
-          </p>
-        )}
-        {!stats && <p className="text-xs text-gray-400 mb-4">Aucun produit importé</p>}
-
-        <p className={`text-sm font-medium ${theme.subtext} mb-2`}>Catégories à importer :</p>
-        <div className="space-y-2 mb-4">
-          {categories.map(cat => (
-            <label key={cat.id} className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enabledIds.includes(cat.id)}
-                onChange={() => toggleCategory(cat.id)}
-                className={`w-4 h-4 rounded ${theme.checkboxAccent}`}
-              />
-              <span className="text-sm text-gray-800">{cat.category_name}</span>
-            </label>
-          ))}
+      <form onSubmit={handleSave} className="space-y-3">
+        <div>
+          <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Nom d&apos;utilisateur {label}</label>
+          <input
+            type="text"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+            className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="ton@email.com"
+          />
         </div>
-
-        <div className="flex gap-2">
+        <div>
+          <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Mot de passe {label}</label>
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required={!account}
+            className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder={account ? '••••••• (laisser vide pour conserver)' : '••••••••'}
+          />
+        </div>
+        {saved && <p className="text-green-600 text-sm">✅ Sauvegardé avec succès</p>}
+        {testError && testResult === false && <p className="text-red-600 text-sm">❌ {testError}</p>}
+        {manualSessionResult === true && <p className="text-green-600 text-sm">✅ Session enregistrée — connexion automatique activée</p>}
+        {manualSessionError && manualSessionResult === false && <p className="text-red-600 text-sm">❌ {manualSessionError}</p>}
+        <div className="flex gap-2 pt-1">
           <button
             type="button"
-            onClick={handleSaveCategories}
-            disabled={savingCats}
+            onClick={handleTest}
+            disabled={testing || !account}
             className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
           >
-            {savingCats ? 'Sauvegarde...' : 'Sauvegarder catégories'}
+            {testing ? '⏳ Test...' : testResult === true ? '✅ Connecté' : testResult === false ? '❌ Échec' : 'Tester la connexion'}
           </button>
           <button
-            type="button"
-            onClick={handleImport}
-            disabled={importing}
+            type="submit"
+            disabled={saving}
             className={`flex-1 ${buttonClass} text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition`}
           >
-            {importing ? '⏳ Import...' : 'Importer maintenant'}
+            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>
         </div>
-
-        {importProgress.length > 0 && (
-          <div className="mt-4 space-y-1">
-            {importProgress.map(p => (
-              <div key={p.category} className="text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700">{p.category}</span>
-                  <span className={p.done ? 'text-green-600 font-medium' : 'text-blue-500'}>
-                    {p.done ? `✅ ${p.imported} produits` : `⏳ ${p.imported}...`}
-                  </span>
-                </div>
-                {p.error && p.category === '⚠️ Erreur' && <p className="text-red-600 break-all mt-0.5">{p.error}</p>}
-              </div>
-            ))}
-            {importDone && importProgress.reduce((s, p) => s + p.imported, 0) === 0 && (
-              <p className="text-red-600 text-xs font-medium mt-2">⚠️ 0 produits importés — voir détails ci-dessus</p>
-            )}
-            {importDone && importProgress.reduce((s, p) => s + p.imported, 0) > 0 && (
-              <p className="text-green-600 text-xs font-medium mt-2">
-                ✅ Import terminé — {importProgress.reduce((s, p) => s + p.imported, 0)} produits au total
-              </p>
-            )}
+        {showManualSession && account && (
+          <div className="pt-2 border-t border-gray-200 mt-2">
+            <p className="text-xs text-gray-500 mb-2">
+              Home Depot bloque les connexions automatiques. Une fenêtre Chrome normale s&apos;ouvre — connectez-vous, puis <strong>fermez la fenêtre Chrome</strong> quand vous avez terminé.
+            </p>
+            <button
+              type="button"
+              onClick={handleManualSession}
+              disabled={manualSession}
+              className="w-full border border-orange-300 text-orange-700 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-orange-50 disabled:opacity-50 transition"
+            >
+              {manualSession ? '⏳ Chrome ouvert — connectez-vous puis fermez la fenêtre...' : '🔑 Connexion manuelle Home Depot (ouvre Chrome)'}
+            </button>
           </div>
         )}
-      </div>
-    </>
+      </form>
+    </div>
   );
 }
 
@@ -422,13 +268,8 @@ export default function SettingsPage() {
   const [thresholdSaved, setThresholdSaved] = useState(false);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [enabledIds, setEnabledIds] = useState<number[]>([]);
-  const [savingCats, setSavingCats] = useState(false);
-  const [stats, setStats] = useState<CatalogStats | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState<ImportProgress[]>([]);
-  const [importDone, setImportDone] = useState(false);
+  const [supplierVisibility, setSupplierVisibility] = useState<SupplierVisibility[]>([]);
+  const [togglingSupplier, setTogglingSupplier] = useState<string | null>(null);
 
   const [billingLoading, setBillingLoading] = useState(false);
 
@@ -469,11 +310,7 @@ export default function SettingsPage() {
     fetch('/api/supplier/account').then(r => r.json()).then((a: Account | null) => {
       if (a) { setAccount(a); setUsername(a.username); }
     });
-    fetch('/api/supplier/categories').then(r => r.json()).then((cats: Category[]) => {
-      setCategories(cats);
-      setEnabledIds(cats.filter(c => c.enabled).map(c => c.id));
-    });
-    fetch('/api/supplier/import').then(r => r.json()).then(setStats);
+    fetch('/api/supplier/visibility').then(r => r.json()).then(setSupplierVisibility);
     fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite' }) => {
       if (data?.preference) setPreference(data.preference);
       if (data?.lumenRepEmail !== undefined) setLumenRepEmail(data.lumenRepEmail);
@@ -512,23 +349,19 @@ export default function SettingsPage() {
     setTestResult(data.success);
     setTestError(data.error || null);
     setTesting(false);
-    if (data.success) {
-      handleImport();
-    }
   }
 
-  async function handleSaveCategories() {
-    setSavingCats(true);
-    await fetch('/api/supplier/categories', {
+  async function handleToggleVisibility(supplier: string, visible: boolean) {
+    setTogglingSupplier(supplier);
+    setSupplierVisibility(prev =>
+      prev.map(v => v.supplier === supplier ? { ...v, visible } : v)
+    );
+    await fetch('/api/supplier/visibility', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabledIds }),
+      body: JSON.stringify({ supplier, visible }),
     });
-    setSavingCats(false);
-  }
-
-  function toggleCategory(id: number) {
-    setEnabledIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setTogglingSupplier(null);
   }
 
   async function handlePreferenceChange(pref: 'cheapest' | 'fastest') {
@@ -578,48 +411,6 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inventory_enabled: next }),
     });
-  }
-
-  async function handleImport() {
-    if (importing) return;
-    setImporting(true);
-    setImportProgress([]);
-    setImportDone(false);
-
-    const res = await fetch('/api/supplier/import', { method: 'POST' });
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    if (!reader) { setImporting(false); return; }
-
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              setImportDone(true);
-              if (data.stats) setStats(data.stats);
-              if (data.error) {
-                setImportProgress(prev => [...prev, { category: '⚠️ Erreur', imported: 0, total: 0, done: true, error: data.error }]);
-              }
-            } else {
-              setImportProgress(prev => {
-                const idx = prev.findIndex(p => p.category === data.category);
-                if (idx >= 0) { const u = [...prev]; u[idx] = data; return u; }
-                return [...prev, data];
-              });
-            }
-          } catch { /* ignore */ }
-        }
-      }
-    }
-    setImporting(false);
   }
 
   async function handleSavePayment(e: React.FormEvent) {
@@ -834,76 +625,6 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          {/* Lumen catalog */}
-          <div className={`${lumenTheme.bg} rounded-2xl border ${lumenTheme.border} shadow-sm p-5 mb-6`}>
-            <h2 className={`font-semibold ${lumenTheme.heading} mb-1 flex items-center gap-2`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg>
-              Catalogue produits Lumen
-            </h2>
-            {stats && (
-              <p className="text-xs text-gray-500 mb-4">
-                {stats.count} produits importés
-                {stats.lastSync ? ` · Dernière sync: ${new Date(stats.lastSync).toLocaleDateString('fr-CA')}` : ''}
-              </p>
-            )}
-            {!stats && <p className="text-xs text-gray-400 mb-4">Aucun produit importé</p>}
-            <p className={`text-sm font-medium ${lumenTheme.subtext} mb-2`}>Catégories à importer :</p>
-            <div className="space-y-2 mb-4">
-              {categories.map(cat => (
-                <label key={cat.id} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={enabledIds.includes(cat.id)}
-                    onChange={() => toggleCategory(cat.id)}
-                    className={`w-4 h-4 rounded ${lumenTheme.checkboxAccent}`}
-                  />
-                  <span className="text-sm text-gray-800">{cat.category_name}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleSaveCategories}
-                disabled={savingCats}
-                className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
-              >
-                {savingCats ? 'Sauvegarde...' : 'Sauvegarder catégories'}
-              </button>
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={importing}
-                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition"
-              >
-                {importing ? '⏳ Import...' : 'Importer maintenant'}
-              </button>
-            </div>
-            {importProgress.length > 0 && (
-              <div className="mt-4 space-y-1">
-                {importProgress.map(p => (
-                  <div key={p.category} className="text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-700">{p.category}</span>
-                      <span className={p.done ? 'text-green-600 font-medium' : 'text-blue-500'}>
-                        {p.done ? `✅ ${p.imported} produits` : `⏳ ${p.imported}...`}
-                      </span>
-                    </div>
-                    {p.error && p.category === '⚠️ Erreur' && <p className="text-red-600 break-all mt-0.5">{p.error}</p>}
-                  </div>
-                ))}
-                {importDone && importProgress.reduce((sum, p) => sum + p.imported, 0) === 0 && (
-                  <p className="text-red-600 text-xs font-medium mt-2">⚠️ 0 produits importés — voir détails ci-dessus</p>
-                )}
-                {importDone && importProgress.reduce((sum, p) => sum + p.imported, 0) > 0 && (
-                  <p className="text-green-600 text-xs font-medium mt-2">
-                    ✅ Import terminé — {importProgress.reduce((sum, p) => sum + p.imported, 0)} produits au total
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* ─── CANAC ─── */}
           <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2 px-1">Canac</p>
           <SupplierSection supplierKey="canac" label="Canac" theme={themes.blue} />
@@ -915,6 +636,55 @@ export default function SettingsPage() {
           {/* ─── GUILLEVIN ─── */}
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-2 px-1">Guillevin</p>
           <SupplierSection supplierKey="guillevin" label="Guillevin" theme={themes.gray} />
+        </AccordionSection>
+
+        {/* ─── CATALOGUE ─── */}
+        <AccordionSection
+          title="Catalogue produits"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg>}
+          isOpen={openSection === 'catalogue'}
+          onToggle={() => toggleSection('catalogue')}
+        >
+          <p className="text-xs text-gray-500 mb-4">
+            Choisissez quels fournisseurs sont visibles dans la recherche de produits. Tous sont cachés par défaut.
+          </p>
+          <div className="bg-gray-50 rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {[
+              { key: 'lumen',     label: 'Lumen',       dot: 'bg-red-500' },
+              { key: 'canac',     label: 'Canac',       dot: 'bg-blue-500' },
+              { key: 'homedepot', label: 'Home Depot',  dot: 'bg-orange-500' },
+              { key: 'guillevin', label: 'Guillevin',   dot: 'bg-purple-500' },
+              { key: 'jsv',       label: 'JSV',         dot: 'bg-yellow-500' },
+              { key: 'westburne', label: 'Westburne',   dot: 'bg-red-700' },
+              { key: 'nedco',     label: 'Nedco',       dot: 'bg-pink-500' },
+              { key: 'futech',    label: 'Futech',      dot: 'bg-indigo-500' },
+              { key: 'deschenes', label: 'Deschênes',   dot: 'bg-teal-500' },
+              { key: 'bmr',       label: 'BMR',         dot: 'bg-lime-600' },
+              { key: 'rona',      label: 'Rona',        dot: 'bg-cyan-500' },
+            ].map(s => {
+              const isVisible = supplierVisibility.find(v => v.supplier === s.key)?.visible ?? false;
+              return (
+                <div key={s.key} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-2.5 h-2.5 rounded-full ${s.dot} flex-shrink-0`} />
+                    <span className="text-sm font-medium text-gray-800">{s.label}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleVisibility(s.key, !isVisible)}
+                    disabled={togglingSupplier === s.key}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                      isVisible ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      isVisible ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </AccordionSection>
 
         {/* ─── ALERTES ─── */}

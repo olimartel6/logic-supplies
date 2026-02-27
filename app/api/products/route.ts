@@ -85,20 +85,35 @@ export async function GET(req: NextRequest) {
   const tokenParams = tokens.flatMap(t => [`%${t}%`, `%${t}%`]);
   const firstTokenStartsWith = `${tokens[0]}%`;
 
+  // Filter by per-company supplier visibility
+  const visRows = db.prepare(
+    'SELECT supplier, visible FROM supplier_visibility WHERE company_id = ?'
+  ).all(ctx.companyId) as { supplier: string; visible: number }[];
+
+  let supplierWhere = '';
+  let supplierParams: string[] = [];
+  if (visRows.length > 0) {
+    const visible = visRows.filter(r => r.visible === 1).map(r => r.supplier);
+    if (visible.length === 0) return NextResponse.json([]);
+    supplierWhere = `AND supplier IN (${visible.map(() => '?').join(',')})`;
+    supplierParams = visible;
+  }
+  // If no visibility rows exist yet (legacy company), show all — no filter applied
+
   let results: any[];
 
   if (preference === 'cheapest') {
     results = db.prepare(`
       SELECT name, sku, image_url, price, unit, category, supplier
       FROM products
-      WHERE ${tokenWhere}
+      WHERE ${tokenWhere} ${supplierWhere}
       ORDER BY
         CASE WHEN price IS NULL THEN 1 ELSE 0 END,
         price ASC,
         CASE WHEN normalize_text(name) LIKE ? THEN 0 ELSE 1 END,
         name ASC
       LIMIT ${limit}
-    `).all(...tokenParams, firstTokenStartsWith) as any[];
+    `).all(...tokenParams, ...supplierParams, firstTokenStartsWith) as any[];
   } else {
     // Fastest: sort by nearest supplier to the job site
     let supplierOrder = ['lumen', 'canac', 'homedepot', 'guillevin'];
@@ -121,13 +136,13 @@ export async function GET(req: NextRequest) {
     results = db.prepare(`
       SELECT name, sku, image_url, price, unit, category, supplier
       FROM products
-      WHERE ${tokenWhere}
+      WHERE ${tokenWhere} ${supplierWhere}
       ORDER BY
         CASE WHEN supplier = ? THEN 0 WHEN supplier = ? THEN 1 ELSE 2 END,
         CASE WHEN normalize_text(name) LIKE ? THEN 0 ELSE 1 END,
         name ASC
       LIMIT ${limit}
-    `).all(...tokenParams, s0, s1, firstTokenStartsWith) as any[];
+    `).all(...tokenParams, ...supplierParams, s0, s1, firstTokenStartsWith) as any[];
   }
 
   return NextResponse.json(results);

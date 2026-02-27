@@ -180,6 +180,13 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
         "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('rona', ?, ?, ?, ?)"
       ).run(c.name, c.url, c.enabled, companyId);
     }
+
+    // Visibilité fournisseurs — tous cachés par défaut
+    for (const s of ['lumen','canac','homedepot','guillevin','jsv','westburne','nedco','futech','deschenes','bmr','rona']) {
+      db.prepare(
+        'INSERT OR IGNORE INTO supplier_visibility (company_id, supplier, visible) VALUES (?, ?, 0)'
+      ).run(companyId, s);
+    }
   });
   seed();
 }
@@ -352,6 +359,13 @@ function initDb(db: Database.Database) {
       enabled INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS supplier_visibility (
+      company_id INTEGER NOT NULL,
+      supplier   TEXT NOT NULL,
+      visible    INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (company_id, supplier)
+    );
+
     CREATE TABLE IF NOT EXISTS company_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id),
@@ -386,6 +400,7 @@ function initDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_requests_company ON requests(company_id);
     CREATE INDEX IF NOT EXISTS idx_supplier_accounts_company ON supplier_accounts(company_id);
     CREATE INDEX IF NOT EXISTS idx_supplier_categories_company ON supplier_categories(company_id);
+    CREATE INDEX IF NOT EXISTS idx_supplier_visibility_company ON supplier_visibility(company_id);
     CREATE INDEX IF NOT EXISTS idx_budget_alerts_company ON budget_alerts(company_id);
 
     CREATE TABLE IF NOT EXISTS inventory_items (
