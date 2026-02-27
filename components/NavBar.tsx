@@ -110,7 +110,7 @@ export default function NavBar({ role, name, inventoryEnabled }: NavBarProps) {
       </div>
 
       {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 py-3 z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 py-3 z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
         <div className="flex justify-around max-w-lg mx-auto">
           {isElectrician && (
             <>
