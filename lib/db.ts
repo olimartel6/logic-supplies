@@ -2,14 +2,13 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'sparky.db');
-console.log('[db] DATABASE_PATH env:', process.env.DATABASE_PATH);
-console.log('[db] Using DB_PATH:', DB_PATH);
-
 let db: Database.Database;
 
 export function getDb() {
   if (!db) {
+    const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'sparky.db');
+    console.log('[db:runtime] DATABASE_PATH env:', process.env.DATABASE_PATH);
+    console.log('[db:runtime] Using DB_PATH:', DB_PATH);
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
     // Custom SQLite function: accent-insensitive, case-insensitive, dimension-normalized search
