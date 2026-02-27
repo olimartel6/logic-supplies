@@ -32,47 +32,59 @@ async function createGuillevinPage(browser: any) {
   return context.newPage();
 }
 
-// Guillevin uses Auth0 (gic.ca.auth0.com) — same Universal Login pattern as Canac.
-// Both email (input#username) and password (input#password) are shown on the same page.
-// Flow: fill email → fill password → press Enter → redirect back to guillevin.com
+// Guillevin migrated to Shopify's new Customer Accounts (shopify.com/<id>/account).
+// New flow is 2-step: enter email → click Continue → enter password → submit.
+// The page is a React SPA so we need extra time after domcontentloaded to render.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
   await page.goto('https://www.guillevin.com/account/login', {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
-  await page.waitForTimeout(2000);
+  // Extra wait for React SPA to render after shopify.com redirect
+  await page.waitForTimeout(4000);
 
-  // Auth0 Universal Login (selectors may vary by deployment)
+  // Step 1: email field (Shopify new accounts uses name="email")
   const emailField = page.locator([
-    'input#username',
-    'input[name="username"]',
-    'input[type="email"]',
     'input[name="email"]',
+    'input[type="email"]',
+    'input[id="email"]',
+    'input#username',        // legacy Auth0 fallback
+    'input[name="username"]',
   ].join(', ')).first();
-  await emailField.waitFor({ timeout: 15000 });
+  await emailField.waitFor({ timeout: 20000 });
   await emailField.click();
   await emailField.type(username, { delay: 60 });
   await page.waitForTimeout(300);
 
-  const passwordField = page.locator([
-    'input#password',
-    'input[name="password"]',
-    'input[type="password"]',
+  // New Shopify accounts: click "Continue" to reveal the password field
+  const continueBtn = page.locator([
+    'button[type="submit"]:has-text("Continue")',
+    'button[type="submit"]:has-text("Continuer")',
+    'button:has-text("Continue")',
+    'button:has-text("Continuer")',
   ].join(', ')).first();
-  await passwordField.waitFor({ timeout: 10000 });
+  if (await continueBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await continueBtn.click();
+    await page.waitForTimeout(2000);
+  }
+
+  // Step 2: password field (appears after Continue, or on same page for legacy login)
+  const passwordField = page.locator([
+    'input[type="password"]',
+    'input[name="password"]',
+    'input#password',
+  ].join(', ')).first();
+  await passwordField.waitFor({ timeout: 15000 });
   await passwordField.click();
   await passwordField.type(password, { delay: 60 });
   await page.waitForTimeout(300);
 
-  // Submit by pressing Enter (same as Canac)
   await passwordField.press('Enter');
-
-  // Wait until we land back on guillevin.com (leaving gic.ca.auth0.com)
   await page.waitForFunction(
     () => window.location.hostname.includes('guillevin.com'),
-    { timeout: 20000 }
+    { timeout: 25000 }
   ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
 
   const url = page.url();
   return url.includes('guillevin.com') && !url.includes('login');
