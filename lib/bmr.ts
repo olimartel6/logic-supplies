@@ -30,18 +30,26 @@ async function createBmrPage(browser: any) {
 }
 
 async function loginToBmr(page: any, username: string, password: string): Promise<boolean> {
+  // Use networkidle so reCAPTCHA and Axeptio scripts are fully loaded before we interact
   await page.goto('https://www.bmr.ca/fr/customer/account/login/', {
+    waitUntil: 'networkidle', timeout: 40000,
+  }).catch(() => page.goto('https://www.bmr.ca/fr/customer/account/login/', {
     waitUntil: 'domcontentloaded', timeout: 30000,
-  });
-  await page.waitForTimeout(2000);
+  }));
+  await page.waitForTimeout(3000);
 
-  // Dismiss any cookie/GDPR banner
-  const cookieBtn = page.locator(
-    'button:has-text("Accepter"), button:has-text("Accept"), #onetrust-accept-btn-handler'
-  ).first();
-  if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  // BMR uses Axeptio for cookie consent (not OneTrust)
+  const cookieBtn = page.locator([
+    '#axeptio_btn_acceptAll',
+    '.axeptio-btn-accept',
+    'button:has-text("D\'accord")',
+    'button:has-text("Tout accepter")',
+    'button:has-text("Accepter tout")',
+    'button:has-text("Accept all")',
+  ].join(', ')).first();
+  if (await cookieBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
     await cookieBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
   }
 
   const emailField = page.locator([
@@ -64,14 +72,26 @@ async function loginToBmr(page: any, username: string, password: string): Promis
   await passwordField.waitFor({ timeout: 10000 });
   await passwordField.click();
   await passwordField.type(password, { delay: 60 });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
 
-  await passwordField.press('Enter');
+  // Click submit button explicitly — required to trigger invisible reCAPTCHA
+  const submitBtn = page.locator([
+    'button:has-text("Connexion")',
+    'button[type="submit"]#send2',
+    'button[type="submit"].action.login',
+    'button[type="submit"]',
+  ].join(', ')).first();
+  if (await submitBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await submitBtn.click();
+  } else {
+    await passwordField.press('Enter');
+  }
+
   await page.waitForFunction(
     () => !window.location.pathname.includes('/login'),
-    { timeout: 20000 }
+    { timeout: 25000 }
   ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
 
   const url = page.url();
   return !url.includes('/login') && url.includes('bmr.ca');
