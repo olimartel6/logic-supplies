@@ -7,6 +7,7 @@ export async function createBrowserbaseBrowser() {
   });
   const session = await bb.sessions.create({
     projectId: process.env.BROWSERBASE_PROJECT_ID!,
+    timeout: 300, // 5 minutes max, auto-close si bloqué
   });
   return chromium.connectOverCDP(session.connectUrl);
 }
