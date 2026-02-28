@@ -95,12 +95,18 @@ function SupplierSection({
   showManualSession,
   theme,
   buttonClass = 'bg-blue-600 hover:bg-blue-700',
+  visible = false,
+  toggling = false,
+  onToggleVisible,
 }: {
   supplierKey: 'canac' | 'homedepot' | 'guillevin';
   label: string;
   showManualSession?: boolean;
   theme: SectionTheme;
   buttonClass?: string;
+  visible?: boolean;
+  toggling?: boolean;
+  onToggleVisible?: (v: boolean) => void;
 }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [username, setUsername] = useState('');
@@ -173,12 +179,25 @@ function SupplierSection({
         <span className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
         </span>
-        <div>
+        <div className="flex-1">
           <h2 className={`font-semibold ${theme.heading}`}>{label}</h2>
           <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
             {account ? '● Compte configuré' : '● Non connecté'}
           </p>
         </div>
+        {onToggleVisible && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-gray-400">Catalogue</span>
+            <button
+              type="button"
+              onClick={() => onToggleVisible(!visible)}
+              disabled={toggling}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${visible ? 'bg-blue-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${visible ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-3">
@@ -546,11 +565,22 @@ export default function SettingsPage() {
               <span className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-red-700"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
               </span>
-              <div>
+              <div className="flex-1">
                 <h2 className={`font-semibold ${lumenTheme.heading}`}>Lumen — Compte</h2>
                 <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
                   {account ? '● Compte configuré' : '● Non connecté'}
                 </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-gray-400">Catalogue</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleVisibility('lumen', !(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false))}
+                  disabled={togglingSupplier === 'lumen'}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false) ? 'bg-blue-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false) ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
             </div>
             <form onSubmit={handleSave} className="space-y-3">
@@ -627,40 +657,49 @@ export default function SettingsPage() {
 
           {/* ─── CANAC ─── */}
           <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2 px-1">Canac</p>
-          <SupplierSection supplierKey="canac" label="Canac" theme={themes.blue} />
+          <SupplierSection
+            supplierKey="canac"
+            label="Canac"
+            theme={themes.blue}
+            visible={supplierVisibility.find(v => v.supplier === 'canac')?.visible ?? false}
+            toggling={togglingSupplier === 'canac'}
+            onToggleVisible={v => handleToggleVisibility('canac', v)}
+          />
 
           {/* ─── HOME DEPOT ─── */}
           <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-2 mt-2 px-1">Home Depot</p>
-          <SupplierSection supplierKey="homedepot" label="Home Depot" showManualSession theme={themes.orange} />
+          <SupplierSection
+            supplierKey="homedepot"
+            label="Home Depot"
+            showManualSession
+            theme={themes.orange}
+            visible={supplierVisibility.find(v => v.supplier === 'homedepot')?.visible ?? false}
+            toggling={togglingSupplier === 'homedepot'}
+            onToggleVisible={v => handleToggleVisibility('homedepot', v)}
+          />
 
           {/* ─── GUILLEVIN ─── */}
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-2 px-1">Guillevin</p>
-          <SupplierSection supplierKey="guillevin" label="Guillevin" theme={themes.gray} />
-        </AccordionSection>
+          <SupplierSection
+            supplierKey="guillevin"
+            label="Guillevin"
+            theme={themes.gray}
+            visible={supplierVisibility.find(v => v.supplier === 'guillevin')?.visible ?? false}
+            toggling={togglingSupplier === 'guillevin'}
+            onToggleVisible={v => handleToggleVisibility('guillevin', v)}
+          />
 
-        {/* ─── CATALOGUE ─── */}
-        <AccordionSection
-          title="Catalogue produits"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg>}
-          isOpen={openSection === 'catalogue'}
-          onToggle={() => toggleSection('catalogue')}
-        >
-          <p className="text-xs text-gray-500 mb-4">
-            Choisissez quels fournisseurs sont visibles dans la recherche de produits. Tous sont cachés par défaut.
-          </p>
+          {/* ─── Autres fournisseurs (catalogue seulement) ─── */}
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-2 px-1">Autres fournisseurs</p>
           <div className="bg-gray-50 rounded-xl border border-gray-200 divide-y divide-gray-100">
             {[
-              { key: 'lumen',     label: 'Lumen',       dot: 'bg-red-500' },
-              { key: 'canac',     label: 'Canac',       dot: 'bg-blue-500' },
-              { key: 'homedepot', label: 'Home Depot',  dot: 'bg-orange-500' },
-              { key: 'guillevin', label: 'Guillevin',   dot: 'bg-purple-500' },
-              { key: 'jsv',       label: 'JSV',         dot: 'bg-yellow-500' },
-              { key: 'westburne', label: 'Westburne',   dot: 'bg-red-700' },
-              { key: 'nedco',     label: 'Nedco',       dot: 'bg-pink-500' },
-              { key: 'futech',    label: 'Futech',      dot: 'bg-indigo-500' },
-              { key: 'deschenes', label: 'Deschênes',   dot: 'bg-teal-500' },
-              { key: 'bmr',       label: 'BMR',         dot: 'bg-lime-600' },
-              { key: 'rona',      label: 'Rona',        dot: 'bg-cyan-500' },
+              { key: 'jsv',       label: 'JSV',       dot: 'bg-yellow-500' },
+              { key: 'westburne', label: 'Westburne', dot: 'bg-red-700'    },
+              { key: 'nedco',     label: 'Nedco',     dot: 'bg-pink-500'   },
+              { key: 'futech',    label: 'Futech',    dot: 'bg-indigo-500' },
+              { key: 'deschenes', label: 'Deschênes', dot: 'bg-teal-500'   },
+              { key: 'bmr',       label: 'BMR',       dot: 'bg-lime-600'   },
+              { key: 'rona',      label: 'Rona',      dot: 'bg-cyan-500'   },
             ].map(s => {
               const isVisible = supplierVisibility.find(v => v.supplier === s.key)?.visible ?? false;
               return (
@@ -669,18 +708,21 @@ export default function SettingsPage() {
                     <span className={`w-2.5 h-2.5 rounded-full ${s.dot} flex-shrink-0`} />
                     <span className="text-sm font-medium text-gray-800">{s.label}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleVisibility(s.key, !isVisible)}
-                    disabled={togglingSupplier === s.key}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-                      isVisible ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      isVisible ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">Catalogue</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleVisibility(s.key, !isVisible)}
+                      disabled={togglingSupplier === s.key}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                        isVisible ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        isVisible ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
