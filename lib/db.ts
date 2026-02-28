@@ -157,10 +157,9 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
 
     // Catégories BMR
     const bmrCategories = [
-      { name: 'Électricité',             url: '/fr/electricite',              enabled: 1 },
-      { name: 'Fils et câbles',          url: '/fr/electricite/fils-cables',  enabled: 1 },
-      { name: 'Disjoncteurs',            url: '/fr/electricite/disjoncteurs', enabled: 0 },
-      { name: 'Éclairage',               url: '/fr/electricite/eclairage',    enabled: 0 },
+      { name: 'Fils et câbles',  url: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html', enabled: 1 },
+      { name: 'Disjoncteurs',    url: '/fr/electricite/disjoncteurs-et-fusibles.html',               enabled: 0 },
+      { name: 'Éclairage',       url: '/fr/luminaires-et-eclairage.html',                            enabled: 0 },
     ];
     for (const c of bmrCategories) {
       db.prepare(
@@ -246,10 +245,9 @@ export function seedSuperadminCategories(db: Database.Database) {
       { supplier: 'deschenes', name: 'Plomberie',   url: '/s/plomberie' },
       { supplier: 'deschenes', name: 'CVC',         url: '/s/cvc' },
       // BMR
-      { supplier: 'bmr', name: 'Électricité',    url: '/fr/electricite' },
-      { supplier: 'bmr', name: 'Fils et câbles', url: '/fr/electricite/fils-cables' },
-      { supplier: 'bmr', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs' },
-      { supplier: 'bmr', name: 'Éclairage',      url: '/fr/electricite/eclairage' },
+      { supplier: 'bmr', name: 'Fils et câbles', url: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
+      { supplier: 'bmr', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs-et-fusibles.html' },
+      { supplier: 'bmr', name: 'Éclairage',      url: '/fr/luminaires-et-eclairage.html' },
       // Rona
       { supplier: 'rona', name: 'Électricité',    url: '/fr/electricite' },
       { supplier: 'rona', name: 'Fils et câbles', url: '/fr/electricite/fils-et-cables' },
