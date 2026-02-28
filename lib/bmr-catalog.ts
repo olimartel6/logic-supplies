@@ -51,42 +51,64 @@ export async function importBmrCatalog(
 
     // Login
     await page.goto('https://www.bmr.ca/fr/customer/account/login/', {
+      waitUntil: 'networkidle', timeout: 40000,
+    }).catch(() => page.goto('https://www.bmr.ca/fr/customer/account/login/', {
       waitUntil: 'domcontentloaded', timeout: 30000,
-    });
-    await page.waitForTimeout(2000);
+    }));
+    await page.waitForTimeout(3000);
 
-    // Dismiss any cookie/GDPR banner
-    const cookieBtn = page.locator(
-      'button:has-text("Accepter"), button:has-text("Accept"), #onetrust-accept-btn-handler'
-    ).first();
-    if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    // BMR uses Axeptio for cookie consent
+    const cookieBtn = page.locator([
+      '#axeptio_btn_acceptAll',
+      '.axeptio-btn-accept',
+      'button:has-text("D\'accord")',
+      'button:has-text("Tout accepter")',
+      'button:has-text("Accepter tout")',
+      'button:has-text("Accept all")',
+    ].join(', ')).first();
+    if (await cookieBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       await cookieBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(800);
     }
 
     const emailField = page.locator([
       'input#email',
       'input[name="login[username]"]',
+      'input[autocomplete="email"]',
       'input[type="email"]',
     ].join(', ')).first();
     await emailField.waitFor({ timeout: 15000 });
-    await emailField.fill(account.username);
+    await emailField.click();
+    await emailField.type(account.username, { delay: 60 });
     await page.waitForTimeout(300);
 
     const passwordField = page.locator([
       'input#pass',
       'input[name="login[password]"]',
+      'input[autocomplete="current-password"]',
       'input[type="password"]',
     ].join(', ')).first();
     await passwordField.waitFor({ timeout: 10000 });
-    await passwordField.fill(password);
-    await page.waitForTimeout(300);
+    await passwordField.click();
+    await passwordField.type(password, { delay: 60 });
+    await page.waitForTimeout(500);
 
-    await passwordField.press('Enter');
+    const submitBtn = page.locator([
+      'button:has-text("Connexion")',
+      'button[type="submit"]#send2',
+      'button[type="submit"].action.login',
+      'button[type="submit"]',
+    ].join(', ')).first();
+    if (await submitBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await submitBtn.click();
+    } else {
+      await passwordField.press('Enter');
+    }
+
     await page.waitForFunction(
-      () => !window.location.pathname.includes('/login'), { timeout: 20000 }
+      () => !window.location.pathname.includes('/login'), { timeout: 25000 }
     ).catch(() => {});
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
 
     if (!page.url().includes('bmr.ca') || page.url().includes('/login')) {
       return { total: 0, error: 'Login BMR échoué' };
