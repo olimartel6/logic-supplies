@@ -17,8 +17,10 @@ export async function GET() {
   ).all(ctx.companyId) as { supplier: string; visible: number }[];
 
   const map = Object.fromEntries(rows.map(r => [r.supplier, r.visible === 1]));
+  // Legacy companies with no rows: treat all as visible (matches product API behaviour)
+  const defaultVisible = rows.length === 0;
   return NextResponse.json(
-    ALL_SUPPLIERS.map(s => ({ supplier: s, visible: map[s] ?? false }))
+    ALL_SUPPLIERS.map(s => ({ supplier: s, visible: map[s] ?? defaultVisible }))
   );
 }
 
@@ -35,6 +37,21 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
+
+  // If this is the first toggle for a legacy company (no rows yet), seed all as visible=1
+  // so turning one OFF doesn't hide everything else.
+  const count = (db.prepare(
+    'SELECT COUNT(*) as cnt FROM supplier_visibility WHERE company_id = ?'
+  ).get(ctx.companyId) as any).cnt as number;
+  if (count === 0) {
+    const insertAll = db.prepare(
+      'INSERT OR IGNORE INTO supplier_visibility (company_id, supplier, visible) VALUES (?, ?, 1)'
+    );
+    for (const s of ALL_SUPPLIERS) {
+      insertAll.run(ctx.companyId, s);
+    }
+  }
+
   db.prepare(`
     INSERT INTO supplier_visibility (company_id, supplier, visible) VALUES (?, ?, ?)
     ON CONFLICT(company_id, supplier) DO UPDATE SET visible = excluded.visible

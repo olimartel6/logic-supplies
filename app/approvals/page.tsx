@@ -170,7 +170,7 @@ function ApprovalsContent() {
           {displayed.map(r => (
             <div
               key={r.id}
-              onClick={() => { setSelected(r); setComment(''); }}
+              onClick={() => { setSelected(r); setComment(''); setConfirmOrder(false); }}
               className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:border-blue-300 hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-start justify-between">
