@@ -559,4 +559,17 @@ function initDb(db: Database.Database) {
   if (!linkSetting) {
     db.prepare("INSERT INTO app_settings (key, value) VALUES ('stripe_payment_link', '')").run();
   }
+
+  // Fix stale BMR category URLs (old paths returned 404 — missing .html and wrong subcategory paths)
+  const bmrUrlFixes: Array<{ old: string; new: string }> = [
+    { old: '/fr/electricite',              new: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
+    { old: '/fr/electricite/fils-cables',  new: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
+    { old: '/fr/electricite/disjoncteurs', new: '/fr/electricite/disjoncteurs-et-fusibles.html' },
+    { old: '/fr/electricite/eclairage',    new: '/fr/luminaires-et-eclairage.html' },
+  ];
+  for (const fix of bmrUrlFixes) {
+    db.prepare(
+      "UPDATE supplier_categories SET category_url = ? WHERE supplier = 'bmr' AND category_url = ?"
+    ).run(fix.new, fix.old);
+  }
 }

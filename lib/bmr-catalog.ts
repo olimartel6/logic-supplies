@@ -67,10 +67,11 @@ export async function importBmrCatalog(
         let products: any[] = [];
 
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          // Wait for Algolia-rendered product grid
-          await page.waitForSelector('.product-item-info, li.item.product', { timeout: 8000 }).catch(() => {});
-          await page.waitForTimeout(1500);
+          // networkidle ensures Algolia's API calls finish before we scrape
+          await page.goto(url, { waitUntil: 'networkidle', timeout: 40000 }).catch(() =>
+            page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+          );
+          await page.waitForTimeout(1000);
 
           products = await page.evaluate(() => {
             const items: any[] = [];
