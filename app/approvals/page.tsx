@@ -319,7 +319,7 @@ function ApprovalsContent() {
       {selected && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-20" onClick={() => { setSelected(null); }}>
           <div className="bg-white rounded-t-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex-1 overflow-y-auto p-6 pb-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 {selected.urgency && (
