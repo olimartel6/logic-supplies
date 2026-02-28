@@ -319,8 +319,9 @@ function ApprovalsContent() {
       {selected && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-20" onClick={() => { setSelected(null); }}>
           <div className="bg-white rounded-t-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-2">
-            <div className="flex items-center justify-between mb-4">
+
+            {/* ── Header (toujours visible) ── */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-3 flex-shrink-0">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 {selected.urgency && (
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 flex-shrink-0">
@@ -329,125 +330,130 @@ function ApprovalsContent() {
                 )}
                 {selected.product}
               </h2>
-              <button onClick={() => { setSelected(null); }} className="text-gray-400 text-2xl">×</button>
-            </div>
-            <div className="space-y-3 text-sm mb-6">
-              <div className="flex justify-between"><span className="text-gray-500">Électricien</span><span className="font-medium">{selected.electrician_name}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
-              {selected.unit_price != null && (
-                <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2 -mx-1">
-                  <span className="text-gray-600 text-xs">Prix unitaire</span>
-                  <span className="text-sm font-medium text-gray-700">{selected.unit_price.toFixed(2)} $</span>
-                </div>
-              )}
-              {selected.unit_price != null && (
-                <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 -mx-1">
-                  <span className="text-gray-700 font-semibold text-sm">Total estimé</span>
-                  <span className="text-base font-bold text-blue-700">
-                    {(selected.unit_price * selected.quantity).toFixed(2)} $
-                    {selected.unit_price * selected.quantity > largeOrderThreshold && (
-                      <span className="ml-2 text-xs font-medium text-amber-600 inline-flex items-center gap-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" /></svg>
-                        Grande commande
-                      </span>
-                    )}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between"><span className="text-gray-500">Chantier</span><span>{selected.job_site_name}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Statut actuel</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selected.status]?.color}`}>{statusConfig[selected.status]?.label}</span></div>
-              {selected.note && <div><span className="text-gray-500">Note</span><p className="mt-1 text-gray-800">{selected.note}</p></div>}
-              {selected.lumen_order_status && (() => {
-                const sup = selected.order_supplier || selected.supplier || '';
-                const supLabel = sup === 'canac' ? 'Canac' : sup === 'homedepot' ? 'Home Depot' : sup === 'guillevin' ? 'Guillevin' : 'Lumen';
-                const cartUrl = sup === 'canac' ? 'https://www.canac.ca/panier' : sup === 'homedepot' ? 'https://www.homedepot.ca/checkout/cart' : sup === 'guillevin' ? 'https://www.guillevin.com/cart' : 'https://www.lumen.ca/en/cart';
-                return (
-                  <>
-                    <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                      <span className="text-gray-500">{supLabel}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        selected.lumen_order_status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        selected.lumen_order_status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {selected.lumen_order_status === 'confirmed' ? `Commandé #${selected.lumen_order_id}` :
-                         selected.lumen_order_status === 'pending' ? 'Dans le panier' :
-                         'Échec commande'}
-                      </span>
-                    </div>
-                    {selected.lumen_order_status === 'pending' && (
-                      <a href={cartUrl} target="_blank" rel="noreferrer"
-                        className="block text-center text-sm text-orange-600 underline mt-1">
-                        → Finaliser sur {supLabel === 'Home Depot' ? 'homedepot.ca' : supLabel === 'Canac' ? 'canac.ca' : 'lumen.ca'}
-                      </a>
-                    )}
-                  </>
-                );
-              })()}
+              <button onClick={() => { setSelected(null); }} className="text-gray-400 text-2xl leading-none">×</button>
             </div>
 
+            {/* ── Boutons Rejeter / Approuver (toujours visibles, juste sous le header) ── */}
             {selected.status === 'pending' && (
-              <>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Commentaire (optionnel)</label>
-                  <textarea
-                    value={comment}
-                    onChange={e => setComment(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="ex: Réduis à 3 boîtes, on en a en stock"
-                    rows={2}
-                  />
-                </div>
-                {paymentConfigured && (
-                  <div className="mb-2">
-                    <p className="text-xs text-gray-500 mb-1.5">Livraison</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setDeliveryOverride('office')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
-                      >
-                        Bureau
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeliveryOverride('jobsite')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
-                      >
-                        Chantier
-                      </button>
-                    </div>
+              <div className="flex gap-3 px-6 pb-3 flex-shrink-0">
+                <button
+                  onClick={() => handleDecision('rejected')}
+                  disabled={loading}
+                  className="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-2xl font-semibold hover:bg-red-100 disabled:opacity-50 transition"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    Rejeter
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleDecision('approved')}
+                  disabled={loading}
+                  className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                    Approuver
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* ── Détails (scrollables) ── */}
+            <div className="overflow-y-auto px-6 pb-6 border-t border-gray-100">
+              <div className="space-y-3 text-sm mt-4 mb-4">
+                <div className="flex justify-between"><span className="text-gray-500">Électricien</span><span className="font-medium">{selected.electrician_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
+                {selected.unit_price != null && (
+                  <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2 -mx-1">
+                    <span className="text-gray-600 text-xs">Prix unitaire</span>
+                    <span className="text-sm font-medium text-gray-700">{selected.unit_price.toFixed(2)} $</span>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-          {/* Action buttons — outside scroll so always visible */}
-          {selected.status === 'pending' && (
-            <div className="flex gap-3 px-6 pb-6 pt-4 border-t border-gray-100 bg-white">
-              <button
-                onClick={() => handleDecision('rejected')}
-                disabled={loading}
-                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-2xl font-semibold hover:bg-red-100 disabled:opacity-50 transition"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                  Rejeter
-                </span>
-              </button>
-              <button
-                onClick={() => handleDecision('approved')}
-                disabled={loading}
-                className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                  Approuver
-                </span>
-              </button>
+                {selected.unit_price != null && (
+                  <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 -mx-1">
+                    <span className="text-gray-700 font-semibold text-sm">Total estimé</span>
+                    <span className="text-base font-bold text-blue-700">
+                      {(selected.unit_price * selected.quantity).toFixed(2)} $
+                      {selected.unit_price * selected.quantity > largeOrderThreshold && (
+                        <span className="ml-2 text-xs font-medium text-amber-600 inline-flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" /></svg>
+                          Grande commande
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between"><span className="text-gray-500">Chantier</span><span>{selected.job_site_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selected.status]?.color}`}>{statusConfig[selected.status]?.label}</span></div>
+                {selected.note && <div><span className="text-gray-500">Note</span><p className="mt-1 text-gray-800">{selected.note}</p></div>}
+                {selected.lumen_order_status && (() => {
+                  const sup = selected.order_supplier || selected.supplier || '';
+                  const supLabel = sup === 'canac' ? 'Canac' : sup === 'homedepot' ? 'Home Depot' : sup === 'guillevin' ? 'Guillevin' : 'Lumen';
+                  const cartUrl = sup === 'canac' ? 'https://www.canac.ca/panier' : sup === 'homedepot' ? 'https://www.homedepot.ca/checkout/cart' : sup === 'guillevin' ? 'https://www.guillevin.com/cart' : 'https://www.lumen.ca/en/cart';
+                  return (
+                    <>
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                        <span className="text-gray-500">{supLabel}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          selected.lumen_order_status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          selected.lumen_order_status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {selected.lumen_order_status === 'confirmed' ? `Commandé #${selected.lumen_order_id}` :
+                           selected.lumen_order_status === 'pending' ? 'Dans le panier' :
+                           'Échec commande'}
+                        </span>
+                      </div>
+                      {selected.lumen_order_status === 'pending' && (
+                        <a href={cartUrl} target="_blank" rel="noreferrer"
+                          className="block text-center text-sm text-orange-600 underline mt-1">
+                          → Finaliser sur {supLabel === 'Home Depot' ? 'homedepot.ca' : supLabel === 'Canac' ? 'canac.ca' : 'lumen.ca'}
+                        </a>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              {selected.status === 'pending' && (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Commentaire (optionnel)</label>
+                    <textarea
+                      value={comment}
+                      onChange={e => setComment(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder="ex: Réduis à 3 boîtes, on en a en stock"
+                      rows={2}
+                    />
+                  </div>
+                  {paymentConfigured && (
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-500 mb-1.5">Livraison</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryOverride('office')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
+                        >
+                          Bureau
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryOverride('jobsite')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
+                        >
+                          Chantier
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
-        </div>
+
+          </div>
         </div>
       )}
     </div>
