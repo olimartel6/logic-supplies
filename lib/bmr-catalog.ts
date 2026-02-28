@@ -31,7 +31,7 @@ export async function importBmrCatalog(
       unit = excluded.unit, category = excluded.category, last_synced = CURRENT_TIMESTAMP
   `);
 
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   let totalImported = 0;
 
   try {
