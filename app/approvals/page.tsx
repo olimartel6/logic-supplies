@@ -79,6 +79,7 @@ function ApprovalsContent() {
       setUser(u);
     });
     loadRequests();
+    const interval = setInterval(loadRequests, 10000);
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { largeOrderThreshold?: number; defaultDelivery?: string }) => {
       if (d.largeOrderThreshold != null) setLargeOrderThreshold(d.largeOrderThreshold);
       if (d.defaultDelivery) {
@@ -87,6 +88,7 @@ function ApprovalsContent() {
       }
     }).catch(() => {});
     fetch('/api/settings/payment').then(r => r.json()).then((d: any) => setPaymentConfigured(d.configured)).catch(() => {});
+    return () => clearInterval(interval);
   }, [router, loadRequests]);
 
   async function handleDelete(id: number) {
