@@ -320,7 +320,8 @@ function ApprovalsContent() {
       {/* Detail / approval modal */}
       {selected && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-20" onClick={() => { setSelected(null); setConfirmOrder(false); }}>
-          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-t-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex-1 overflow-y-auto p-6 pb-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 {selected.urgency && (
@@ -411,7 +412,7 @@ function ApprovalsContent() {
                   />
                 </div>
                 {paymentConfigured && (
-                  <div className="mb-3">
+                  <div className="mb-2">
                     <p className="text-xs text-gray-500 mb-1.5">Livraison</p>
                     <div className="flex gap-2">
                       <button
@@ -431,31 +432,35 @@ function ApprovalsContent() {
                     </div>
                   </div>
                 )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleDecision('rejected')}
-                    disabled={loading}
-                    className="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-2xl font-semibold hover:bg-red-100 disabled:opacity-50 transition"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                      Rejeter
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => handleDecision('approved')}
-                    disabled={loading || !confirmOrder}
-                    className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                      Approuver
-                    </span>
-                  </button>
-                </div>
               </>
             )}
           </div>
+          {/* Action buttons — outside scroll so always visible */}
+          {selected.status === 'pending' && (
+            <div className="flex gap-3 px-6 pb-6 pt-4 border-t border-gray-100 bg-white">
+              <button
+                onClick={() => handleDecision('rejected')}
+                disabled={loading}
+                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-2xl font-semibold hover:bg-red-100 disabled:opacity-50 transition"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                  Rejeter
+                </span>
+              </button>
+              <button
+                onClick={() => handleDecision('approved')}
+                disabled={loading || !confirmOrder}
+                className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  Approuver
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
         </div>
       )}
     </div>
