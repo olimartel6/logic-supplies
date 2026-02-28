@@ -157,9 +157,10 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
 
     // Catégories BMR
     const bmrCategories = [
-      { name: 'Fils et câbles',  url: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html', enabled: 1 },
-      { name: 'Disjoncteurs',    url: '/fr/electricite/disjoncteurs-et-fusibles.html',               enabled: 0 },
-      { name: 'Éclairage',       url: '/fr/luminaires-et-eclairage.html',                            enabled: 0 },
+      { name: 'Fils et câbles',        url: '/fr/electricite/fils-prises-et-fiches.html',   enabled: 1 },
+      { name: 'Disjoncteurs',          url: '/fr/electricite/disjoncteurs-et-fusibles.html', enabled: 1 },
+      { name: 'Boîtes électriques',    url: '/fr/electricite/boites-electriques.html',       enabled: 1 },
+      { name: 'Éclairage',             url: '/fr/luminaires-et-eclairage.html',               enabled: 0 },
     ];
     for (const c of bmrCategories) {
       db.prepare(
@@ -245,9 +246,10 @@ export function seedSuperadminCategories(db: Database.Database) {
       { supplier: 'deschenes', name: 'Plomberie',   url: '/s/plomberie' },
       { supplier: 'deschenes', name: 'CVC',         url: '/s/cvc' },
       // BMR
-      { supplier: 'bmr', name: 'Fils et câbles', url: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
-      { supplier: 'bmr', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs-et-fusibles.html' },
-      { supplier: 'bmr', name: 'Éclairage',      url: '/fr/luminaires-et-eclairage.html' },
+      { supplier: 'bmr', name: 'Fils et câbles',     url: '/fr/electricite/fils-prises-et-fiches.html' },
+      { supplier: 'bmr', name: 'Disjoncteurs',        url: '/fr/electricite/disjoncteurs-et-fusibles.html' },
+      { supplier: 'bmr', name: 'Boîtes électriques',  url: '/fr/electricite/boites-electriques.html' },
+      { supplier: 'bmr', name: 'Éclairage',           url: '/fr/luminaires-et-eclairage.html' },
       // Rona
       { supplier: 'rona', name: 'Électricité',    url: '/fr/electricite' },
       { supplier: 'rona', name: 'Fils et câbles', url: '/fr/electricite/fils-et-cables' },
@@ -561,15 +563,29 @@ function initDb(db: Database.Database) {
   }
 
   // Fix stale BMR category URLs (old paths returned 404 — missing .html and wrong subcategory paths)
+  // Also broaden fils-electriques → parent fils-prises-et-fiches to get more products
   const bmrUrlFixes: Array<{ old: string; new: string }> = [
-    { old: '/fr/electricite',              new: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
-    { old: '/fr/electricite/fils-cables',  new: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html' },
-    { old: '/fr/electricite/disjoncteurs', new: '/fr/electricite/disjoncteurs-et-fusibles.html' },
-    { old: '/fr/electricite/eclairage',    new: '/fr/luminaires-et-eclairage.html' },
+    { old: '/fr/electricite',                                             new: '/fr/electricite/fils-prises-et-fiches.html' },
+    { old: '/fr/electricite/fils-cables',                                 new: '/fr/electricite/fils-prises-et-fiches.html' },
+    { old: '/fr/electricite/fils-prises-et-fiches/fils-electriques.html', new: '/fr/electricite/fils-prises-et-fiches.html' },
+    { old: '/fr/electricite/disjoncteurs',                                new: '/fr/electricite/disjoncteurs-et-fusibles.html' },
+    { old: '/fr/electricite/eclairage',                                   new: '/fr/luminaires-et-eclairage.html' },
   ];
   for (const fix of bmrUrlFixes) {
     db.prepare(
       "UPDATE supplier_categories SET category_url = ? WHERE supplier = 'bmr' AND category_url = ?"
     ).run(fix.new, fix.old);
   }
+  // Enable Disjoncteurs and Boîtes électriques for BMR; insert if missing
+  db.prepare(`
+    INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id)
+    SELECT 'bmr', 'Disjoncteurs', '/fr/electricite/disjoncteurs-et-fusibles.html', 1, id FROM companies
+  `).run();
+  db.prepare(`
+    INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id)
+    SELECT 'bmr', 'Boîtes électriques', '/fr/electricite/boites-electriques.html', 1, id FROM companies
+  `).run();
+  db.prepare(
+    "UPDATE supplier_categories SET enabled = 1 WHERE supplier = 'bmr' AND category_name IN ('Disjoncteurs', 'Boîtes électriques')"
+  ).run();
 }
