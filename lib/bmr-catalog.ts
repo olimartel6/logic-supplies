@@ -68,25 +68,46 @@ export async function importBmrCatalog(
 
         try {
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(3000);
+
+          // Debug: capture page structure on first page of first category
+          if (pageNum === 1 && categoryTotal === 0) {
+            const debug = await page.evaluate(() => ({
+              url: window.location.href,
+              title: document.title,
+              bodyClasses: document.body.className,
+              sampleSelectors: {
+                'li.item': document.querySelectorAll('li.item').length,
+                '.product-item': document.querySelectorAll('.product-item').length,
+                '[class*="product"]': document.querySelectorAll('[class*="product-item"]').length,
+                'article': document.querySelectorAll('article').length,
+              },
+              firstItemHTML: document.querySelector('li.item, .product-item, article')?.outerHTML?.slice(0, 500) || 'none',
+            }));
+            console.error('[BMR DEBUG]', JSON.stringify(debug));
+          }
 
           products = await page.evaluate(() => {
             const items: any[] = [];
             const cards = document.querySelectorAll(
-              '.product-item, .product-item-info, .item.product.product-item'
+              'li.item.product, .product-item, .item.product-item, [class*="product-item-info"]'
             );
             for (const card of Array.from(cards)) {
-              const nameEl = card.querySelector('.product-item-link, .product-name a');
+              const nameEl = card.querySelector(
+                '.product-item-link, .product-name a, a[class*="product"], h2 a, h3 a'
+              );
               const name = nameEl?.textContent?.trim() || '';
               if (name.length < 3) continue;
 
-              const imgEl = card.querySelector('.product-image-photo, img.product-image-photo') as HTMLImageElement | null;
+              const imgEl = card.querySelector('img') as HTMLImageElement | null;
               const image_url = imgEl?.src || '';
 
               const skuEl = card.querySelector('[data-sku], .sku .value, [itemprop="sku"]');
               const sku = skuEl?.textContent?.trim() || name.slice(0, 40);
 
-              const priceEl = card.querySelector('[data-price-type="finalPrice"] .price');
+              const priceEl = card.querySelector(
+                '[data-price-type="finalPrice"] .price, .price-wrapper .price, .price'
+              );
               const priceText = priceEl?.textContent?.trim() || '';
               const priceMatch = priceText.match(/[\d]+[.,][\d]{2}/);
               const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : null;
