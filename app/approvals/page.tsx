@@ -37,7 +37,6 @@ function ApprovalsContent() {
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [confirmOrder, setConfirmOrder] = useState(false);
   const [largeOrderThreshold, setLargeOrderThreshold] = useState<number>(2000);
   const [deliveryOverride, setDeliveryOverride] = useState<'office' | 'jobsite' | null>(null);
   const [paymentConfigured, setPaymentConfigured] = useState(false);
@@ -110,7 +109,6 @@ function ApprovalsContent() {
     await loadRequests();
     setSelected(null);
     setComment('');
-    setConfirmOrder(false);
     setLoading(false);
     if (status === 'approved' && approvedRequest.supplier === 'lumen') {
       setOrderModal(approvedRequest);
@@ -170,7 +168,7 @@ function ApprovalsContent() {
           {displayed.map(r => (
             <div
               key={r.id}
-              onClick={() => { setSelected(r); setComment(''); setConfirmOrder(false); }}
+              onClick={() => { setSelected(r); setComment(''); }}
               className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:border-blue-300 hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-start justify-between">
@@ -319,7 +317,7 @@ function ApprovalsContent() {
 
       {/* Detail / approval modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-20" onClick={() => { setSelected(null); setConfirmOrder(false); }}>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-20" onClick={() => { setSelected(null); }}>
           <div className="bg-white rounded-t-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex-1 overflow-y-auto p-6 pb-2">
             <div className="flex items-center justify-between mb-4">
@@ -331,7 +329,7 @@ function ApprovalsContent() {
                 )}
                 {selected.product}
               </h2>
-              <button onClick={() => { setSelected(null); setConfirmOrder(false); }} className="text-gray-400 text-2xl">×</button>
+              <button onClick={() => { setSelected(null); }} className="text-gray-400 text-2xl">×</button>
             </div>
             <div className="space-y-3 text-sm mb-6">
               <div className="flex justify-between"><span className="text-gray-500">Électricien</span><span className="font-medium">{selected.electrician_name}</span></div>
@@ -390,17 +388,6 @@ function ApprovalsContent() {
 
             {selected.status === 'pending' && (
               <>
-                <label className="flex items-start gap-3 cursor-pointer mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={confirmOrder}
-                    onChange={e => setConfirmOrder(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer flex-shrink-0"
-                  />
-                  <span className="text-xs text-blue-800 leading-relaxed">
-                    Je confirme que cette commande est exacte et j&apos;accepte les conditions
-                  </span>
-                </label>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Commentaire (optionnel)</label>
                   <textarea
@@ -450,7 +437,7 @@ function ApprovalsContent() {
               </button>
               <button
                 onClick={() => handleDecision('approved')}
-                disabled={loading || !confirmOrder}
+                disabled={loading}
                 className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 <span className="flex items-center justify-center gap-2">
