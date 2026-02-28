@@ -31,7 +31,7 @@ export async function importBmrCatalog(
       unit = excluded.unit, category = excluded.category, last_synced = CURRENT_TIMESTAMP
   `);
 
-  const browser = await createBrowserbaseBrowser({ proxies: true });
+  const browser = await createBrowserbaseBrowser();
   let totalImported = 0;
 
   try {
@@ -41,65 +41,20 @@ export async function importBmrCatalog(
       extraHTTPHeaders: { 'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8' },
       viewport: { width: 1280, height: 800 },
     });
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['fr-CA', 'fr', 'en-US', 'en'] });
-      (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {} };
-    });
     const page = await context.newPage();
 
-    // Login
-    await page.goto('https://www.bmr.ca/fr/customer/account/login/', {
-      waitUntil: 'networkidle', timeout: 40000,
-    }).catch(() => page.goto('https://www.bmr.ca/fr/customer/account/login/', {
-      waitUntil: 'domcontentloaded', timeout: 30000,
-    }));
-    await page.waitForTimeout(3000);
-
-    // BMR uses Axeptio for cookie consent
+    // Dismiss cookie banner once on homepage before scraping
+    await page.goto('https://www.bmr.ca/fr/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(2000);
     const cookieBtn = page.locator([
       '#axeptio_btn_acceptAll',
       '.axeptio-btn-accept',
       'button:has-text("D\'accord")',
       'button:has-text("Tout accepter")',
-      'button:has-text("Accepter tout")',
     ].join(', ')).first();
-    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (await cookieBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       await cookieBtn.click();
-      await page.waitForTimeout(1000);
-    }
-
-    const emailField = page.locator('input#email, input[name="login[username]"], input[type="email"]').first();
-    await emailField.waitFor({ timeout: 15000 });
-    await emailField.click();
-    await emailField.type(account.username, { delay: 80 });
-    await page.waitForTimeout(400);
-
-    const passwordField = page.locator('input#pass, input[name="login[password]"], input[type="password"]').first();
-    await passwordField.waitFor({ timeout: 10000 });
-    await passwordField.click();
-    await passwordField.type(password, { delay: 80 });
-    await page.waitForTimeout(600);
-
-    const submitBtn = page.locator('button#send2, button[type="submit"].action.login, button[type="submit"]').first();
-    if (await submitBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await submitBtn.click();
-    } else {
-      await passwordField.press('Enter');
-    }
-
-    await page.waitForFunction(
-      () => !window.location.pathname.includes('/login'), { timeout: 30000 }
-    ).catch(() => {});
-    await page.waitForTimeout(2000);
-
-    const finalUrl = page.url();
-    const pageTitle = await page.title().catch(() => '');
-    const errorMsg = await page.locator('.message-error, .error-msg, [data-ui-id="message-error"]').first().textContent({ timeout: 2000 }).catch(() => '');
-
-    if (finalUrl.includes('/login')) {
-      return { total: 0, error: `Login BMR échoué — URL: ${finalUrl} | Titre: ${pageTitle}${errorMsg ? ` | Erreur: ${errorMsg.trim()}` : ''}` };
+      await page.waitForTimeout(800);
     }
 
     for (const cat of categories) {
