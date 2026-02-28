@@ -73,6 +73,25 @@ export async function importBmrCatalog(
           );
           await page.waitForTimeout(1000);
 
+          // Debug: dump page structure so we can fix selectors
+          const debug = await page.evaluate(() => ({
+            url: window.location.href,
+            title: document.title,
+            counts: {
+              'li.item.product': document.querySelectorAll('li.item.product').length,
+              '.product-item-info': document.querySelectorAll('.product-item-info').length,
+              '.link-product': document.querySelectorAll('.link-product').length,
+              '.ais-hits--item': document.querySelectorAll('.ais-hits--item').length,
+              '[class*="ais-"]': document.querySelectorAll('[class*="ais-"]').length,
+              '#instant-search-results-container *': document.querySelectorAll('#instant-search-results-container *').length,
+            },
+            firstProductHTML: (
+              document.querySelector('li.item.product, .product-item-info, .link-product, [class*="ais-hits"]')
+            )?.outerHTML?.slice(0, 800) || 'NONE',
+            bodySnippet: document.body.innerHTML.slice(0, 500),
+          }));
+          console.error('[BMR DEBUG]', JSON.stringify(debug));
+
           products = await page.evaluate(() => {
             const items: any[] = [];
             const cards = document.querySelectorAll(
