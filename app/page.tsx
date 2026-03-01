@@ -2,8 +2,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useT } from '@/lib/LanguageContext';
 
 export default function LoginPage() {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -148,21 +150,21 @@ export default function LoginPage() {
               onClick={() => { setMode('signin'); setError(''); setStep('email'); setPassword(''); }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === 'signin' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Se connecter
+              {t('sign_in')}
             </button>
             <button
               type="button"
               onClick={() => { setMode('signup'); setError(''); setStep('email'); setPassword(''); }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === 'signup' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Créer un compte
+              {t('sign_up')}
             </button>
           </div>
 
           {/* Signup — Step 1: email */}
           {mode === 'signup' && step === 'email' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
               <input
                 type="email"
                 value={email}
@@ -178,10 +180,10 @@ export default function LoginPage() {
           {mode === 'signup' && step === 'code' && (
             <>
               <p className="text-sm text-gray-600">
-                Code envoyé à <span className="font-medium">{email}</span>
+                {t('code_sent_to')} <span className="font-medium">{email}</span>
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Code de vérification</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('verification_code')}</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -200,7 +202,7 @@ export default function LoginPage() {
                 onClick={() => handleSendCode({ preventDefault: () => {} } as React.FormEvent)}
                 className="text-sm text-blue-600 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {resendCooldown > 0 ? `Renvoyer le code (${resendCooldown}s)` : 'Renvoyer le code'}
+                {resendCooldown > 0 ? t('resend_cooldown').replace('{n}', String(resendCooldown)) : t('resend_code')}
               </button>
             </>
           )}
@@ -209,7 +211,7 @@ export default function LoginPage() {
           {mode === 'signup' && step === 'form' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la compagnie</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('company_name')}</label>
                 <input
                   type="text"
                   value={companyName}
@@ -220,7 +222,7 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Votre nom</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('your_name')}</label>
                 <input
                   type="text"
                   value={adminName}
@@ -231,7 +233,7 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('password')}</label>
                 <input
                   type="password"
                   value={password}
@@ -242,7 +244,7 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmer le mot de passe</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('confirm_password')}</label>
                 <input
                   type="password"
                   value={confirmPassword}
@@ -259,7 +261,7 @@ export default function LoginPage() {
           {mode === 'signin' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('email')}</label>
                 <input
                   type="email"
                   value={email}
@@ -270,7 +272,7 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('password')}</label>
                 <input
                   type="password"
                   value={password}
@@ -294,9 +296,9 @@ export default function LoginPage() {
                   className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer flex-shrink-0"
                 />
                 <span className="text-xs text-gray-600 leading-relaxed">
-                  J&apos;accepte les{' '}
+                  {t('terms_accept')}{' '}
                   <Link href="/conditions-dutilisation" target="_blank" className="text-blue-600 hover:underline font-medium">
-                    Conditions d&apos;utilisation
+                    {t('terms_link')}
                   </Link>
                 </span>
               </label>
@@ -308,9 +310,9 @@ export default function LoginPage() {
                   className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer flex-shrink-0"
                 />
                 <span className="text-xs text-gray-600 leading-relaxed">
-                  J&apos;accepte la{' '}
+                  {t('privacy_accept')}{' '}
                   <Link href="/politique-de-confidentialite" target="_blank" className="text-blue-600 hover:underline font-medium">
-                    Politique de confidentialité
+                    {t('privacy_link')}
                   </Link>
                 </span>
               </label>
@@ -325,11 +327,11 @@ export default function LoginPage() {
           >
             {loading
               ? (mode === 'signup'
-                  ? (step === 'email' ? 'Envoi...' : step === 'code' ? 'Vérification...' : 'Redirection vers le paiement...')
-                  : 'Connexion...')
+                  ? (step === 'email' ? t('sending') : step === 'code' ? t('verifying') : t('redirecting_payment'))
+                  : t('signing_in'))
               : (mode === 'signup'
-                  ? (step === 'email' ? 'Envoyer le code →' : step === 'code' ? 'Vérifier →' : 'Continuer vers le paiement →')
-                  : 'Se connecter')}
+                  ? (step === 'email' ? t('send_code') : step === 'code' ? t('verify_code') : t('continue_payment'))
+                  : t('sign_in_btn'))}
           </button>
         </form>
       </div>
