@@ -34,7 +34,13 @@ export async function POST(req: NextRequest) {
     VALUES (?, ?, ?)
   `).run(email.toLowerCase(), code, expiresAt);
 
-  await sendVerificationCodeEmail(email, code);
+  try {
+    await sendVerificationCodeEmail(email, code);
+    console.log(`[SMTP] Code sent to ${email}`);
+  } catch (err: any) {
+    console.error('[SMTP ERROR]', err.message, err.code);
+    return NextResponse.json({ error: `Erreur d'envoi: ${err.message}` }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
