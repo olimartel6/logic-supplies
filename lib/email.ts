@@ -1,15 +1,7 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-  },
-});
-
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM = process.env.RESEND_FROM || 'LogicSupplies <onboarding@resend.dev>';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 function supplierLabel(supplier: string): string {
@@ -31,9 +23,9 @@ export async function sendNewRequestEmail(to: string, data: {
   urgency: boolean;
   note: string;
 }) {
-  if (!process.env.SMTP_USER) return;
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  if (!process.env.RESEND_API_KEY) return;
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `⚡ Nouvelle demande — ${data.product}${data.urgency ? ' 🚨 URGENT' : ''}`,
     html: `
@@ -59,10 +51,10 @@ export async function sendStatusEmail(to: string, data: {
   status: string;
   officeComment?: string;
 }) {
-  if (!process.env.SMTP_USER) return;
+  if (!process.env.RESEND_API_KEY) return;
   const approved = data.status === 'approved';
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `${approved ? '✅' : '❌'} Demande ${approved ? 'approuvée' : 'rejetée'} — ${data.product}`,
     html: `
@@ -86,11 +78,11 @@ export async function sendCartNotificationEmail(to: string, data: {
   supplier: string;
   reason: string;
 }) {
-  if (!process.env.SMTP_USER) return;
+  if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cartUrl = supplierCartUrl(data.supplier);
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `🛒 Produit ajouté au panier ${label} — ${data.product}`,
     html: `
@@ -121,11 +113,11 @@ export async function sendOrderConfirmationEmail(to: string, data: {
   orderId: string;
   cancelToken: string;
 }) {
-  if (!process.env.SMTP_USER) return;
+  if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cancelUrl = `${APP_URL}/cancel-order/${data.cancelToken}`;
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `✅ Commande envoyée à ${label} — ${data.product}`,
     html: `
@@ -157,7 +149,7 @@ export async function sendBudgetAlertEmail(to: string, data: {
   product?: string;
   threshold?: number;
 }) {
-  if (!process.env.SMTP_USER) return;
+  if (!process.env.RESEND_API_KEY) return;
 
   const fmt = (n: number) =>
     n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
@@ -192,8 +184,8 @@ export async function sendBudgetAlertEmail(to: string, data: {
     `;
   }
 
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject,
     html: `
@@ -207,9 +199,9 @@ export async function sendBudgetAlertEmail(to: string, data: {
 }
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
-  if (!process.env.SMTP_USER) return;
-  await transporter.sendMail({
-    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+  if (!process.env.RESEND_API_KEY) return;
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `${code} — Votre code de vérification logicSupplies`,
     html: `

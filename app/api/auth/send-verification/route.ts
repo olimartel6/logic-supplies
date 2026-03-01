@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email invalide.' }, { status: 400 });
   }
 
-  if (!process.env.SMTP_USER) {
+  if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ error: 'Envoi d\'email non configuré. Contactez le support.' }, { status: 503 });
   }
 
