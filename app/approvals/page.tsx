@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import { Suspense } from 'react';
+import { useLang, useT } from '@/lib/LanguageContext';
+import type { Lang } from '@/lib/i18n';
 
 interface Request {
   id: number;
@@ -24,12 +26,6 @@ interface Request {
 }
 interface User { name: string; role: string; inventoryEnabled?: boolean; }
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: 'En attente', color: 'bg-yellow-100 text-yellow-800' },
-  approved: { label: 'Approuvé', color: 'bg-green-100 text-green-800' },
-  rejected: { label: 'Rejeté', color: 'bg-red-100 text-red-800' },
-};
-
 function ApprovalsContent() {
   const [user, setUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<Request[]>([]);
@@ -49,6 +45,15 @@ function ApprovalsContent() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const { setLang } = useLang();
+  const t = useT();
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    pending: { label: t('status_pending'), color: 'bg-yellow-100 text-yellow-800' },
+    approved: { label: t('status_approved'), color: 'bg-green-100 text-green-800' },
+    rejected: { label: t('status_rejected'), color: 'bg-red-100 text-red-800' },
+  };
 
   function closeOrderModal() {
     if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
@@ -77,6 +82,7 @@ function ApprovalsContent() {
       if (!u) return;
       if (u.role === 'electrician') { router.push('/my-requests'); return; }
       setUser(u);
+      setLang((u.language as Lang) || 'fr');
     });
     loadRequests();
     const interval = setInterval(loadRequests, 10000);
@@ -142,7 +148,7 @@ function ApprovalsContent() {
     setSendingEmail(false);
   }
 
-  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>;
+  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
   const displayed = showAll ? requests : requests.filter(r => r.status === 'pending');
 
@@ -152,7 +158,7 @@ function ApprovalsContent() {
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">
-            {showAll ? 'Toutes les demandes' : 'En attente d\'approbation'}
+            {showAll ? t('all_requests') : t('approvals_title')}
           </h1>
           <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
             {displayed.length}
@@ -162,7 +168,7 @@ function ApprovalsContent() {
         {displayed.length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 mx-auto mb-3 text-gray-300"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-            <p>{showAll ? 'Aucune demande' : 'Aucune demande en attente'}</p>
+            <p>{showAll ? t('no_requests_all') : t('no_pending')}</p>
           </div>
         )}
 
@@ -345,7 +351,7 @@ function ApprovalsContent() {
                 >
                   <span className="flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                    Rejeter
+                    {loading ? t('rejecting') : t('reject')}
                   </span>
                 </button>
                 <button
@@ -355,7 +361,7 @@ function ApprovalsContent() {
                 >
                   <span className="flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    Approuver
+                    {loading ? t('approving') : t('approve')}
                   </span>
                 </button>
               </div>
@@ -364,7 +370,7 @@ function ApprovalsContent() {
             {/* ── Détails (scrollables) ── */}
             <div className="overflow-y-auto px-6 pb-6 border-t border-gray-100">
               <div className="space-y-3 text-sm mt-4 mb-4">
-                <div className="flex justify-between"><span className="text-gray-500">Électricien</span><span className="font-medium">{selected.electrician_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{t('electrician')}</span><span className="font-medium">{selected.electrician_name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
                 {selected.unit_price != null && (
                   <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2 -mx-1">
@@ -386,7 +392,7 @@ function ApprovalsContent() {
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between"><span className="text-gray-500">Chantier</span><span>{selected.job_site_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{t('job_site')}</span><span>{selected.job_site_name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selected.status]?.color}`}>{statusConfig[selected.status]?.label}</span></div>
                 {selected.note && <div><span className="text-gray-500">Note</span><p className="mt-1 text-gray-800">{selected.note}</p></div>}
                 {selected.lumen_order_status && (() => {
@@ -421,12 +427,12 @@ function ApprovalsContent() {
               {selected.status === 'pending' && (
                 <>
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Commentaire (optionnel)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('office_comment')}</label>
                     <textarea
                       value={comment}
                       onChange={e => setComment(e.target.value)}
                       className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="ex: Réduis à 3 boîtes, on en a en stock"
+                      placeholder={t('office_comment_placeholder')}
                       rows={2}
                     />
                   </div>
@@ -439,14 +445,14 @@ function ApprovalsContent() {
                           onClick={() => setDeliveryOverride('office')}
                           className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
                         >
-                          Bureau
+                          {t('delivery_office')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setDeliveryOverride('jobsite')}
                           className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${(deliveryOverride ?? defaultDelivery) === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-500'}`}
                         >
-                          Chantier
+                          {t('delivery_jobsite')}
                         </button>
                       </div>
                     </div>
