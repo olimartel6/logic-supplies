@@ -167,7 +167,7 @@ export default function ProfilePage() {
                   i > 0 ? 'border-l border-gray-200' : ''
                 } ${lang === l ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
               >
-                {l === 'fr' ? '🇫🇷 Français' : l === 'en' ? '🇨🇦 English' : '🇪🇸 Español'}
+                {l === 'fr' ? 'Français' : l === 'en' ? 'English' : 'Español'}
               </button>
             ))}
           </div>
