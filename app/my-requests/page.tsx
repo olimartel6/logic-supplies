@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
+import { useLang, useT } from '@/lib/LanguageContext';
+import type { Lang } from '@/lib/i18n';
 
 interface Request {
   id: number;
@@ -22,17 +24,19 @@ interface User {
   inventoryEnabled?: boolean;
 }
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: 'En attente', color: 'bg-yellow-100 text-yellow-800' },
-  approved: { label: 'Approuvé', color: 'bg-green-100 text-green-800' },
-  rejected: { label: 'Rejeté', color: 'bg-red-100 text-red-800' },
-};
-
 export default function MyRequestsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<Request[]>([]);
   const [selected, setSelected] = useState<Request | null>(null);
   const router = useRouter();
+  const { setLang } = useLang();
+  const t = useT();
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    pending: { label: t('status_pending'), color: 'bg-yellow-100 text-yellow-800' },
+    approved: { label: t('status_approved'), color: 'bg-green-100 text-green-800' },
+    rejected: { label: t('status_rejected'), color: 'bg-red-100 text-red-800' },
+  };
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
@@ -42,18 +46,19 @@ export default function MyRequestsPage() {
       if (!u) return;
       if (u.role !== 'electrician') { router.push('/approvals'); return; }
       setUser(u);
+      setLang((u.language as Lang) || 'fr');
     });
     fetch('/api/requests').then(r => r.json()).then(setRequests);
   }, [router]);
 
-  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>;
+  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
   return (
     <div className="pb-20">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-gray-900">Mes demandes</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t('my_requests_title')}</h1>
           <button
             onClick={() => router.push('/new-request')}
             className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold"
@@ -69,7 +74,7 @@ export default function MyRequestsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
               </svg>
             </div>
-            <p>Aucune demande pour l&apos;instant</p>
+            <p>{t('no_requests')}</p>
             <button onClick={() => router.push('/new-request')} className="mt-4 text-blue-600 font-medium">
               Créer ma première demande →
             </button>
@@ -116,12 +121,12 @@ export default function MyRequestsPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selected.status]?.color}`}>{statusConfig[selected.status]?.label}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Chantier</span><span>{selected.job_site_name}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Urgent</span><span className={selected.urgency ? 'text-red-600 font-medium flex items-center gap-1' : ''}>{selected.urgency ? (<><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" /></svg>Oui</>) : 'Non'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">{t('job_site')}</span><span>{selected.job_site_name}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">{t('urgency')}</span><span className={selected.urgency ? 'text-red-600 font-medium flex items-center gap-1' : ''}>{selected.urgency ? (<><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" /></svg>Oui</>) : 'Non'}</span></div>
               {selected.note && <div><span className="text-gray-500">Note</span><p className="mt-1">{selected.note}</p></div>}
               {selected.office_comment && (
                 <div className="bg-red-50 rounded-xl p-3">
-                  <p className="text-xs text-red-600 font-medium">Commentaire du bureau</p>
+                  <p className="text-xs text-red-600 font-medium">{t('office_comment')}</p>
                   <p className="mt-1 text-red-800">{selected.office_comment}</p>
                 </div>
               )}
