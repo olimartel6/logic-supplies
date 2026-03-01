@@ -3,9 +3,9 @@ import { getDb } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
-  const { companyName, adminName, adminEmail, adminPassword } = await req.json();
+  const { companyName, adminName, adminEmail, adminPassword, verificationToken } = await req.json();
 
-  if (!companyName || !adminName || !adminEmail || !adminPassword) {
+  if (!companyName || !adminName || !adminEmail || !adminPassword || !verificationToken) {
     return NextResponse.json({ error: 'Tous les champs sont requis.' }, { status: 400 });
   }
   if (adminPassword.length < 6) {
@@ -14,8 +14,18 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
+  // Validate verification token
+  const verification = db.prepare(`
+    SELECT * FROM email_verifications
+    WHERE email = ? AND token = ? AND verified = 1 AND expires_at > datetime('now')
+  `).get(adminEmail.toLowerCase(), verificationToken) as any;
+
+  if (!verification) {
+    return NextResponse.json({ error: 'Vérification email expirée. Recommencez.' }, { status: 400 });
+  }
+
   // Check email not already used
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(adminEmail);
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(adminEmail.toLowerCase());
   if (existing) {
     return NextResponse.json({ error: 'Cet email est déjà utilisé.' }, { status: 409 });
   }
@@ -29,14 +39,16 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = bcrypt.hashSync(adminPassword, 10);
   const id = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // +1h
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   db.prepare(`
     INSERT INTO pending_signups (id, company_name, admin_name, admin_email, admin_password_hash, expires_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, companyName, adminName, adminEmail, passwordHash, expiresAt);
+  `).run(id, companyName, adminName, adminEmail.toLowerCase(), passwordHash, expiresAt);
 
-  // Build payment link URL with client_reference_id for webhook matching
+  // Clean up verification row
+  db.prepare('DELETE FROM email_verifications WHERE id = ?').run(verification.id);
+
   const url = `${paymentLink}?client_reference_id=${id}&prefilled_email=${encodeURIComponent(adminEmail)}`;
 
   return NextResponse.json({ url });
