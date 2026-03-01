@@ -536,6 +536,9 @@ function initDb(db: Database.Database) {
   if (!userCols.find(c => c.name === 'auto_approve')) {
     db.exec(`ALTER TABLE users ADD COLUMN auto_approve INTEGER DEFAULT 0`);
   }
+  if (!userCols.find(c => c.name === 'language')) {
+    db.exec(`ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'fr'`);
+  }
 
   // Sentinel company id=0 for superadmin operations (needed when FK constraints are enforced)
   db.prepare("INSERT OR IGNORE INTO companies (id, name, subscription_status) VALUES (0, '_superadmin', 'active')").run();

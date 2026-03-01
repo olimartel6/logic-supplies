@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest) {
   const session = await getSession();
   if (!session.userId) return NextResponse.json({ error: 'Non connecté' }, { status: 401 });
 
-  const { email, currentPassword, newPassword } = await req.json();
+  const { email, currentPassword, newPassword, language } = await req.json();
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId) as any;
   if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 });
@@ -29,6 +29,10 @@ export async function PATCH(req: NextRequest) {
     db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, user.id);
   }
 
+  if (language && ['fr', 'en', 'es'].includes(language)) {
+    db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, user.id);
+  }
+
   return NextResponse.json({ success: true });
 }
 
@@ -39,10 +43,10 @@ export async function GET() {
   }
   const db = getDb();
   const settings = db.prepare('SELECT inventory_enabled FROM company_settings WHERE company_id = ?').get(session.companyId) as any;
-  // Add this after getting settings
   const company = session.companyId
     ? db.prepare('SELECT subscription_status, superadmin_created FROM companies WHERE id = ?').get(session.companyId) as any
     : null;
+  const userRow = db.prepare('SELECT language FROM users WHERE id = ?').get(session.userId) as any;
   return NextResponse.json({
     id: session.userId,
     companyId: session.companyId,
@@ -52,5 +56,6 @@ export async function GET() {
     inventoryEnabled: !!settings?.inventory_enabled,
     subscriptionStatus: company?.subscription_status ?? 'active',
     superadminCreated: !!company?.superadmin_created,
+    language: userRow?.language ?? 'fr',
   });
 }
