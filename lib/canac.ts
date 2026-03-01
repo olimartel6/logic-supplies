@@ -209,9 +209,12 @@ export async function placeCanacOrder(
     await page.waitForTimeout(4000);
     console.error('[Canac] Page résultats:', page.url());
 
-    // Click first product link to navigate to product page
+    // Wait for Angular to render product cards (same selector confirmed in catalog import)
+    await page.waitForSelector('canac-product-list-item', { timeout: 15000 }).catch(() => {});
+
+    // Click first product link using the confirmed Canac Angular selector
     const firstProductLink = page.locator(
-      'a[class*="product__name"], a[class*="productName"], h2 a, .product-item__name a, [class*="product-name"] a'
+      'a.canac-product-list-item__title-heading, canac-product-list-item a[href*="/fr/"]'
     ).first();
 
     if (await firstProductLink.isVisible({ timeout: 5000 }).catch(() => false)) {
