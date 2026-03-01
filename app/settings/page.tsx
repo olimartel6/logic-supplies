@@ -509,6 +509,26 @@ export default function SettingsPage() {
           {t('settings_title')}
         </h1>
 
+        {/* ─── PROFIL ─── */}
+        <AccordionSection
+          title={t('nav_profile')}
+          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>}
+          isOpen={openSection === 'profil'}
+          onToggle={() => toggleSection('profil')}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">{t('profile_title')} — {user.name}</p>
+            <button
+              type="button"
+              onClick={() => router.push('/profile')}
+              className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+              {t('nav_profile')}
+            </button>
+          </div>
+        </AccordionSection>
+
         {/* ─── FOURNISSEURS ─── */}
         <AccordionSection
           title={t('suppliers_title')}
