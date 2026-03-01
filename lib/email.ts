@@ -205,7 +205,7 @@ export async function sendBudgetAlertEmail(to: string, data: {
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
   if (!process.env.RESEND_API_KEY) return;
-  await getResend().emails.send({
+  const { error } = await getResend().emails.send({
     from: getFrom(),
     to,
     subject: `${code} — Votre code de vérification logicSupplies`,
@@ -217,4 +217,5 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
       <p style="color:#666;font-size:14px;">Si vous n'avez pas demandé ce code, ignorez cet email.</p>
     `,
   });
+  if (error) throw new Error(error.message);
 }
