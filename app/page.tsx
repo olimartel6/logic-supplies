@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -17,7 +17,10 @@ export default function LoginPage() {
   const [verificationToken, setVerificationToken] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
+
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -57,9 +60,13 @@ export default function LoginPage() {
     setLoading(false);
     if (!res.ok) { setError(data.error); return; }
     setStep('code');
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
     setResendCooldown(30);
-    const interval = setInterval(() => {
-      setResendCooldown(n => { if (n <= 1) { clearInterval(interval); return 0; } return n - 1; });
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown(n => {
+        if (n <= 1) { clearInterval(cooldownRef.current!); cooldownRef.current = null; return 0; }
+        return n - 1;
+      });
     }, 1000);
   }
 
@@ -190,7 +197,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 disabled={resendCooldown > 0}
-                onClick={handleSendCode as any}
+                onClick={() => handleSendCode({ preventDefault: () => {} } as React.FormEvent)}
                 className="text-sm text-blue-600 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {resendCooldown > 0 ? `Renvoyer le code (${resendCooldown}s)` : 'Renvoyer le code'}
