@@ -1,6 +1,7 @@
 'use client';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useT } from '@/lib/LanguageContext';
 
 interface NavBarProps {
   role: string;
@@ -68,6 +69,7 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
   const router = useRouter();
   const pathname = usePathname();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
+  const t = useT();
 
   const isElectrician = role === 'electrician';
   const isOfficeOrAdmin = role === 'office' || role === 'admin';
@@ -105,7 +107,7 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
         <div className="flex items-center gap-3">
           <span className="text-sm text-slate-300">{name}</span>
           <button onClick={logout} className="text-sm text-slate-400 hover:text-red-400 transition">
-            Déconnexion
+            {t('nav_logout')}
           </button>
         </div>
       </div>
@@ -117,21 +119,21 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
             <>
               <button onClick={() => router.push('/new-request')} className={linkClass('/new-request')}>
                 <IconPlus />
-                <span>Nouvelle</span>
+                <span>{t('nav_new')}</span>
               </button>
               <button onClick={() => router.push('/my-requests')} className={linkClass('/my-requests')}>
                 <IconClipboard />
-                <span>Mes demandes</span>
+                <span>{t('nav_my_requests')}</span>
               </button>
               {inventoryEnabled && (
                 <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
                   <IconBox />
-                  <span>Inventaire</span>
+                  <span>{t('nav_inventory')}</span>
                 </button>
               )}
               <button onClick={() => router.push('/profile')} className={linkClass('/profile')}>
                 <IconGear />
-                <span>Profil</span>
+                <span>{t('nav_profile')}</span>
               </button>
             </>
           )}
@@ -139,11 +141,11 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
             <>
               <button onClick={() => router.push('/approvals')} className={linkClass('/approvals')}>
                 <IconCheckBadge />
-                <span>Approbations</span>
+                <span>{t('nav_approvals')}</span>
               </button>
               <button onClick={() => router.push('/approvals?all=1')} className={linkClass('/approvals?all=1')}>
                 <IconList />
-                <span>Toutes</span>
+                <span>{t('nav_all')}</span>
               </button>
               <button onClick={() => router.push('/budget')} className={`${linkClass('/budget')} relative`}>
                 <span className="relative">
@@ -154,12 +156,12 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
                     </span>
                   )}
                 </span>
-                <span>Budget</span>
+                <span>{t('nav_budget')}</span>
               </button>
               {inventoryEnabled && (
                 <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
                   <IconBox />
-                  <span>Inventaire</span>
+                  <span>{t('nav_inventory')}</span>
                 </button>
               )}
             </>
@@ -167,14 +169,14 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
           {role === 'admin' && (
             <button onClick={() => router.push('/admin')} className={linkClass('/admin')}>
               <IconUsers />
-              <span>Admin</span>
+              <span>{t('nav_admin')}</span>
             </button>
           )}
 
           {isOfficeOrAdmin && (
             <button onClick={() => router.push('/settings')} className={linkClass('/settings')}>
               <IconGear />
-              <span>Paramètres</span>
+              <span>{t('nav_settings')}</span>
             </button>
           )}
         </div>
