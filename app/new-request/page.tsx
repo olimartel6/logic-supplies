@@ -2,6 +2,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
+import { useLang, useT } from '@/lib/LanguageContext';
+import type { Lang } from '@/lib/i18n';
 
 interface User { name: string; role: string; inventoryEnabled?: boolean; }
 interface JobSite { id: number; name: string; address: string; }
@@ -66,6 +68,9 @@ export default function NewRequestPage() {
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  const { setLang } = useLang();
+  const t = useT();
+
   const [activeTab, setActiveTab] = useState<'favoris' | 'recherche'>('recherche');
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [favoriteSKUs, setFavoriteSKUs] = useState<Set<string>>(new Set());
@@ -90,6 +95,7 @@ export default function NewRequestPage() {
       if (!u) return;
       if (u.role !== 'electrician') { router.push('/approvals'); return; }
       setUser(u);
+      setLang((u.language as Lang) || 'fr');
     });
     fetch('/api/job-sites').then(r => r.json()).then(setJobSites);
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { preference: 'cheapest' | 'fastest' }) => {
@@ -251,7 +257,7 @@ export default function NewRequestPage() {
     }
   }
 
-  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>;
+  if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
   if (success) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -262,7 +268,7 @@ export default function NewRequestPage() {
           </svg>
         </div>
         <h2 className="text-xl font-bold text-gray-900">
-          {successCount} demande{successCount > 1 ? 's' : ''} envoyée{successCount > 1 ? 's' : ''} !
+          {t('request_submitted')}
         </h2>
         <p className="text-gray-500 mt-2">Le bureau va recevoir une notification.</p>
       </div>
@@ -292,7 +298,7 @@ export default function NewRequestPage() {
               onChange={e => handleJobSiteChange(e.target.value)}
               className="w-full rounded-xl px-3 py-2 text-base bg-slate-700 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400"
             >
-              <option value="">Sélectionner un chantier</option>
+              <option value="">{t('job_site_select')}</option>
               {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}{s.address ? ` — ${s.address}` : ''}</option>)}
             </select>
           )}
@@ -302,7 +308,7 @@ export default function NewRequestPage() {
                 type="text"
                 value={query}
                 onChange={handleQueryChange}
-                placeholder="Rechercher du matériel électrique..."
+                placeholder={t('search_products')}
                 autoComplete="off"
                 className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-base bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
@@ -459,7 +465,7 @@ export default function NewRequestPage() {
             <div className="px-4 pb-4 space-y-3">
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Quantité</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('quantity_label')}</label>
                   <input
                     type="number"
                     min="1"
@@ -469,7 +475,7 @@ export default function NewRequestPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Unité</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('unit_label')}</label>
                   <select
                     value={pendingUnit}
                     onChange={e => setPendingUnit(e.target.value)}
@@ -571,26 +577,26 @@ export default function NewRequestPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Chantier *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('job_site_label')}</label>
                 <select
                   value={jobSiteId}
                   onChange={e => handleJobSiteChange(e.target.value)}
                   required
                   className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Sélectionner un chantier</option>
+                  <option value="">{t('job_site_select')}</option>
                   {jobSites.map(s => (
                     <option key={s.id} value={s.id}>{s.name}{s.address ? ` — ${s.address}` : ''}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Note (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('note_label')}</label>
                 <textarea
                   value={note}
                   onChange={e => setNote(e.target.value)}
                   className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="ex: Besoin pour demain matin"
+                  placeholder={t('note_placeholder')}
                   rows={2}
                 />
               </div>
@@ -605,7 +611,7 @@ export default function NewRequestPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
                   </svg>
-                  Urgent
+                  {t('urgent_label')}
                 </span>
               </label>
             </div>
@@ -614,7 +620,7 @@ export default function NewRequestPage() {
               disabled={loading}
               className="w-full bg-yellow-400 text-slate-900 py-4 rounded-2xl font-bold text-lg hover:bg-yellow-300 disabled:opacity-50 transition shadow-sm"
             >
-              {loading ? 'Envoi en cours...' : `Envoyer ${cart.length} demande${cart.length > 1 ? 's' : ''}`}
+              {loading ? t('submitting') : t('submit_request')}
             </button>
           </form>
         )}
@@ -698,7 +704,7 @@ export default function NewRequestPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                   </svg>
                 </div>
-                <p className="font-medium text-gray-600">Aucun produit trouvé</p>
+                <p className="font-medium text-gray-600">{t('no_results')}</p>
                 <p className="text-sm mt-1">pour &laquo; {query} &raquo;</p>
                 <p className="text-xs mt-3 text-gray-400">Essayez d&apos;autres mots-clés ou importez les catalogues dans les paramètres</p>
               </div>
