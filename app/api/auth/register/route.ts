@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Paiement non configuré. Contactez-nous.' }, { status: 503 });
   }
 
-  const passwordHash = bcrypt.hashSync(adminPassword, 10);
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
   const id = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
