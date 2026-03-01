@@ -205,3 +205,19 @@ export async function sendBudgetAlertEmail(to: string, data: {
     `,
   });
 }
+
+export async function sendVerificationCodeEmail(to: string, code: string) {
+  if (!process.env.SMTP_USER) return;
+  await transporter.sendMail({
+    from: `"logicSupplies" <${process.env.SMTP_USER}>`,
+    to,
+    subject: `${code} — Votre code de vérification logicSupplies`,
+    html: `
+      <h2>Vérification de votre adresse email</h2>
+      <p>Voici votre code de vérification :</p>
+      <div style="font-size:2.5rem;font-weight:bold;letter-spacing:0.3em;padding:16px 0;color:#2563eb;">${code}</div>
+      <p style="color:#666;font-size:14px;">Ce code expire dans 15 minutes.</p>
+      <p style="color:#666;font-size:14px;">Si vous n'avez pas demandé ce code, ignorez cet email.</p>
+    `,
+  });
+}
