@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
+import { useLang, useT } from '@/lib/LanguageContext';
+import type { Lang } from '@/lib/i18n';
 
 interface CurrentUser { id: number; name: string; email: string; role: string; inventoryEnabled?: boolean; }
 
@@ -25,6 +27,10 @@ export default function ProfilePage() {
   const [preference, setPreference] = useState<'cheapest' | 'fastest'>('cheapest');
   const [prefSaved, setPrefSaved] = useState(false);
 
+  const { lang, setLang } = useLang();
+  const t = useT();
+  const [langSaved, setLangSaved] = useState(false);
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
       if (!r.ok) { router.push('/'); return; }
@@ -33,6 +39,7 @@ export default function ProfilePage() {
       if (!u) return;
       setCurrentUser(u);
       setEmail(u.email);
+      setLang((u.language as Lang) || 'fr');
     });
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { preference: 'cheapest' | 'fastest' }) => {
       if (d?.preference) setPreference(d.preference);
@@ -47,6 +54,16 @@ export default function ProfilePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preference: pref }),
     }).then(() => { setPrefSaved(true); setTimeout(() => setPrefSaved(false), 2000); }).catch(() => {});
+  }
+
+  function handleLanguage(l: Lang) {
+    setLang(l);
+    setLangSaved(false);
+    fetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: l }),
+    }).then(() => { setLangSaved(true); setTimeout(() => setLangSaved(false), 2000); }).catch(() => {});
   }
 
   async function handleEmailSave(e: React.FormEvent) {
@@ -136,6 +153,26 @@ export default function ProfilePage() {
             {prefSaved && <p className="text-xs text-green-600 mt-1">Préférence sauvegardée.</p>}
           </div>
         )}
+
+        {/* Language */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-1">{t('language_label')}</h2>
+          <div className="flex rounded-xl overflow-hidden border border-gray-200">
+            {(['fr', 'en', 'es'] as Lang[]).map((l, i) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => handleLanguage(l)}
+                className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-1.5 transition ${
+                  i > 0 ? 'border-l border-gray-200' : ''
+                } ${lang === l ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                {l === 'fr' ? '🇫🇷 Français' : l === 'en' ? '🇨🇦 English' : '🇪🇸 Español'}
+              </button>
+            ))}
+          </div>
+          {langSaved && <p className="text-xs text-green-600 mt-1">{t('language_saved')}</p>}
+        </div>
 
         {/* Email */}
         <form onSubmit={handleEmailSave} className="bg-white rounded-2xl border border-gray-200 p-5 mb-4 space-y-3">
