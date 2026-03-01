@@ -76,7 +76,7 @@ export default function ProfilePage() {
       body: JSON.stringify({ email }),
     });
     const data = await res.json();
-    setEmailMsg(res.ok ? { ok: true, text: 'Email mis à jour.' } : { ok: false, text: data.error });
+    setEmailMsg(res.ok ? { ok: true, text: t('email_updated') } : { ok: false, text: data.error });
     setEmailLoading(false);
   }
 
@@ -95,7 +95,7 @@ export default function ProfilePage() {
     });
     const data = await res.json();
     if (res.ok) {
-      setPwMsg({ ok: true, text: 'Mot de passe mis à jour.' });
+      setPwMsg({ ok: true, text: t('password_updated') });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -105,20 +105,20 @@ export default function ProfilePage() {
     setPwLoading(false);
   }
 
-  if (!currentUser) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>;
+  if (!currentUser) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
   return (
     <div className="pb-20">
       <NavBar role={currentUser.role} name={currentUser.name} inventoryEnabled={currentUser.inventoryEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Mon profil</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-1">{t('profile_title')}</h1>
         <p className="text-sm text-gray-500 mb-6">{currentUser.name}</p>
 
         {/* Préférence fournisseur — visible pour les électriciens */}
         {currentUser.role === 'electrician' && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
-            <h2 className="font-semibold text-gray-900 mb-1">Préférence de recherche</h2>
-            <p className="text-xs text-gray-500 mb-4">Détermine comment les produits sont triés lors d'une recherche.</p>
+            <h2 className="font-semibold text-gray-900 mb-1">{t('search_preference')}</h2>
+            <p className="text-xs text-gray-500 mb-4">{t('search_preference_desc')}</p>
             <div className="flex rounded-xl overflow-hidden border border-gray-200">
               <button
                 type="button"
@@ -130,7 +130,7 @@ export default function ProfilePage() {
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
-                Moins cher
+                {t('cheapest')}
               </button>
               <button
                 type="button"
@@ -142,15 +142,15 @@ export default function ProfilePage() {
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
                 </svg>
-                Plus rapide
+                {t('fastest')}
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">
               {preference === 'cheapest'
-                ? 'Les produits les moins chers apparaissent en premier.'
-                : 'Les produits du fournisseur le plus proche du chantier apparaissent en premier.'}
+                ? t('cheapest_desc')
+                : t('fastest_desc')}
             </p>
-            {prefSaved && <p className="text-xs text-green-600 mt-1">Préférence sauvegardée.</p>}
+            {prefSaved && <p className="text-xs text-green-600 mt-1">{t('preference_saved')}</p>}
           </div>
         )}
 
@@ -176,7 +176,7 @@ export default function ProfilePage() {
 
         {/* Email */}
         <form onSubmit={handleEmailSave} className="bg-white rounded-2xl border border-gray-200 p-5 mb-4 space-y-3">
-          <h2 className="font-semibold text-gray-900">Adresse email</h2>
+          <h2 className="font-semibold text-gray-900">{t('email_address')}</h2>
           <input
             type="email"
             required
@@ -193,20 +193,20 @@ export default function ProfilePage() {
             disabled={emailLoading || email === currentUser.email}
             className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition"
           >
-            {emailLoading ? 'Sauvegarde...' : 'Mettre à jour l\'email'}
+            {emailLoading ? t('saving') : t('update_email')}
           </button>
         </form>
 
         {/* Password */}
         <form onSubmit={handlePasswordSave} className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
-          <h2 className="font-semibold text-gray-900">Changer le mot de passe</h2>
+          <h2 className="font-semibold text-gray-900">{t('change_password')}</h2>
           <input
             type="password"
             required
             value={currentPassword}
             onChange={e => setCurrentPassword(e.target.value)}
             className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Mot de passe actuel"
+            placeholder={t('current_password')}
           />
           <input
             type="password"
@@ -214,7 +214,7 @@ export default function ProfilePage() {
             value={newPassword}
             onChange={e => setNewPassword(e.target.value)}
             className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Nouveau mot de passe"
+            placeholder={t('new_password')}
           />
           <input
             type="password"
@@ -222,7 +222,7 @@ export default function ProfilePage() {
             value={confirmPassword}
             onChange={e => setConfirmPassword(e.target.value)}
             className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Confirmer le nouveau mot de passe"
+            placeholder={t('confirm_new_password')}
           />
           {pwMsg && (
             <p className={`text-sm ${pwMsg.ok ? 'text-green-600' : 'text-red-500'}`}>{pwMsg.text}</p>
@@ -232,7 +232,7 @@ export default function ProfilePage() {
             disabled={pwLoading}
             className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition"
           >
-            {pwLoading ? 'Sauvegarde...' : 'Changer le mot de passe'}
+            {pwLoading ? t('saving') : t('update_password_btn')}
           </button>
         </form>
       </div>
