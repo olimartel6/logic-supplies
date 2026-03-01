@@ -1,8 +1,13 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM || 'LogicSupplies <onboarding@resend.dev>';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
+function getFrom() {
+  return process.env.RESEND_FROM || 'LogicSupplies <onboarding@resend.dev>';
+}
 
 function supplierLabel(supplier: string): string {
   return supplier === 'canac' ? 'Canac' : supplier === 'homedepot' ? 'Home Depot' : 'Lumen';
@@ -24,8 +29,8 @@ export async function sendNewRequestEmail(to: string, data: {
   note: string;
 }) {
   if (!process.env.RESEND_API_KEY) return;
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject: `⚡ Nouvelle demande — ${data.product}${data.urgency ? ' 🚨 URGENT' : ''}`,
     html: `
@@ -53,8 +58,8 @@ export async function sendStatusEmail(to: string, data: {
 }) {
   if (!process.env.RESEND_API_KEY) return;
   const approved = data.status === 'approved';
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject: `${approved ? '✅' : '❌'} Demande ${approved ? 'approuvée' : 'rejetée'} — ${data.product}`,
     html: `
@@ -81,8 +86,8 @@ export async function sendCartNotificationEmail(to: string, data: {
   if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cartUrl = supplierCartUrl(data.supplier);
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject: `🛒 Produit ajouté au panier ${label} — ${data.product}`,
     html: `
@@ -116,8 +121,8 @@ export async function sendOrderConfirmationEmail(to: string, data: {
   if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cancelUrl = `${APP_URL}/cancel-order/${data.cancelToken}`;
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject: `✅ Commande envoyée à ${label} — ${data.product}`,
     html: `
@@ -184,8 +189,8 @@ export async function sendBudgetAlertEmail(to: string, data: {
     `;
   }
 
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject,
     html: `
@@ -200,8 +205,8 @@ export async function sendBudgetAlertEmail(to: string, data: {
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
   if (!process.env.RESEND_API_KEY) return;
-  await resend.emails.send({
-    from: FROM,
+  await getResend().emails.send({
+    from: getFrom(),
     to,
     subject: `${code} — Votre code de vérification logicSupplies`,
     html: `
