@@ -9,6 +9,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email invalide.' }, { status: 400 });
   }
 
+  if (!process.env.SMTP_USER) {
+    return NextResponse.json({ error: 'Envoi d\'email non configuré. Contactez le support.' }, { status: 503 });
+  }
+
   const db = getDb();
 
   // Check email not already registered
