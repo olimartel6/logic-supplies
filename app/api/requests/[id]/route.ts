@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     `).run(status, office_comment || '', id, ctx.companyId);
 
     const request = db.prepare(`
-      SELECT r.*, u.email as electrician_email FROM requests r
+      SELECT r.*, u.email as electrician_email, u.language as electrician_language FROM requests r
       LEFT JOIN users u ON r.electrician_id = u.id
       WHERE r.id = ? AND r.company_id = ?
     `).get(id, ctx.companyId) as any;
@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       sendStatusEmail(request.electrician_email, {
         product: request.product, quantity: request.quantity, unit: request.unit,
         status, officeComment: office_comment,
-      }).catch(console.error);
+      }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
     }
   }
 

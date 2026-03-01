@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     triggerApproval(requestId, companyId, db).catch(console.error);
   } else {
     // Normal flow: notify office of pending request
-    const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string }[];
+    const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
     const jobSite = db.prepare('SELECT name FROM job_sites WHERE id = ?').get(job_site_id) as { name: string } | undefined;
     for (const u of officeUsers) {
       sendNewRequestEmail(u.email, {
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         electrician: '',
         urgency: !!urgency,
         note: note || '',
-      }).catch(console.error);
+      }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
     }
   }
 

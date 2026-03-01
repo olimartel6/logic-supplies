@@ -23,6 +23,7 @@ export async function triggerApproval(
 
   const request = db.prepare(`
     SELECT r.*, u.email as electrician_email, u.name as electrician_name,
+           u.language as electrician_language,
            j.name as job_site_name, j.address as job_site_address
     FROM requests r
     LEFT JOIN users u ON r.electrician_id = u.id
@@ -54,8 +55,8 @@ export async function triggerApproval(
       ).get(request.job_site_id, companyId) as any;
 
       const officeEmails = db.prepare(
-        "SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?"
-      ).all(companyId) as { email: string }[];
+        "SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?"
+      ).all(companyId) as { email: string; language: string }[];
 
       if (site?.budget_total && orderAmount > 0) {
         const prevCommitted = (site.budget_committed ?? 0) - orderAmount;
@@ -70,7 +71,7 @@ export async function triggerApproval(
             sendBudgetAlertEmail(u.email, {
               type: '80_percent', jobSite: request.job_site_name,
               committed: site.budget_committed, total: site.budget_total,
-            }).catch(console.error);
+            }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
           }
         }
         if (oldPct < 100 && newPct >= 100) {
@@ -81,7 +82,7 @@ export async function triggerApproval(
             sendBudgetAlertEmail(u.email, {
               type: '100_percent', jobSite: request.job_site_name,
               committed: site.budget_committed, total: site.budget_total,
-            }).catch(console.error);
+            }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
           }
         }
       }
@@ -94,7 +95,7 @@ export async function triggerApproval(
           sendBudgetAlertEmail(u.email, {
             type: 'large_order', jobSite: request.job_site_name,
             amount: orderAmount, product: request.product, threshold,
-          }).catch(console.error);
+          }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
         }
       }
     } catch (err) {
@@ -110,7 +111,7 @@ export async function triggerApproval(
       unit: request.unit,
       status: 'approved',
       officeComment: office_comment,
-    }).catch(console.error);
+    }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
   }
 
   // Trigger auto-order async
@@ -155,22 +156,25 @@ export async function triggerApproval(
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(companyId, requestId, supplier, result.orderId || null, orderStatus, cancelToken, cancelExpiresAt);
 
-      const officeUsers = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string }[];
-      const allEmails = [...officeUsers.map(u => u.email), request.electrician_email].filter(Boolean);
+      const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
+      const allRecipients = [
+        ...officeUsers,
+        { email: request.electrician_email, language: request.electrician_language },
+      ].filter(u => u.email);
 
       if (result.success) {
-        for (const email of allEmails) {
-          sendOrderConfirmationEmail(email, {
+        for (const u of allRecipients) {
+          sendOrderConfirmationEmail(u.email, {
             product: request.product, quantity: request.quantity, unit: request.unit,
             jobSite: request.job_site_name, supplier, reason, orderId: result.orderId!, cancelToken,
-          }).catch(console.error);
+          }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
         }
       } else if (result.inCart) {
-        for (const email of allEmails) {
-          sendCartNotificationEmail(email, {
+        for (const u of allRecipients) {
+          sendCartNotificationEmail(u.email, {
             product: request.product, quantity: request.quantity, unit: request.unit,
             jobSite: request.job_site_name, supplier, reason,
-          }).catch(console.error);
+          }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
         }
       }
     } catch (err) {
