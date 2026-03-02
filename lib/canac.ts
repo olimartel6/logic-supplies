@@ -189,11 +189,17 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // After OAuth login the page is on the Angular app — do NOT navigate away.
-    // Any navigation to /canac/fr/2/search/* triggers Cloudflare Turnstile which
-    // intercepts subsequent fetch() calls and returns HTML instead of JSON.
-    // The session cookies from OAuth are already valid for API calls on this page.
-    await page.waitForTimeout(2000);
+    // After OAuth, Cloudflare Turnstile challenges the callback URL ("Un instant…").
+    // With residential proxies it auto-solves in a few seconds; wait for it to complete
+    // before making any API calls — otherwise all fetches return Cloudflare HTML.
+    await page.waitForFunction(
+      () => {
+        const t = document.title.toLowerCase();
+        return !t.includes('instant') && !t.includes('just a moment') && document.title.trim().length > 0;
+      },
+      { timeout: 30000 }
+    ).catch(() => {});
+    await page.waitForTimeout(2000); // give Angular time to bootstrap after challenge resolves
     const postLoginUrl = page.url();
     const pageTitle = await page.title().catch(() => '?');
     const isCFChallenge = ['un instant', 'just a moment', 'checking'].some(s => pageTitle.toLowerCase().includes(s));
