@@ -7,7 +7,7 @@ export async function createBrowserbaseBrowser(opts?: { proxies?: boolean }) {
   });
   const session = await bb.sessions.create({
     projectId: process.env.BROWSERBASE_PROJECT_ID!,
-    timeout: 300,
+    timeout: opts?.proxies ? 600 : 300, // proxy sessions need more time for CF warmup
     ...(opts?.proxies ? { proxies: true } : {}),
   });
   return chromium.connectOverCDP(session.connectUrl);

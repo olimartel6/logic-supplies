@@ -49,6 +49,27 @@ export async function createCanacPage(browser: any) {
 }
 
 export async function loginToCanac(page: any, username: string, password: string): Promise<boolean> {
+  // Step 0: Cloudflare warmup — visit the Angular app BEFORE the OAuth flow.
+  // cf_clearance is obtained here so the OAuth callback (/canac/?code=…) won't be
+  // challenged by Cloudflare. Residential proxies should solve within ~60-120s.
+  console.error('[Canac] Cloudflare warmup: visite /canac/fr/2…');
+  await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  let cfClearance = false;
+  for (let i = 0; i < 60; i++) { // up to 120 seconds
+    const cookies = await page.context().cookies(['https://www.canac.ca']);
+    if (cookies.some((c: any) => c.name === 'cf_clearance')) {
+      cfClearance = true;
+      console.error(`[Canac] cf_clearance obtenu (t=${i * 2}s)`);
+      break;
+    }
+    if (i % 5 === 0) {
+      const title = await page.title().catch(() => '?');
+      console.error(`[Canac] Warmup t=${i * 2}s titre="${title}"`);
+    }
+    await page.waitForTimeout(2000);
+  }
+  if (!cfClearance) console.error('[Canac] cf_clearance jamais obtenu après 120s — continue quand même');
+
   // Real Canac domain is canac.ca (canac.com redirects to an unrelated US company)
   await page.goto('https://www.canac.ca/fr/connexion', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForTimeout(4000);
@@ -189,24 +210,16 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // After OAuth, Cloudflare Turnstile challenges the callback URL ("Un instant…").
-    // With residential proxies it auto-solves in a few seconds; wait for it to complete
-    // before making any API calls — otherwise all fetches return Cloudflare HTML.
-    await page.waitForFunction(
-      () => {
-        const t = document.title.toLowerCase();
-        return !t.includes('instant') && !t.includes('just a moment') && document.title.trim().length > 0;
-      },
-      { timeout: 30000 }
-    ).catch(() => {});
-    await page.waitForTimeout(2000); // give Angular time to bootstrap after challenge resolves
-    const postLoginUrl = page.url();
-    const pageTitle = await page.title().catch(() => '?');
-    const isCFChallenge = ['un instant', 'just a moment', 'checking'].some(s => pageTitle.toLowerCase().includes(s));
-    console.error(`[Canac] Post-login: url=${postLoginUrl} titre="${pageTitle}" cloudflare=${isCFChallenge}`);
+    // Log cookies so we can see what the login established
+    const allCookies = await page.context().cookies(['https://www.canac.ca']);
+    const cookieNames = allCookies.map((c: any) => c.name).join(', ') || '(aucun)';
+    const hasCF = allCookies.some((c: any) => c.name === 'cf_clearance');
+    console.error(`[Canac] Cookies post-login: [${cookieNames}] cf_clearance=${hasCF}`);
 
     // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
-    // Try progressively shorter queries until we find a match
+    // Use page.context().request (Playwright HTTP client) instead of page.evaluate(fetch).
+    // context.request makes a direct Node.js HTTP request sharing the browser's cookies
+    // and proxy — it is NOT subject to Cloudflare's JavaScript challenge page.
     const queries = [
       product,
       product.split(' ').slice(0, 4).join(' '),
@@ -219,18 +232,23 @@ export async function placeCanacOrder(
 
     for (const query of queries) {
       console.error(`[Canac] API search: "${query}"`);
-      const searchResult = await page.evaluate(async (q: string) => {
-        try {
-          const url = `/canac/rest/v2/canac/products/search?query=${encodeURIComponent(q)}&lang=fr&curr=CAD&pageSize=5`;
-          const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
-          const data = await res.json();
-          return { status: res.status, products: (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name })) };
-        } catch (e: any) { return { status: 0, error: e.message, products: [] }; }
-      }, query);
-      console.error(`[Canac] API search résultat: status=${searchResult.status} produits=${searchResult.products?.length ?? 0}${(searchResult as any).error ? ` erreur="${(searchResult as any).error}"` : ''}`);
-      if (searchResult.products?.length > 0) {
-        productCode = searchResult.products[0].code;
-        productName = searchResult.products[0].name;
+      let status = 0, body = '', isJson = false;
+      try {
+        const resp = await page.context().request.get(
+          `https://www.canac.ca/canac/rest/v2/canac/products/search?query=${encodeURIComponent(query)}&lang=fr&curr=CAD&pageSize=5`,
+          { headers: { Accept: 'application/json' } }
+        );
+        status = resp.status();
+        body = await resp.text();
+        isJson = body.trimStart().startsWith('{') || body.trimStart().startsWith('[');
+      } catch (e: any) { body = e.message; }
+      console.error(`[Canac] API: status=${status} isJson=${isJson} body="${body.slice(0, 250)}"`);
+      if (!isJson) continue;
+      const data = JSON.parse(body);
+      const products = (data.products || []).slice(0, 3);
+      if (products.length > 0) {
+        productCode = products[0].code;
+        productName = products[0].name;
         console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
         break;
       }
@@ -241,39 +259,34 @@ export async function placeCanacOrder(
       return { success: false, error: `Produit "${product}" introuvable sur Canac` };
     }
 
-    // ── Step 2: Get CSRF token (SAP CC requires it for POST requests) ─────────
-    const csrfToken = await page.evaluate(async () => {
-      try {
-        const res = await fetch('/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD', {
-          credentials: 'include',
-          headers: { Accept: 'application/json' },
-        });
-        return res.headers.get('X-CSRF-Token') || '';
-      } catch { return ''; }
-    });
+    // ── Step 2: Get CSRF token via context.request ────────────────────────────
+    let csrfToken = '';
+    try {
+      const csrfResp = await page.context().request.get(
+        'https://www.canac.ca/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD',
+        { headers: { Accept: 'application/json' } }
+      );
+      csrfToken = csrfResp.headers()['x-csrf-token'] || '';
+    } catch { /* csrf optional */ }
     console.error(`[Canac] CSRF token: ${csrfToken ? 'ok' : 'vide'}`);
 
-    // ── Step 3: Add to cart via API ───────────────────────────────────────────
-    const cartResult = await page.evaluate(async ({ code, qty, csrf }: { code: string; qty: number; csrf: string }) => {
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-        if (csrf) headers['X-CSRF-Token'] = csrf;
-        const res = await fetch('/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD', {
-          method: 'POST',
-          credentials: 'include',
-          headers,
-          body: JSON.stringify({ product: { code }, quantity: qty }),
-        });
-        const data = await res.json().catch(() => ({}));
-        return { status: res.status, data };
-      } catch (e: any) { return { status: 0, error: e.message }; }
-    }, { code: productCode, qty: quantity, csrf: csrfToken });
+    // ── Step 3: Add to cart via context.request ───────────────────────────────
+    const cartHeaders: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (csrfToken) cartHeaders['X-CSRF-Token'] = csrfToken;
+    let cartStatus = 0, cartBody = '';
+    try {
+      const cartResp = await page.context().request.post(
+        'https://www.canac.ca/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD',
+        { headers: cartHeaders, data: { product: { code: productCode }, quantity } }
+      );
+      cartStatus = cartResp.status();
+      cartBody = await cartResp.text();
+    } catch (e: any) { cartBody = e.message; }
+    console.error(`[Canac] Add to cart: status=${cartStatus} body="${cartBody.slice(0, 150)}"`);
 
-    console.error(`[Canac] Add to cart: status=${cartResult.status} data=${JSON.stringify(cartResult.data).slice(0, 150)}`);
-
-    const cartSuccess = cartResult.status === 200 || cartResult.status === 201;
+    const cartSuccess = cartStatus === 200 || cartStatus === 201;
     if (!cartSuccess) {
-      return { success: false, error: `Erreur ajout panier (${cartResult.status}): ${JSON.stringify(cartResult.data).slice(0, 100)}` };
+      return { success: false, error: `Erreur ajout panier (${cartStatus}): ${cartBody.slice(0, 100)}` };
     }
 
     console.error('[Canac] Ajouté au panier via API');
