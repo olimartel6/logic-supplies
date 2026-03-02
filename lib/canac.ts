@@ -195,20 +195,11 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // Navigate to home page — wait extra time for Cloudflare Turnstile to auto-verify
-    await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Navigate directly to search URL — skips the homepage entirely so we never need
+    // to interact with the search bar (which Cloudflare Turnstile blocks from rendering).
+    const searchUrl = `https://www.canac.ca/canac/fr/2/search/${encodeURIComponent(product)}`;
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(6000);
-    console.error('[Canac] Page après login:', page.url());
-
-    const searchBar = page.locator('input[placeholder*="Rechercher"]').first();
-    await searchBar.waitFor({ timeout: 20000 });
-    await searchBar.click();
-    await searchBar.type(product, { delay: 120 });
-    await page.waitForTimeout(1500);
-
-    // Press Enter → search results page
-    await searchBar.press('Enter');
-    await page.waitForTimeout(4000);
     console.error('[Canac] Page résultats:', page.url());
 
     // Wait for Angular to render product cards (same selector confirmed in catalog import)
