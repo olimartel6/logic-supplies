@@ -197,6 +197,11 @@ export async function placeCanacOrder(
     await page.waitForTimeout(3000);
     console.error('[Canac] Session établie:', page.url());
 
+    // Diagnostic: confirm whether Cloudflare challenge page is active
+    const pageTitle = await page.title().catch(() => '?');
+    const isCFChallenge = pageTitle.toLowerCase().includes('just a moment') || pageTitle.toLowerCase().includes('checking');
+    console.error(`[Canac] Page titre="${pageTitle}" cloudflare=${isCFChallenge}`);
+
     // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
     // Try progressively shorter queries until we find a match
     const queries = [
@@ -219,7 +224,7 @@ export async function placeCanacOrder(
           return { status: res.status, products: (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name })) };
         } catch (e: any) { return { status: 0, error: e.message, products: [] }; }
       }, query);
-      console.error(`[Canac] API search résultat: status=${searchResult.status} produits=${searchResult.products?.length ?? 0}`);
+      console.error(`[Canac] API search résultat: status=${searchResult.status} produits=${searchResult.products?.length ?? 0}${(searchResult as any).error ? ` erreur="${(searchResult as any).error}"` : ''}`);
       if (searchResult.products?.length > 0) {
         productCode = searchResult.products[0].code;
         productName = searchResult.products[0].name;
