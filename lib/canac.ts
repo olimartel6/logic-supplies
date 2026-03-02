@@ -130,19 +130,14 @@ export async function loginToCanac(page: any, username: string, password: string
 
   await passField.press('Enter');
 
-  // Wait for (1) URL to leave Auth0, then (2) Angular to finish processing the OAuth
-  // callback (/canac/?code=…). The callback is complete when ?code= leaves the URL
-  // (Angular exchanges the code server-side and redirects to the app homepage).
-  // Without waiting for step 2, the SAP CC session isn't established yet.
+  // Wait for URL to leave Auth0
   await page.waitForFunction(
     () => !window.location.hostname.includes('login.canac.ca'),
     { timeout: 40000 }
   ).catch(() => {});
-  await page.waitForFunction(
-    () => !window.location.search.includes('code='),
-    { timeout: 30000 }
-  ).catch(() => {});
-  await page.waitForTimeout(2000);
+  // Give Angular 5s to process the OAuth callback and establish the SAP CC session.
+  // waitForFunction on location.search caused CDP disconnects during the navigation.
+  await page.waitForTimeout(5000);
 
   const url = page.url();
   return url.includes('canac.ca') && !url.includes('login.canac.ca');
@@ -215,8 +210,14 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // Log cookies so we can see what the login established
-    const allCookies = await page.context().cookies(['https://www.canac.ca']);
+    // Log cookies — also verifies the Browserbase session is still alive
+    let allCookies: any[] = [];
+    try {
+      allCookies = await page.context().cookies(['https://www.canac.ca']);
+    } catch (err: any) {
+      console.error('[Canac] Session Browserbase perdue après login:', err.message);
+      return { success: false, error: 'Session Browserbase fermée après login — réessayez' };
+    }
     const cookieNames = allCookies.map((c: any) => c.name).join(', ') || '(aucun)';
     const hasCF = allCookies.some((c: any) => c.name === 'cf_clearance');
     console.error(`[Canac] Cookies post-login: [${cookieNames}] cf_clearance=${hasCF}`);
