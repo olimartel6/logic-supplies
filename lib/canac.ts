@@ -50,7 +50,7 @@ export async function createCanacPage(browser: any) {
 
 export async function loginToCanac(page: any, username: string, password: string): Promise<boolean> {
   // Real Canac domain is canac.ca (canac.com redirects to an unrelated US company)
-  await page.goto('https://www.canac.ca/fr/connexion', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto('https://www.canac.ca/fr/connexion', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForTimeout(4000);
 
   // Didomi cookie consent banner
@@ -89,17 +89,15 @@ export async function loginToCanac(page: any, username: string, password: string
     }
   }
 
-  // Wait for Auth0 redirect to login.canac.ca
+  // Wait for Auth0 redirect to login.canac.ca (proxy adds latency — 30s)
   await page.waitForFunction(
     () => window.location.hostname.includes('login.canac.ca'),
-    { timeout: 15000 }
+    { timeout: 30000 }
   );
-  await page.waitForTimeout(1500); // allow Auth0 React app to fully render
+  await page.waitForTimeout(2000); // allow Auth0 React app to fully render
 
-  // Step 3: Auth0 shows both email (input#username) and password (input#password) at once
-  // Use type() with delay (not fill()) so Auth0's React onChange handlers fire correctly
   const emailField = page.locator('input#username').first();
-  await emailField.waitFor({ timeout: 10000 });
+  await emailField.waitFor({ timeout: 15000 });
   await emailField.click();
   await emailField.type(username, { delay: 50 });
   await page.waitForTimeout(300);
@@ -109,15 +107,11 @@ export async function loginToCanac(page: any, username: string, password: string
   await passField.type(password, { delay: 50 });
   await page.waitForTimeout(400);
 
-  // Press Enter to submit (the visible submit button is obscured by Auth0's ULP layout;
-  // pressing Enter in the password field reliably submits the form)
   await passField.press('Enter');
 
-  // Wait until we leave Auth0 — use waitForFunction to avoid "load" event timeout issues
-  // SAP Commerce Cloud pages are heavy and the "load" event can take >15s
   await page.waitForFunction(
     () => !window.location.hostname.includes('login.canac.ca'),
-    { timeout: 20000 }
+    { timeout: 40000 }
   ).catch(() => {});
   await page.waitForTimeout(2000);
 
@@ -198,12 +192,12 @@ export async function placeCanacOrder(
     // Navigate directly to search URL — skips the homepage entirely so we never need
     // to interact with the search bar (which Cloudflare Turnstile blocks from rendering).
     const searchUrl = `https://www.canac.ca/canac/fr/2/search/${encodeURIComponent(product)}`;
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(6000);
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(8000);
     console.error('[Canac] Page résultats:', page.url());
 
     // Wait for Angular to render product cards (same selector confirmed in catalog import)
-    const cardsFound = await page.waitForSelector('canac-product-list-item', { timeout: 15000 })
+    const cardsFound = await page.waitForSelector('canac-product-list-item', { timeout: 25000 })
       .then(() => true).catch(() => false);
     const cardCount = await page.locator('canac-product-list-item').count();
     const cfBlocking = await page.locator('[id*="cf-chl"], [name*="cf-turnstile"]').count() > 0;
