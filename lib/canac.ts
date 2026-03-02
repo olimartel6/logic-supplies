@@ -203,7 +203,24 @@ export async function placeCanacOrder(
     console.error('[Canac] Page résultats:', page.url());
 
     // Wait for Angular to render product cards (same selector confirmed in catalog import)
-    await page.waitForSelector('canac-product-list-item', { timeout: 15000 }).catch(() => {});
+    const cardsFound = await page.waitForSelector('canac-product-list-item', { timeout: 15000 })
+      .then(() => true).catch(() => false);
+    const cardCount = await page.locator('canac-product-list-item').count();
+    const cfBlocking = await page.locator('[id*="cf-chl"], [name*="cf-turnstile"]').count() > 0;
+    console.error(`[Canac] cartes=${cardCount} cloudflare=${cfBlocking} cardsFound=${cardsFound}`);
+
+    // If no results for full name, retry with first 3 words (Canac may not carry specific brand)
+    if (cardCount === 0 && !cfBlocking) {
+      const shortQuery = product.split(' ').slice(0, 3).join(' ');
+      if (shortQuery !== product) {
+        console.error(`[Canac] 0 résultats, retry avec "${shortQuery}"`);
+        const shortUrl = `https://www.canac.ca/canac/fr/2/search/${encodeURIComponent(shortQuery)}`;
+        await page.goto(shortUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(6000);
+        await page.waitForSelector('canac-product-list-item', { timeout: 15000 }).catch(() => {});
+        console.error(`[Canac] Retry cartes=${await page.locator('canac-product-list-item').count()}`);
+      }
+    }
 
     // Click first product link using the confirmed Canac Angular selector
     const firstProductLink = page.locator(
