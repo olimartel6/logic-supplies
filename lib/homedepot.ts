@@ -103,18 +103,32 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   }
 
   // 2. Form login (two-step: email first, then password)
-  // homedepot.ca/myaccount is the correct entry point — /fr/accueil/connexion.html returns 404
-  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(3000);
+  // Go to homepage first so Akamai's sensor collects enough behavior data before login.
+  // Jumping straight to /myaccount triggers "unexpected error" because the legitimacy
+  // score hasn't been established yet.
+  await page.goto('https://www.homedepot.ca', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(5000);  // Let Akamai JS sensor run
 
-  // OneTrust cookie consent banner
+  // Simulate light browsing: scroll down a bit, then back up
+  await page.mouse.move(640, 400);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.scrollBy(0, 300));
+  await page.waitForTimeout(800);
+  await page.evaluate(() => window.scrollBy(0, -300));
+  await page.waitForTimeout(500);
+
+  // OneTrust cookie consent banner (may appear on homepage)
   const cookieBtn = page.locator('#onetrust-accept-btn-handler').first();
   if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await cookieBtn.click();
     await page.waitForTimeout(1000);
   }
 
-  // Dismiss store picker modal — give it up to 5s to appear (slower on some sessions)
+  // Now navigate to login page
+  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(5000);  // Let Akamai sensor re-run on new page
+
+  // Dismiss store picker modal
   const closeBtn = page.locator('button.acl-modal__close').first();
   if (await closeBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
     await closeBtn.click();
@@ -122,12 +136,15 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   }
   await page.waitForTimeout(1000);
 
-  // Step 1: Fill email — use type() with delay so React's onChange fires
+  // Step 1: Fill email — move mouse to field naturally before clicking
   const emailField = page.locator('input[type="email"]').first();
   await emailField.waitFor({ timeout: 10000 });
+  await emailField.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
   await emailField.click();
+  await page.waitForTimeout(400);
   await emailField.type(username, { delay: 80 });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(800);
 
   // Step 2: Submit email by pressing Enter — avoids Akamai detecting a forced button click.
   // The two-step form validates the email server-side before showing the password field.
