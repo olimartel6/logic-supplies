@@ -172,19 +172,23 @@ export async function loginToHomeDepot(page: any, username: string, password: st
 }
 
 export async function testHomeDepotConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await createBrowserbaseBrowser();
+  // Use residential proxies — Home Depot's Akamai Bot Manager blocks datacenter IPs
+  const browser = await createBrowserbaseBrowser({ proxies: true });
 
   let captchaDetected = false;
+  let akamaiDetected = false;
 
   try {
     const context = await createHDContext(browser);
     const page = await context.newPage();
 
-    // Detect reCAPTCHA Enterprise challenge being triggered
     page.on('request', (req: any) => {
       const url = req.url();
       if (url.includes('recaptcha/enterprise/reload') || url.includes('recaptcha/api2/payload')) {
         captchaDetected = true;
+      }
+      if (url.includes('akamai') || url.includes('_abck') || url.includes('bm_sz')) {
+        akamaiDetected = true;
       }
     });
 
@@ -212,7 +216,7 @@ export async function testHomeDepotConnection(username: string, password: string
 }
 
 export async function getHomeDepotPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const context = await createHDContext(browser);
     const page = await context.newPage();
@@ -248,13 +252,18 @@ export async function placeHomeDepotOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
-  const browser = await createBrowserbaseBrowser();
+  // Use residential proxies to bypass Akamai Bot Manager
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const context = await createHDContext(browser);
     const page = await context.newPage();
     const loggedIn = await loginToHomeDepot(page, username, password);
     if (!loggedIn) {
-      console.error('[HomeDepot] Login échoué');
+      const url = page.url();
+      const emailVisible = await page.locator('input[type="email"]').isVisible({ timeout: 1000 }).catch(() => false);
+      const passVisible = await page.locator('input[type="password"]').isVisible({ timeout: 1000 }).catch(() => false);
+      const bodySnippet = (await page.textContent('body').catch(() => '')).slice(0, 200).replace(/\s+/g, ' ');
+      console.error(`[HomeDepot] Login échoué — url=${url} email=${emailVisible} pass=${passVisible} body="${bodySnippet}"`);
       return { success: false, error: 'Login Home Depot échoué' };
     }
 
