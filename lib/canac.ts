@@ -70,13 +70,13 @@ export async function loginToCanac(page: any, username: string, password: string
   }
   if (!cfClearance) console.error('[Canac] cf_clearance jamais obtenu après 120s — continue quand même');
 
-  // Real Canac domain is canac.ca (canac.com redirects to an unrelated US company)
-  await page.goto('https://www.canac.ca/fr/connexion', { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForTimeout(4000);
+  // We are already on /canac/fr/2 (Angular app) from the warmup — do NOT navigate to
+  // /fr/connexion. With cf_clearance the Angular app now fully loads, and the connexion
+  // page suppresses the "Se connecter" header button. Use the homepage header button instead.
 
-  // Didomi cookie consent banner
+  // Didomi cookie consent banner (may appear on initial Angular load)
   const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter & Fermer")').first();
-  if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
     await cookieBtn.click();
     await page.waitForTimeout(800);
   }
