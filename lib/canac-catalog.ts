@@ -32,7 +32,7 @@ export async function importCanacCatalog(
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
   const password = decrypt(account.password_encrypted);
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   let totalImported = 0;
 
   const upsert = db.prepare(`

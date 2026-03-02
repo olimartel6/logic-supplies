@@ -129,7 +129,7 @@ export async function loginToCanac(page: any, username: string, password: string
 }
 
 export async function testCanacConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
@@ -149,7 +149,7 @@ export async function testCanacConnection(username: string, password: string): P
 }
 
 export async function getCanacPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
@@ -185,7 +185,8 @@ export async function placeCanacOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
-  const browser = await createBrowserbaseBrowser();
+  // Residential proxies needed: Canac uses Cloudflare Turnstile which blocks datacenter IPs
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
     const loggedIn = await loginToCanac(page, username, password);
@@ -194,12 +195,13 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // Navigate to home page then search
+    // Navigate to home page — wait extra time for Cloudflare Turnstile to auto-verify
     await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(6000);
+    console.error('[Canac] Page après login:', page.url());
 
     const searchBar = page.locator('input[placeholder*="Rechercher"]').first();
-    await searchBar.waitFor({ timeout: 8000 });
+    await searchBar.waitFor({ timeout: 20000 });
     await searchBar.click();
     await searchBar.type(product, { delay: 120 });
     await page.waitForTimeout(1500);
