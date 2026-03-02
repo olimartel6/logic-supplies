@@ -189,18 +189,15 @@ export async function placeCanacOrder(
       return { success: false, error: 'Login Canac échoué' };
     }
 
-    // Navigate to a SAP CC page to establish session cookies for API calls.
-    // Cloudflare Turnstile blocks Angular page rendering but does NOT block fetch() API
-    // calls from within the authenticated browser session — this is the key bypass.
-    const searchUrl = `https://www.canac.ca/canac/fr/2/search/${encodeURIComponent(product)}`;
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000);
-    console.error('[Canac] Session établie:', page.url());
-
-    // Diagnostic: confirm whether Cloudflare challenge page is active
+    // After OAuth login the page is on the Angular app — do NOT navigate away.
+    // Any navigation to /canac/fr/2/search/* triggers Cloudflare Turnstile which
+    // intercepts subsequent fetch() calls and returns HTML instead of JSON.
+    // The session cookies from OAuth are already valid for API calls on this page.
+    await page.waitForTimeout(2000);
+    const postLoginUrl = page.url();
     const pageTitle = await page.title().catch(() => '?');
-    const isCFChallenge = pageTitle.toLowerCase().includes('just a moment') || pageTitle.toLowerCase().includes('checking');
-    console.error(`[Canac] Page titre="${pageTitle}" cloudflare=${isCFChallenge}`);
+    const isCFChallenge = ['un instant', 'just a moment', 'checking'].some(s => pageTitle.toLowerCase().includes(s));
+    console.error(`[Canac] Post-login: url=${postLoginUrl} titre="${pageTitle}" cloudflare=${isCFChallenge}`);
 
     // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
     // Try progressively shorter queries until we find a match
