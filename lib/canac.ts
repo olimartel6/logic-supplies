@@ -130,16 +130,21 @@ export async function loginToCanac(page: any, username: string, password: string
 
   await passField.press('Enter');
 
+  // Wait for (1) URL to leave Auth0, then (2) Angular to finish processing the OAuth
+  // callback (/canac/?code=…). The callback is complete when ?code= leaves the URL
+  // (Angular exchanges the code server-side and redirects to the app homepage).
+  // Without waiting for step 2, the SAP CC session isn't established yet.
   await page.waitForFunction(
     () => !window.location.hostname.includes('login.canac.ca'),
     { timeout: 40000 }
   ).catch(() => {});
+  await page.waitForFunction(
+    () => !window.location.search.includes('code='),
+    { timeout: 30000 }
+  ).catch(() => {});
   await page.waitForTimeout(2000);
 
   const url = page.url();
-  // Success = left Auth0 (login.canac.ca) and landed back on canac.ca.
-  // SAP Commerce Cloud's OAuth flow always lands on /connexion first while establishing the session,
-  // so we do NOT check for /connexion — leaving login.canac.ca is the real success signal.
   return url.includes('canac.ca') && !url.includes('login.canac.ca');
 }
 
@@ -232,23 +237,24 @@ export async function placeCanacOrder(
 
     for (const query of queries) {
       console.error(`[Canac] API search: "${query}"`);
-      let status = 0, body = '', isJson = false;
-      try {
-        const resp = await page.context().request.get(
-          `https://www.canac.ca/canac/rest/v2/canac/products/search?query=${encodeURIComponent(query)}&lang=fr&curr=CAD&pageSize=5`,
-          { headers: { Accept: 'application/json' } }
-        );
-        status = resp.status();
-        body = await resp.text();
-        isJson = body.trimStart().startsWith('{') || body.trimStart().startsWith('[');
-      } catch (e: any) { body = e.message; }
-      console.error(`[Canac] API: status=${status} isJson=${isJson} body="${body.slice(0, 250)}"`);
-      if (!isJson) continue;
-      const data = JSON.parse(body);
-      const products = (data.products || []).slice(0, 3);
-      if (products.length > 0) {
-        productCode = products[0].code;
-        productName = products[0].name;
+      // page.evaluate(fetch) runs inside the browser on the Browserbase proxy — it carries
+      // cf_clearance and the SAP CC session, bypassing Cloudflare entirely.
+      // context.request would use Railway's IP (no cf_clearance) and get a 403.
+      const result = await page.evaluate(async (q: string) => {
+        try {
+          const url = `/canac/rest/v2/canac/products/search?query=${encodeURIComponent(q)}&lang=fr&curr=CAD&pageSize=5`;
+          const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+          const text = await res.text();
+          const isJson = text.trimStart().startsWith('{') || text.trimStart().startsWith('[');
+          if (!isJson) return { status: res.status, products: [], body: text.slice(0, 200) };
+          const data = JSON.parse(text);
+          return { status: res.status, products: (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name })) };
+        } catch (e: any) { return { status: 0, products: [], error: e.message }; }
+      }, query);
+      console.error(`[Canac] API: status=${result.status} produits=${result.products?.length ?? 0}${(result as any).body ? ` body="${(result as any).body}"` : ''}${(result as any).error ? ` erreur="${(result as any).error}"` : ''}`);
+      if (result.products?.length > 0) {
+        productCode = result.products[0].code;
+        productName = result.products[0].name;
         console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
         break;
       }
@@ -259,29 +265,32 @@ export async function placeCanacOrder(
       return { success: false, error: `Produit "${product}" introuvable sur Canac` };
     }
 
-    // ── Step 2: Get CSRF token via context.request ────────────────────────────
-    let csrfToken = '';
-    try {
-      const csrfResp = await page.context().request.get(
-        'https://www.canac.ca/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD',
-        { headers: { Accept: 'application/json' } }
-      );
-      csrfToken = csrfResp.headers()['x-csrf-token'] || '';
-    } catch { /* csrf optional */ }
+    // ── Step 2: Get CSRF token via page.evaluate (browser proxy, has cf_clearance) ──
+    const csrfToken = await page.evaluate(async () => {
+      try {
+        const res = await fetch('/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD', {
+          credentials: 'include', headers: { Accept: 'application/json' },
+        });
+        return res.headers.get('X-CSRF-Token') || '';
+      } catch { return ''; }
+    });
     console.error(`[Canac] CSRF token: ${csrfToken ? 'ok' : 'vide'}`);
 
-    // ── Step 3: Add to cart via context.request ───────────────────────────────
-    const cartHeaders: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (csrfToken) cartHeaders['X-CSRF-Token'] = csrfToken;
-    let cartStatus = 0, cartBody = '';
-    try {
-      const cartResp = await page.context().request.post(
-        'https://www.canac.ca/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD',
-        { headers: cartHeaders, data: { product: { code: productCode }, quantity } }
-      );
-      cartStatus = cartResp.status();
-      cartBody = await cartResp.text();
-    } catch (e: any) { cartBody = e.message; }
+    // ── Step 3: Add to cart via page.evaluate (browser proxy, has cf_clearance) ──
+    const cartResult = await page.evaluate(async ({ code, qty, csrf }: { code: string; qty: number; csrf: string }) => {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+        if (csrf) headers['X-CSRF-Token'] = csrf;
+        const res = await fetch('/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD', {
+          method: 'POST', credentials: 'include', headers,
+          body: JSON.stringify({ product: { code }, quantity: qty }),
+        });
+        const text = await res.text();
+        return { status: res.status, body: text.slice(0, 200) };
+      } catch (e: any) { return { status: 0, body: e.message }; }
+    }, { code: productCode, qty: quantity, csrf: csrfToken });
+    const cartStatus = cartResult.status;
+    const cartBody = cartResult.body;
     console.error(`[Canac] Add to cart: status=${cartStatus} body="${cartBody.slice(0, 150)}"`);
 
     const cartSuccess = cartStatus === 200 || cartStatus === 201;
