@@ -122,27 +122,16 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   }
   await page.waitForTimeout(1000);
 
-  // Step 1: Fill email using type() with delay so React's onChange fires and enables the Sign In button.
-  // The button starts with class "acl-button--is-disabled" and React removes it after detecting input.
-  // Using fill() bypasses key events and leaves the button disabled.
+  // Step 1: Fill email — use type() with delay so React's onChange fires
   const emailField = page.locator('input[type="email"]').first();
   await emailField.waitFor({ timeout: 10000 });
-  await emailField.click({ force: true });
+  await emailField.click();
   await emailField.type(username, { delay: 80 });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
 
-  // Wait for Sign In button to become enabled (React removes is-disabled after valid input)
-  await page.waitForFunction(
-    () => {
-      const btn = document.querySelector('button[type="submit"]');
-      return btn && !btn.className.includes('is-disabled');
-    },
-    { timeout: 5000 }
-  ).catch(() => {});
-
-  // Step 2: Click Sign In to submit email (two-step form: validates account first)
-  const signInBtn = page.locator('button[type="submit"]').first();
-  await signInBtn.click({ force: true });
+  // Step 2: Submit email by pressing Enter — avoids Akamai detecting a forced button click.
+  // The two-step form validates the email server-side before showing the password field.
+  await emailField.press('Enter');
   await page.waitForTimeout(8000);  // HD validates email server-side — can take several seconds
 
   // Step 3: Wait for password field — only appears if email is recognized by HD
@@ -150,7 +139,7 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   const passVisible = await passField.isVisible({ timeout: 5000 }).catch(() => false);
   if (!passVisible) return false;
 
-  await passField.click({ force: true });
+  await passField.click();
   await passField.type(password, { delay: 60 });
   await page.waitForTimeout(400);
   await passField.press('Enter');
