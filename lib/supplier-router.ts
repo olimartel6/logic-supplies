@@ -206,8 +206,11 @@ export async function selectAndOrder(
     };
   }
 
-  const selected =
-    preference === 'cheapest'
+  // With a single account there is nothing to compare — skip the price/distance
+  // check (which would open a full browser session) and go straight to ordering.
+  const selected = accounts.length === 1
+    ? { account: accounts[0], reason: `${supplierLabel(accounts[0].supplier)} sélectionné` }
+    : preference === 'cheapest'
       ? await selectCheapest(accounts, product)
       : await selectFastest(accounts, jobSiteAddress);
 
