@@ -50,8 +50,8 @@ export async function importCanacCatalog(
   try {
     const page = await createCanacPage(browser);
 
-    const loggedIn = await loginToCanac(page, account.username, password);
-    if (!loggedIn) {
+    const loginResult = await loginToCanac(page, account.username, password);
+    if (!loginResult.success) {
       return { total: 0, error: 'Login Canac échoué' };
     }
 

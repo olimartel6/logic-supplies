@@ -48,17 +48,13 @@ export async function createCanacPage(browser: any) {
   return context.newPage();
 }
 
-export async function loginToCanac(page: any, username: string, password: string): Promise<boolean> {
+export async function loginToCanac(page: any, username: string, password: string): Promise<{ success: boolean; accessToken?: string }> {
   // Step 0: Cloudflare warmup — visit the Angular app BEFORE the OAuth flow.
-  // cf_clearance is obtained here so the OAuth callback (/canac/?code=…) won't be
-  // challenged by Cloudflare. Residential proxies should solve within ~60-120s.
   console.error('[Canac] Cloudflare warmup: visite /canac/fr/2…');
   await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 60000 });
-  let cfClearance = false;
-  for (let i = 0; i < 60; i++) { // up to 120 seconds
+  for (let i = 0; i < 60; i++) {
     const cookies = await page.context().cookies(['https://www.canac.ca']);
     if (cookies.some((c: any) => c.name === 'cf_clearance')) {
-      cfClearance = true;
       console.error(`[Canac] cf_clearance obtenu (t=${i * 2}s)`);
       break;
     }
@@ -68,21 +64,47 @@ export async function loginToCanac(page: any, username: string, password: string
     }
     await page.waitForTimeout(2000);
   }
-  if (!cfClearance) console.error('[Canac] cf_clearance jamais obtenu après 120s — continue quand même');
 
-  // We are already on /canac/fr/2 (Angular app) from the warmup — do NOT navigate to
-  // /fr/connexion. With cf_clearance the Angular app now fully loads, and the connexion
-  // page suppresses the "Se connecter" header button. Use the homepage header button instead.
+  // Set up route interceptors BEFORE clicking login.
+  // Root cause: when the browser follows the OAuth callback to /canac/?code=..., Browserbase
+  // has rotated the proxy IP (it rotates on off-domain navigation to login.canac.ca). The
+  // old cf_clearance is IP-bound and invalid for the new IP → Cloudflare blocks the callback
+  // URL → Angular never processes the code → user is never logged in.
+  // Fix: intercept the callback redirect at the Playwright CDP level (before the HTTP request
+  // is made) and redirect to /canac/fr/2 instead. Cloudflare never sees the callback URL.
+  let capturedCode: string | null = null;
+  let capturedClientId: string | null = null;
+  let capturedRedirectUri: string | null = null;
 
-  // Didomi cookie consent banner (may appear on initial Angular load)
+  // Observe Auth0 authorize request to capture client_id and redirect_uri
+  await page.route(/https:\/\/login\.canac\.ca\/authorize/, async (route: any) => {
+    try {
+      const u = new URL(route.request().url());
+      capturedClientId = u.searchParams.get('client_id');
+      capturedRedirectUri = u.searchParams.get('redirect_uri');
+      console.error(`[Canac] Auth0 authorize intercepté: client_id=${capturedClientId?.slice(0, 20)}`);
+    } catch {}
+    await route.continue();
+  });
+
+  // Intercept OAuth callback: capture code, redirect to clean page
+  await page.route(/https:\/\/www\.canac\.ca\/canac\/\?.*code=/, async (route: any) => {
+    try {
+      const u = new URL(route.request().url());
+      capturedCode = u.searchParams.get('code');
+      console.error(`[Canac] OAuth code intercepté ✓`);
+    } catch {}
+    await route.fulfill({ status: 302, headers: { Location: 'https://www.canac.ca/canac/fr/2' } });
+  });
+
+  // Cookie consent banner (may appear on initial Angular load)
   const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter & Fermer")').first();
   if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
     await cookieBtn.click();
     await page.waitForTimeout(800);
   }
 
-  // Step 1: Click the header "Se connecter" button → opens account dialog
-  // Use flexible selectors in case Canac updates class names
+  // Click header "Se connecter" button
   const headerBtn = page.locator([
     'button.canac-login__btn',
     'button[class*="login__btn"]',
@@ -94,10 +116,8 @@ export async function loginToCanac(page: any, username: string, password: string
   await headerBtn.click();
   await page.waitForTimeout(1500);
 
-  // Step 2: Click "Se connecter ou créer un compte" inside the dialog → redirects to Auth0 (login.canac.ca)
-  // If Auth0 already opened (some flows skip the dialog), skip this step
-  const alreadyOnAuth0 = page.url().includes('login.canac.ca');
-  if (!alreadyOnAuth0) {
+  // Click dialog login button if needed
+  if (!page.url().includes('login.canac.ca')) {
     const dialogLoginBtn = page.locator([
       'button.canac-my-account-dialog__login-btn',
       'button[class*="my-account-dialog__login"]',
@@ -110,12 +130,12 @@ export async function loginToCanac(page: any, username: string, password: string
     }
   }
 
-  // Wait for Auth0 redirect to login.canac.ca (proxy adds latency — 30s)
-  await page.waitForFunction(
-    () => window.location.hostname.includes('login.canac.ca'),
-    { timeout: 30000 }
-  );
-  await page.waitForTimeout(2000); // allow Auth0 React app to fully render
+  // Poll for Auth0 (avoid waitForFunction which can cause CDP disconnects)
+  for (let i = 0; i < 30; i++) {
+    if (page.url().includes('login.canac.ca')) break;
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForTimeout(2000);
 
   const emailField = page.locator('input#username').first();
   await emailField.waitFor({ timeout: 15000 });
@@ -130,25 +150,81 @@ export async function loginToCanac(page: any, username: string, password: string
 
   await passField.press('Enter');
 
-  // Wait for URL to leave Auth0
-  await page.waitForFunction(
-    () => !window.location.hostname.includes('login.canac.ca'),
-    { timeout: 40000 }
-  ).catch(() => {});
-  // Give Angular 5s to process the OAuth callback and establish the SAP CC session.
-  // waitForFunction on location.search caused CDP disconnects during the navigation.
-  await page.waitForTimeout(5000);
+  // Wait for route interceptor to capture the OAuth code (up to 60s)
+  for (let i = 0; i < 60 && !capturedCode; i++) {
+    await page.waitForTimeout(1000);
+    if (i > 0 && i % 10 === 0) {
+      const url = page.url();
+      const title = await page.title().catch(() => '?');
+      console.error(`[Canac] Attente code OAuth t=${i}s url=${url.slice(0, 60)} titre="${title}"`);
+    }
+  }
 
-  const url = page.url();
-  return url.includes('canac.ca') && !url.includes('login.canac.ca');
+  if (!capturedCode) {
+    console.error('[Canac] OAuth code non capturé dans les 60s');
+    return { success: false };
+  }
+
+  // Browser is now on /canac/fr/2 (route interceptor redirected it).
+  // Wait for Cloudflare to issue cf_clearance for the current proxy IP.
+  console.error('[Canac] Re-warmup post-interception...');
+  for (let i = 0; i < 60; i++) {
+    const cookies = await page.context().cookies(['https://www.canac.ca']);
+    const title = await page.title().catch(() => '?');
+    const hasCF = cookies.some((c: any) => c.name === 'cf_clearance');
+    if (i % 5 === 0) console.error(`[Canac] Re-warmup t=${i * 2}s cf_clearance=${hasCF} titre="${title}"`);
+    if (hasCF && !title.toLowerCase().includes('instant')) {
+      console.error(`[Canac] cf_clearance valide (t=${i * 2}s)`);
+      break;
+    }
+    await page.waitForTimeout(2000);
+  }
+
+  // Retrieve PKCE code_verifier set by Angular before the OAuth redirect
+  const allCookies = await page.context().cookies(['https://www.canac.ca']);
+  const codeVerifier = allCookies.find((c: any) => c.name === 'oauth_code_verifier')?.value || '';
+  console.error(`[Canac] PKCE: code_verifier=${codeVerifier ? 'ok' : 'ABSENT'} client_id=${capturedClientId ? 'ok' : 'ABSENT'}`);
+
+  if (!codeVerifier || !capturedClientId || !capturedRedirectUri) {
+    console.error('[Canac] PKCE params manquants — impossible d\'échanger le code');
+    return { success: false };
+  }
+
+  // Exchange code for access_token via PKCE.
+  // Runs in browser from www.canac.ca origin — Auth0 has CORS enabled for this
+  // origin because the Canac Angular SPA performs this same exchange in production.
+  const tokenResult = await page.evaluate(async ({ code, clientId, redirectUri, codeVerifier }: any) => {
+    try {
+      const res = await fetch('https://login.canac.ca/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_type: 'authorization_code', client_id: clientId, code, code_verifier: codeVerifier, redirect_uri: redirectUri }),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text };
+    } catch (e: any) { return { status: 0, body: e.message }; }
+  }, { code: capturedCode, clientId: capturedClientId, redirectUri: capturedRedirectUri, codeVerifier });
+
+  console.error(`[Canac] Token exchange: status=${tokenResult.status} body=${tokenResult.body.slice(0, 300)}`);
+
+  let accessToken: string | null = null;
+  try { accessToken = JSON.parse(tokenResult.body).access_token || null; } catch {}
+
+  if (!accessToken) {
+    console.error('[Canac] Pas de access_token dans la réponse Auth0');
+    return { success: false };
+  }
+
+  console.error('[Canac] Login PKCE réussi ✓');
+  return { success: true, accessToken };
 }
 
 export async function testCanacConnection(username: string, password: string): Promise<ConnectionResult> {
   const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
-    const loggedIn = await loginToCanac(page, username, password);
-    if (loggedIn) return { success: true };
+    const loginResult = await loginToCanac(page, username, password);
+    if (loginResult.success) return { success: true };
     // Only look for error text on the Auth0 page — on canac.ca the page contains unrelated content
     const currentUrl = page.url();
     let errorText = '';
@@ -167,8 +243,8 @@ export async function getCanacPrice(username: string, password: string, product:
   const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
-    const loggedIn = await loginToCanac(page, username, password);
-    if (!loggedIn) return null;
+    const loginResult = await loginToCanac(page, username, password);
+    if (!loginResult.success) return null;
 
     // Search for product (confirmed selector: placeholder contains "Rechercher")
     const searchBar = page.locator('input[placeholder*="Rechercher"]').first();
@@ -204,37 +280,17 @@ export async function placeCanacOrder(
   const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
-    const loggedIn = await loginToCanac(page, username, password);
-    if (!loggedIn) {
+    const loginResult = await loginToCanac(page, username, password);
+    if (!loginResult.success) {
       console.error('[Canac] Login échoué');
       return { success: false, error: 'Login Canac échoué' };
     }
-
-    // Log cookies — also verifies the Browserbase session is still alive
-    let allCookies: any[] = [];
-    try {
-      allCookies = await page.context().cookies(['https://www.canac.ca']);
-    } catch (err: any) {
-      console.error('[Canac] Session Browserbase perdue après login:', err.message);
-      return { success: false, error: 'Session Browserbase fermée après login — réessayez' };
-    }
-    const cookieNames = allCookies.map((c: any) => c.name).join(', ') || '(aucun)';
-    const hasCF = allCookies.some((c: any) => c.name === 'cf_clearance');
-    console.error(`[Canac] Cookies post-login: [${cookieNames}] cf_clearance=${hasCF}`);
-
-    // The OAuth callback URL /canac/?code=...&state=... triggers a Cloudflare WAF rule
-    // (separate from Turnstile — cf_clearance does NOT bypass WAF). Any fetch() from
-    // within that page context returns 403. Navigate to a clean Angular product page first.
-    console.error('[Canac] Navigation vers page produit avant appels API...');
-    await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000);
-    const apiPageUrl = page.url();
-    const apiPageTitle = await page.title().catch(() => '?');
-    console.error(`[Canac] Page API: url=${apiPageUrl} titre="${apiPageTitle}"`);
+    const accessToken = loginResult.accessToken || '';
+    // Browser is already on /canac/fr/2 with valid cf_clearance (loginToCanac guarantees this).
 
     // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
-    // page.evaluate(fetch) runs inside the browser on the Browserbase proxy — it carries
-    // cf_clearance and the SAP CC session, bypassing Cloudflare entirely.
+    // Bearer token (from PKCE exchange) authenticates the request.
+    // page.evaluate(fetch) runs inside the Browserbase browser (proxy IP, has cf_clearance).
     const queries = [
       product,
       product.split(' ').slice(0, 4).join(' '),
@@ -247,20 +303,17 @@ export async function placeCanacOrder(
 
     for (const query of queries) {
       console.error(`[Canac] API search: "${query}"`);
-      // page.evaluate(fetch) runs inside the browser on the Browserbase proxy — it carries
-      // cf_clearance and the SAP CC session, bypassing Cloudflare entirely.
-      // context.request would use Railway's IP (no cf_clearance) and get a 403.
-      const result = await page.evaluate(async (q: string) => {
+      const result = await page.evaluate(async ({ q, token }: { q: string; token: string }) => {
         try {
           const url = `/canac/rest/v2/canac/products/search?query=${encodeURIComponent(q)}&lang=fr&curr=CAD&pageSize=5`;
-          const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+          const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
           const text = await res.text();
           const isJson = text.trimStart().startsWith('{') || text.trimStart().startsWith('[');
           if (!isJson) return { status: res.status, products: [], body: text.slice(0, 200) };
           const data = JSON.parse(text);
           return { status: res.status, products: (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name })) };
         } catch (e: any) { return { status: 0, products: [], error: e.message }; }
-      }, query);
+      }, { q: query, token: accessToken });
       console.error(`[Canac] API: status=${result.status} produits=${result.products?.length ?? 0}${(result as any).body ? ` body="${(result as any).body}"` : ''}${(result as any).error ? ` erreur="${(result as any).error}"` : ''}`);
       if (result.products?.length > 0) {
         productCode = result.products[0].code;
@@ -275,21 +328,21 @@ export async function placeCanacOrder(
       return { success: false, error: `Produit "${product}" introuvable sur Canac` };
     }
 
-    // ── Step 2: Get CSRF token via page.evaluate (browser proxy, has cf_clearance) ──
-    const csrfToken = await page.evaluate(async () => {
+    // ── Step 2: Get CSRF token ──
+    const csrfToken = await page.evaluate(async (token: string) => {
       try {
         const res = await fetch('/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD', {
-          credentials: 'include', headers: { Accept: 'application/json' },
+          credentials: 'include', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
         });
         return res.headers.get('X-CSRF-Token') || '';
       } catch { return ''; }
-    });
+    }, accessToken);
     console.error(`[Canac] CSRF token: ${csrfToken ? 'ok' : 'vide'}`);
 
-    // ── Step 3: Add to cart via page.evaluate (browser proxy, has cf_clearance) ──
-    const cartResult = await page.evaluate(async ({ code, qty, csrf }: { code: string; qty: number; csrf: string }) => {
+    // ── Step 3: Add to cart ──
+    const cartResult = await page.evaluate(async ({ code, qty, csrf, token }: { code: string; qty: number; csrf: string; token: string }) => {
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` };
         if (csrf) headers['X-CSRF-Token'] = csrf;
         const res = await fetch('/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD', {
           method: 'POST', credentials: 'include', headers,
@@ -298,7 +351,7 @@ export async function placeCanacOrder(
         const text = await res.text();
         return { status: res.status, body: text.slice(0, 200) };
       } catch (e: any) { return { status: 0, body: e.message }; }
-    }, { code: productCode, qty: quantity, csrf: csrfToken });
+    }, { code: productCode, qty: quantity, csrf: csrfToken, token: accessToken });
     const cartStatus = cartResult.status;
     const cartBody = cartResult.body;
     console.error(`[Canac] Add to cart: status=${cartStatus} body="${cartBody.slice(0, 150)}"`);
