@@ -309,9 +309,9 @@ export async function placeCanacOrder(
     // with a valid cf_clearance, but allows Sec-Fetch-Mode:navigate (page.goto).
     // All operations below use full page navigation to avoid this WAF rule.
 
-    // ── Step 1: Search via Angular search page + DOM extraction ───────────────
-    // Same approach as canac-catalog.ts: navigate the browser to the Angular search
-    // page (Sec-Fetch-Mode:navigate) and extract canac-product-list-item elements.
+    // ── Step 1: Search via direct REST API navigation (Sec-Fetch-Mode:navigate) ──
+    // page.goto to /canac/rest/v2/ passes Cloudflare Bot Management (navigate mode).
+    // The browser receives raw JSON which we read from document.body.innerText.
     const queries = [
       product,
       product.split(' ').slice(0, 4).join(' '),
@@ -323,38 +323,30 @@ export async function placeCanacOrder(
     let productName: string | null = null;
 
     for (const query of queries) {
-      console.error(`[Canac] Recherche: "${query}"`);
+      console.error(`[Canac] Recherche API: "${query}"`);
       await page.goto(
-        `https://www.canac.ca/canac/fr/search?query=${encodeURIComponent(query)}`,
+        `https://www.canac.ca/canac/rest/v2/canac/products/search?query=${encodeURIComponent(query)}&lang=fr&curr=CAD&pageSize=5`,
         { waitUntil: 'domcontentloaded', timeout: 30000 },
       ).catch(() => {});
 
-      const found = await page.waitForSelector('canac-product-list-item', { timeout: 20000 })
-        .then(() => true).catch(() => false);
-      if (!found) { console.error(`[Canac] Aucun résultat pour "${query}"`); continue; }
+      const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+      const cfBlocked = bodyText.includes('Just a moment') || bodyText.includes('Un instant') || bodyText.includes('Attention Required');
+      const isJson = bodyText.trimStart().startsWith('{');
+      console.error(`[Canac] API response: CF-blocked=${cfBlocked} isJson=${isJson} preview="${bodyText.slice(0, 120).replace(/\n/g, ' ')}"`);
 
-      await page.waitForTimeout(1500); // let Angular finish rendering all cards
+      if (cfBlocked || !isJson) { continue; }
 
-      const products = await page.evaluate(() => {
-        const cards = Array.from(document.querySelectorAll('canac-product-list-item'));
-        return cards.slice(0, 3).map((card: any) => {
-          const nameEl = card.querySelector('a.canac-product-list-item__title-heading') as HTMLAnchorElement | null;
-          const name = nameEl?.textContent?.trim() || '';
-          const skuEl = card.querySelector('span.canac-product-list-item__title-info');
-          const skuText = skuEl?.textContent?.trim() || '';
-          const skuMatch = skuText.match(/\d+/);
-          const code = skuMatch ? skuMatch[0] : '';
-          return { code, name };
-        }).filter((p: any) => p.name && p.code);
-      });
-
-      console.error(`[Canac] Résultats: ${products.length} produit(s)`);
-      if (products.length > 0) {
-        productCode = products[0].code;
-        productName = products[0].name;
-        console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
-        break;
-      }
+      try {
+        const data = JSON.parse(bodyText);
+        const hits = (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name || p.summary || '' })).filter((p: any) => p.code && p.name);
+        console.error(`[Canac] Résultats: ${hits.length} produit(s)`);
+        if (hits.length > 0) {
+          productCode = hits[0].code;
+          productName = hits[0].name;
+          console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
+          break;
+        }
+      } catch { /* JSON parse failed — body wasn't real JSON */ }
     }
 
     if (!productCode) {
