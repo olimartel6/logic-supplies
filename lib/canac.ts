@@ -183,7 +183,14 @@ export async function loginToCanac(page: any, username: string, password: string
 
   // Retrieve PKCE code_verifier set by Angular before the OAuth redirect
   const allCookies = await page.context().cookies(['https://www.canac.ca']);
-  const codeVerifier = allCookies.find((c: any) => c.name === 'oauth_code_verifier')?.value || '';
+  let codeVerifier = allCookies.find((c: any) => c.name === 'oauth_code_verifier')?.value || '';
+  // Diagnose exact value to identify invalid chars (Auth0 requires only [A-Za-z0-9\-._~])
+  console.error(`[Canac] code_verifier raw (60): "${codeVerifier.slice(0, 60)}" len=${codeVerifier.length}`);
+  // Decode URL-encoding if present (Playwright may return raw cookie value with %XX sequences)
+  try { codeVerifier = decodeURIComponent(codeVerifier); } catch {}
+  // Convert standard base64 → base64url (+ → -, / → _, strip = padding)
+  codeVerifier = codeVerifier.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  console.error(`[Canac] code_verifier clean (60): "${codeVerifier.slice(0, 60)}"`);
   console.error(`[Canac] PKCE: code_verifier=${codeVerifier ? 'ok' : 'ABSENT'} client_id=${capturedClientId ? 'ok' : 'ABSENT'}`);
 
   if (!codeVerifier || !capturedClientId || !capturedRedirectUri) {
