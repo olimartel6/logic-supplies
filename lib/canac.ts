@@ -222,10 +222,19 @@ export async function placeCanacOrder(
     const hasCF = allCookies.some((c: any) => c.name === 'cf_clearance');
     console.error(`[Canac] Cookies post-login: [${cookieNames}] cf_clearance=${hasCF}`);
 
+    // The OAuth callback URL /canac/?code=...&state=... triggers a Cloudflare WAF rule
+    // (separate from Turnstile — cf_clearance does NOT bypass WAF). Any fetch() from
+    // within that page context returns 403. Navigate to a clean Angular product page first.
+    console.error('[Canac] Navigation vers page produit avant appels API...');
+    await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(3000);
+    const apiPageUrl = page.url();
+    const apiPageTitle = await page.title().catch(() => '?');
+    console.error(`[Canac] Page API: url=${apiPageUrl} titre="${apiPageTitle}"`);
+
     // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
-    // Use page.context().request (Playwright HTTP client) instead of page.evaluate(fetch).
-    // context.request makes a direct Node.js HTTP request sharing the browser's cookies
-    // and proxy — it is NOT subject to Cloudflare's JavaScript challenge page.
+    // page.evaluate(fetch) runs inside the browser on the Browserbase proxy — it carries
+    // cf_clearance and the SAP CC session, bypassing Cloudflare entirely.
     const queries = [
       product,
       product.split(' ').slice(0, 4).join(' '),
