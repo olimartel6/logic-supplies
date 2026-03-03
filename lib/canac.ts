@@ -304,12 +304,14 @@ export async function placeCanacOrder(
       console.error('[Canac] Login échoué');
       return { success: false, error: 'Login Canac échoué' };
     }
-    const accessToken = loginResult.accessToken || '';
-    // Browser is already on /canac/fr/2 with valid cf_clearance (loginToCanac guarantees this).
+    // Browser is on /canac/fr/2 with fresh cf_clearance.
+    // Cloudflare's WAF blocks Sec-Fetch-Mode:cors (fetch/XHR) to /canac/rest/v2/ even
+    // with a valid cf_clearance, but allows Sec-Fetch-Mode:navigate (page.goto).
+    // All operations below use full page navigation to avoid this WAF rule.
 
-    // ── Step 1: Search via SAP Commerce Cloud REST API ────────────────────────
-    // Bearer token (from PKCE exchange) authenticates the request.
-    // page.evaluate(fetch) runs inside the Browserbase browser (proxy IP, has cf_clearance).
+    // ── Step 1: Search via Angular search page + DOM extraction ───────────────
+    // Same approach as canac-catalog.ts: navigate the browser to the Angular search
+    // page (Sec-Fetch-Mode:navigate) and extract canac-product-list-item elements.
     const queries = [
       product,
       product.split(' ').slice(0, 4).join(' '),
@@ -321,66 +323,84 @@ export async function placeCanacOrder(
     let productName: string | null = null;
 
     for (const query of queries) {
-      console.error(`[Canac] API search: "${query}"`);
-      const result = await page.evaluate(async ({ q, token }: { q: string; token: string }) => {
-        try {
-          const url = `/canac/rest/v2/canac/products/search?query=${encodeURIComponent(q)}&lang=fr&curr=CAD&pageSize=5`;
-          const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
-          const text = await res.text();
-          const isJson = text.trimStart().startsWith('{') || text.trimStart().startsWith('[');
-          if (!isJson) return { status: res.status, products: [], body: text.slice(0, 200) };
-          const data = JSON.parse(text);
-          return { status: res.status, products: (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name })) };
-        } catch (e: any) { return { status: 0, products: [], error: e.message }; }
-      }, { q: query, token: accessToken });
-      console.error(`[Canac] API: status=${result.status} produits=${result.products?.length ?? 0}${(result as any).body ? ` body="${(result as any).body}"` : ''}${(result as any).error ? ` erreur="${(result as any).error}"` : ''}`);
-      if (result.products?.length > 0) {
-        productCode = result.products[0].code;
-        productName = result.products[0].name;
+      console.error(`[Canac] Recherche: "${query}"`);
+      await page.goto(
+        `https://www.canac.ca/canac/fr/search?query=${encodeURIComponent(query)}`,
+        { waitUntil: 'domcontentloaded', timeout: 30000 },
+      ).catch(() => {});
+
+      const found = await page.waitForSelector('canac-product-list-item', { timeout: 20000 })
+        .then(() => true).catch(() => false);
+      if (!found) { console.error(`[Canac] Aucun résultat pour "${query}"`); continue; }
+
+      await page.waitForTimeout(1500); // let Angular finish rendering all cards
+
+      const products = await page.evaluate(() => {
+        const cards = Array.from(document.querySelectorAll('canac-product-list-item'));
+        return cards.slice(0, 3).map((card: any) => {
+          const nameEl = card.querySelector('a.canac-product-list-item__title-heading') as HTMLAnchorElement | null;
+          const name = nameEl?.textContent?.trim() || '';
+          const skuEl = card.querySelector('span.canac-product-list-item__title-info');
+          const skuText = skuEl?.textContent?.trim() || '';
+          const skuMatch = skuText.match(/\d+/);
+          const code = skuMatch ? skuMatch[0] : '';
+          return { code, name };
+        }).filter((p: any) => p.name && p.code);
+      });
+
+      console.error(`[Canac] Résultats: ${products.length} produit(s)`);
+      if (products.length > 0) {
+        productCode = products[0].code;
+        productName = products[0].name;
         console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
         break;
       }
     }
 
     if (!productCode) {
-      console.error(`[Canac] Produit "${product}" introuvable via API`);
+      console.error(`[Canac] Produit "${product}" introuvable`);
       return { success: false, error: `Produit "${product}" introuvable sur Canac` };
     }
 
-    // ── Step 2: Get CSRF token ──
-    const csrfToken = await page.evaluate(async (token: string) => {
-      try {
-        const res = await fetch('/canac/rest/v2/canac/carts/current?lang=fr&curr=CAD', {
-          credentials: 'include', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-        });
-        return res.headers.get('X-CSRF-Token') || '';
-      } catch { return ''; }
-    }, accessToken);
-    console.error(`[Canac] CSRF token: ${csrfToken ? 'ok' : 'vide'}`);
+    // ── Step 2: Add to cart via product page UI ───────────────────────────────
+    // Navigate to the product page and click "Ajouter au panier".
+    // page.goto (Sec-Fetch-Mode:navigate) passes Cloudflare; fetch() does not.
+    console.error(`[Canac] Navigation page produit: /canac/fr/p/${productCode}`);
+    await page.goto(
+      `https://www.canac.ca/canac/fr/p/${productCode}`,
+      { waitUntil: 'domcontentloaded', timeout: 30000 },
+    ).catch(() => {});
 
-    // ── Step 3: Add to cart ──
-    const cartResult = await page.evaluate(async ({ code, qty, csrf, token }: { code: string; qty: number; csrf: string; token: string }) => {
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` };
-        if (csrf) headers['X-CSRF-Token'] = csrf;
-        const res = await fetch('/canac/rest/v2/canac/carts/current/entries?lang=fr&curr=CAD', {
-          method: 'POST', credentials: 'include', headers,
-          body: JSON.stringify({ product: { code }, quantity: qty }),
-        });
-        const text = await res.text();
-        return { status: res.status, body: text.slice(0, 200) };
-      } catch (e: any) { return { status: 0, body: e.message }; }
-    }, { code: productCode, qty: quantity, csrf: csrfToken, token: accessToken });
-    const cartStatus = cartResult.status;
-    const cartBody = cartResult.body;
-    console.error(`[Canac] Add to cart: status=${cartStatus} body="${cartBody.slice(0, 150)}"`);
-
-    const cartSuccess = cartStatus === 200 || cartStatus === 201;
-    if (!cartSuccess) {
-      return { success: false, error: `Erreur ajout panier (${cartStatus}): ${cartBody.slice(0, 100)}` };
+    // Set quantity if > 1
+    if (quantity > 1) {
+      const qtyInput = page.locator('cx-item-counter input').first();
+      if (await qtyInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await qtyInput.fill(String(quantity));
+        await page.waitForTimeout(500);
+      }
     }
 
-    console.error('[Canac] Ajouté au panier via API');
+    const addToCartBtn = page.locator([
+      'cx-add-to-cart button[type="submit"]',
+      'button:has-text("Ajouter au panier")',
+      'button:has-text("Add to Cart")',
+    ].join(', ')).first();
+
+    const btnVisible = await addToCartBtn.isVisible({ timeout: 15000 }).catch(() => false);
+    if (!btnVisible) {
+      console.error('[Canac] Bouton "Ajouter au panier" introuvable');
+      return { success: false, error: 'Bouton "Ajouter au panier" introuvable' };
+    }
+    await addToCartBtn.click();
+    await page.waitForTimeout(3000);
+
+    // Confirm cart dialog appeared
+    const cartConfirmed = await page.locator([
+      '.cx-dialog-title',
+      '[class*="added-to-cart"]',
+      'cx-added-to-cart-dialog',
+    ].join(', ')).first().isVisible({ timeout: 8000 }).catch(() => false);
+    console.error(`[Canac] Ajouté au panier: ${cartConfirmed ? 'confirmé ✓' : 'incertain (bouton cliqué)'}`);
 
     // ── Step 4: Checkout (only if delivery address + payment provided) ────────
     if (deliveryAddress && payment) {
