@@ -169,6 +169,19 @@ export async function loginToCanac(page: any, username: string, password: string
 
   // Submit via Enter on the password field
   await passField.press('Enter');
+  await page.waitForTimeout(2000); // let Auth0 respond
+
+  // Capture Auth0 response: error messages and form input values for diagnostics
+  const auth0Diag = await page.evaluate(() => {
+    const errors = Array.from(document.querySelectorAll('[class*="error"], [role="alert"], .ulp-alert, .js-errors'))
+      .map((el: any) => el.textContent?.trim()).filter((t: string) => t && t.length > 2);
+    const emailVal = (document.querySelector('input#username') as HTMLInputElement)?.value || '?';
+    const passVal = (document.querySelector('input#password') as HTMLInputElement)?.value;
+    const hasCaptcha = !!document.querySelector('iframe[src*="turnstile"], iframe[src*="hcaptcha"], .cf-turnstile, .h-captcha');
+    return { errors, emailVal, passHasValue: passVal !== undefined ? passVal.length > 0 : false, hasCaptcha };
+  }).catch(() => ({ errors: [], emailVal: '?', passHasValue: false, hasCaptcha: false }));
+  console.error(`[Canac] Auth0 diag: email="${auth0Diag.emailVal}" passHasValue=${auth0Diag.passHasValue} captcha=${auth0Diag.hasCaptcha} errors=${JSON.stringify(auth0Diag.errors)}`);
+
   const urlAfterSubmit = page.url();
   console.error(`[Canac] Après soumission: url=${urlAfterSubmit.slice(0, 80)}`);
 
