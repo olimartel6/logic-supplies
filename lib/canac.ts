@@ -165,15 +165,21 @@ export async function loginToCanac(page: any, username: string, password: string
     return { success: false };
   }
 
-  // Browser is now on /canac/fr/2 (route interceptor redirected it).
-  // Wait for Cloudflare to issue cf_clearance for the current proxy IP.
+  // Wait for the 302 redirect from the interceptor to finish loading /canac/fr/2.
+  // page.title() throws while the page is mid-navigation (returns '?' via catch),
+  // which caused the re-warmup loop to exit immediately with a stale cf_clearance.
+  await page.waitForURL('**/canac/fr/**', { timeout: 30000 }).catch(() => {});
+
+  // Browser is now on /canac/fr/2. Wait for Cloudflare to issue a fresh cf_clearance
+  // for the current proxy IP (which may have rotated during the OAuth redirect).
   console.error('[Canac] Re-warmup post-interception...');
   for (let i = 0; i < 60; i++) {
     const cookies = await page.context().cookies(['https://www.canac.ca']);
-    const title = await page.title().catch(() => '?');
+    const title = await page.title().catch(() => '');
     const hasCF = cookies.some((c: any) => c.name === 'cf_clearance');
     if (i % 5 === 0) console.error(`[Canac] Re-warmup t=${i * 2}s cf_clearance=${hasCF} titre="${title}"`);
-    const cfChallenge = title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
+    // Don't exit if title is blank/short (page still loading) or a CF challenge page
+    const cfChallenge = title.length < 3 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
     if (hasCF && !cfChallenge) {
       console.error(`[Canac] cf_clearance valide (t=${i * 2}s)`);
       break;
