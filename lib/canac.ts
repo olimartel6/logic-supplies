@@ -137,57 +137,40 @@ export async function loginToCanac(page: any, username: string, password: string
     if (page.url().includes('login.canac.ca')) break;
     await page.waitForTimeout(1000);
   }
-  // Extra wait: Auth0 Universal Login is a React SPA and needs time to hydrate
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(2000);
 
   const loginUrl = page.url();
   const loginTitle = await page.title().catch(() => '?');
   console.error(`[Canac] Page Auth0: url=${loginUrl.slice(0, 80)} titre="${loginTitle}"`);
 
+  // Use click()+type() — triggers proper keyboard events that React processes.
+  // fill() may bypass React's synthetic onChange listeners, leaving state empty.
   const emailField = page.locator('input#username').first();
   await emailField.waitFor({ timeout: 15000 });
-  // Use fill() — more reliable than click+type for React-controlled inputs
-  await emailField.fill(username);
-  await page.waitForTimeout(500);
+  await emailField.click();
+  await emailField.type(username, { delay: 60 });
+  await page.waitForTimeout(400);
 
-  // Log page state before submitting email step
-  const urlBeforeEmailSubmit = page.url();
-  console.error(`[Canac] Remplissage email fait, url=${urlBeforeEmailSubmit.slice(0, 60)}`);
-
-  // Auth0 Universal Login uses email-first flow: email → Continue → password.
-  // The "ulp-hidden-form-submit-button" exists to handle Enter keypresses.
-  // Use page.keyboard.press which fires on the currently focused element.
+  // Auth0 Universal Login: password field may be hidden initially (email-first flow)
+  // or visible immediately (combined form). Handle both cases.
   const passField = page.locator('input#password').first();
   const passAlreadyVisible = await passField.isVisible({ timeout: 1500 }).catch(() => false);
+  console.error(`[Canac] Password visible: ${passAlreadyVisible}`);
+
   if (!passAlreadyVisible) {
-    // Focus the email field then press Enter
-    await emailField.focus();
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(1000);
-    const urlAfterEmailEnter = page.url();
-    const titleAfterEmailEnter = await page.title().catch(() => '?');
-    console.error(`[Canac] Après Enter email: url=${urlAfterEmailEnter.slice(0, 60)} titre="${titleAfterEmailEnter}"`);
-    // Wait for password field to appear after the email step
-    const passAppeared = await passField.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
-    console.error(`[Canac] Password field apparu: ${passAppeared}`);
-    if (!passAppeared) {
-      // Last resort: try clicking a visible continue button by text
-      const altContinue = page.locator('button:visible:has-text("Se connecter"), button:visible:has-text("Continuer"), button:visible:has-text("Continue")').first();
-      if (await altContinue.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await altContinue.click();
-        await passField.waitFor({ timeout: 10000 });
-      }
-    }
+    // Email-first: press Enter on the email field to advance to the password step
+    await emailField.press('Enter');
+    await passField.waitFor({ timeout: 15000 });
   }
 
-  await passField.fill(password);
+  await passField.click();
+  await passField.type(password, { delay: 60 });
   await page.waitForTimeout(500);
 
-  // Focus the password field then press Enter to submit
-  await passField.focus();
-  await page.keyboard.press('Enter');
-  const urlAfterPassEnter = page.url();
-  console.error(`[Canac] Après Enter password: url=${urlAfterPassEnter.slice(0, 60)}`);
+  // Submit via Enter on the password field
+  await passField.press('Enter');
+  const urlAfterSubmit = page.url();
+  console.error(`[Canac] Après soumission: url=${urlAfterSubmit.slice(0, 80)}`);
 
   // Wait for route interceptor to capture the OAuth code (up to 60s)
   for (let i = 0; i < 60 && !capturedCode; i++) {
