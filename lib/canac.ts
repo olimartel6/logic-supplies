@@ -145,19 +145,14 @@ export async function loginToCanac(page: any, username: string, password: string
   await emailField.type(username, { delay: 50 });
   await page.waitForTimeout(300);
 
-  // Auth0 may use email-first flow: type email → click Continue → password appears.
-  // Try to find an immediately visible password field; if absent, click Continue first.
+  // Auth0 Universal Login uses email-first flow: type email → Enter → password appears.
+  // Auth0 has a hidden "ulp-hidden-form-submit-button" that captures Enter keypresses.
+  // Always press Enter on the email field — this works for both email-first and combined flows.
   const passField = page.locator('input#password').first();
-  const passVisible = await passField.isVisible({ timeout: 2000 }).catch(() => false);
-  if (!passVisible) {
-    // Email-first flow: press Enter or click the Continue/Submit button
-    const continueBtn = page.locator('button[type=submit], button[name=action], button:has-text("Continue"), button:has-text("Continuer")').first();
-    if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await continueBtn.click();
-    } else {
-      await emailField.press('Enter');
-    }
-    // Wait for password field to appear
+  const passAlreadyVisible = await passField.isVisible({ timeout: 1500 }).catch(() => false);
+  if (!passAlreadyVisible) {
+    await emailField.press('Enter');
+    // Wait for password field to appear after the email step
     await passField.waitFor({ timeout: 15000 });
   }
 
@@ -165,13 +160,8 @@ export async function loginToCanac(page: any, username: string, password: string
   await passField.type(password, { delay: 50 });
   await page.waitForTimeout(400);
 
-  // Click submit button explicitly — more reliable than pressing Enter
-  const submitBtn = page.locator('button[type=submit], button[name=action]').first();
-  if (await submitBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await submitBtn.click();
-  } else {
-    await passField.press('Enter');
-  }
+  // Press Enter on the password field to submit
+  await passField.press('Enter');
 
   // Wait for route interceptor to capture the OAuth code (up to 60s)
   for (let i = 0; i < 60 && !capturedCode; i++) {
