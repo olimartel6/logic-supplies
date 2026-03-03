@@ -145,12 +145,33 @@ export async function loginToCanac(page: any, username: string, password: string
   await emailField.type(username, { delay: 50 });
   await page.waitForTimeout(300);
 
+  // Auth0 may use email-first flow: type email → click Continue → password appears.
+  // Try to find an immediately visible password field; if absent, click Continue first.
   const passField = page.locator('input#password').first();
+  const passVisible = await passField.isVisible({ timeout: 2000 }).catch(() => false);
+  if (!passVisible) {
+    // Email-first flow: press Enter or click the Continue/Submit button
+    const continueBtn = page.locator('button[type=submit], button[name=action], button:has-text("Continue"), button:has-text("Continuer")').first();
+    if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await continueBtn.click();
+    } else {
+      await emailField.press('Enter');
+    }
+    // Wait for password field to appear
+    await passField.waitFor({ timeout: 15000 });
+  }
+
   await passField.click();
   await passField.type(password, { delay: 50 });
   await page.waitForTimeout(400);
 
-  await passField.press('Enter');
+  // Click submit button explicitly — more reliable than pressing Enter
+  const submitBtn = page.locator('button[type=submit], button[name=action]').first();
+  if (await submitBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await submitBtn.click();
+  } else {
+    await passField.press('Enter');
+  }
 
   // Wait for route interceptor to capture the OAuth code (up to 60s)
   for (let i = 0; i < 60 && !capturedCode; i++) {
