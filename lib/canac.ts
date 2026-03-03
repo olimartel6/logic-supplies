@@ -85,16 +85,18 @@ export async function loginToCanac(page: any, username: string, password: string
     } catch {}
   });
 
-  // Intercept OAuth callback: capture code, redirect to clean page.
-  // The Cloudflare challenge page auto-resolves and reloads the original URL — that second
-  // request is intercepted here before Cloudflare sees it again.
+  // Intercept OAuth callback: capture code and serve a blank 200 page.
+  // We deliberately avoid a 302 redirect to /canac/fr/2 here because the browser would
+  // carry the old cf_clearance (bound to the pre-OAuth proxy IP), causing Cloudflare to
+  // run a slow Level-2 challenge (120s+) instead of the fast Level-1 one (2-4s).
+  // After the code is captured we clear the stale cf_clearance and do a fresh page.goto().
   await page.route(/https:\/\/www\.canac\.ca\/canac\/\?.*code=/, async (route: any) => {
     try {
       const u = new URL(route.request().url());
       capturedCode = u.searchParams.get('code');
       console.error(`[Canac] OAuth code intercepté ✓`);
     } catch {}
-    await route.fulfill({ status: 302, headers: { Location: 'https://www.canac.ca/canac/fr/2' } });
+    await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body></body></html>' });
   });
 
   // Cookie consent banner (may appear on initial Angular load)
@@ -165,14 +167,17 @@ export async function loginToCanac(page: any, username: string, password: string
     return { success: false };
   }
 
-  // Wait for the 302 redirect from the interceptor to finish loading /canac/fr/2.
-  // page.title() throws while the page is mid-navigation (returns '?' via catch),
-  // which caused the re-warmup loop to exit immediately with a stale cf_clearance.
-  await page.waitForURL('**/canac/fr/**', { timeout: 30000 }).catch(() => {});
+  // Delete the stale cf_clearance (bound to the pre-OAuth proxy IP) so that when we
+  // navigate to /canac/fr/2 Cloudflare runs a Level-1 JS challenge (~2-4s) rather
+  // than a Level-2 managed challenge (120s+ that often never completes).
+  const cookiesBeforeGoto = await page.context().cookies();
+  await page.context().clearCookies();
+  await page.context().addCookies(cookiesBeforeGoto.filter((c: any) => c.name !== 'cf_clearance'));
 
-  // Browser is now on /canac/fr/2. Wait for Cloudflare to issue a fresh cf_clearance
-  // for the current proxy IP (which may have rotated during the OAuth redirect).
-  console.error('[Canac] Re-warmup post-interception...');
+  // Navigate explicitly to /canac/fr/2 — triggers a fresh Level-1 CF challenge.
+  console.error('[Canac] Re-warmup post-OAuth (cf_clearance effacé, goto /canac/fr/2)...');
+  await page.goto('https://www.canac.ca/canac/fr/2', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+
   for (let i = 0; i < 60; i++) {
     const cookies = await page.context().cookies(['https://www.canac.ca']);
     const title = await page.title().catch(() => '');
