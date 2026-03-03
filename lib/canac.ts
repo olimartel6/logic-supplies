@@ -65,29 +65,29 @@ export async function loginToCanac(page: any, username: string, password: string
     await page.waitForTimeout(2000);
   }
 
-  // Set up route interceptors BEFORE clicking login.
-  // Root cause: when the browser follows the OAuth callback to /canac/?code=..., Browserbase
-  // has rotated the proxy IP (it rotates on off-domain navigation to login.canac.ca). The
-  // old cf_clearance is IP-bound and invalid for the new IP → Cloudflare blocks the callback
-  // URL → Angular never processes the code → user is never logged in.
-  // Fix: intercept the callback redirect at the Playwright CDP level (before the HTTP request
-  // is made) and redirect to /canac/fr/2 instead. Cloudflare never sees the callback URL.
+  // Set up interceptors BEFORE clicking login.
   let capturedCode: string | null = null;
   let capturedClientId: string | null = null;
   let capturedRedirectUri: string | null = null;
 
-  // Observe Auth0 authorize request to capture client_id and redirect_uri
-  await page.route(/https:\/\/login\.canac\.ca\/authorize/, async (route: any) => {
+  // Use page.on('request') (CDP Network.requestWillBeSent) to observe ALL requests.
+  // page.route() uses CDP Fetch domain which misses top-level cross-domain navigation
+  // requests (Angular navigating to login.canac.ca/authorize). Network.requestWillBeSent
+  // fires for every request including cross-domain navigations.
+  page.on('request', (req: any) => {
     try {
-      const u = new URL(route.request().url());
-      capturedClientId = u.searchParams.get('client_id');
-      capturedRedirectUri = u.searchParams.get('redirect_uri');
-      console.error(`[Canac] Auth0 authorize intercepté: client_id=${capturedClientId?.slice(0, 20)}`);
+      const u = new URL(req.url());
+      if (!capturedClientId && u.searchParams.has('client_id')) {
+        capturedClientId = u.searchParams.get('client_id');
+        capturedRedirectUri = u.searchParams.get('redirect_uri') || 'https://www.canac.ca/canac/';
+        console.error(`[Canac] OAuth params: client_id=${capturedClientId?.slice(0, 20)} via ${u.hostname}${u.pathname}`);
+      }
     } catch {}
-    await route.continue();
   });
 
-  // Intercept OAuth callback: capture code, redirect to clean page
+  // Intercept OAuth callback: capture code, redirect to clean page.
+  // The Cloudflare challenge page auto-resolves and reloads the original URL — that second
+  // request is intercepted here before Cloudflare sees it again.
   await page.route(/https:\/\/www\.canac\.ca\/canac\/\?.*code=/, async (route: any) => {
     try {
       const u = new URL(route.request().url());
@@ -173,7 +173,8 @@ export async function loginToCanac(page: any, username: string, password: string
     const title = await page.title().catch(() => '?');
     const hasCF = cookies.some((c: any) => c.name === 'cf_clearance');
     if (i % 5 === 0) console.error(`[Canac] Re-warmup t=${i * 2}s cf_clearance=${hasCF} titre="${title}"`);
-    if (hasCF && !title.toLowerCase().includes('instant')) {
+    const cfChallenge = title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
+    if (hasCF && !cfChallenge) {
       console.error(`[Canac] cf_clearance valide (t=${i * 2}s)`);
       break;
     }
