@@ -172,22 +172,18 @@ export async function loginToCanac(page: any, username: string, password: string
     }
 
     await passField.click();
-    // Set password via evaluate to guarantee special chars like $ are not lost
-    await page.evaluate((pw: string) => {
-      const input = document.querySelector('input#password') as HTMLInputElement;
-      if (!input) return;
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-      nativeInputValueSetter.call(input, pw);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }, password);
+    await passField.selectText().catch(() => {});
+    // Use keyboard.insertText() to bypass keyboard layout issues
+    // (type() uses Shift+4 for $ which can fail on non-US layouts)
+    await page.keyboard.insertText(password);
     await page.waitForTimeout(500);
 
-    // Verify password was set correctly
+    // Verify password length
     const passLen = await page.evaluate(() => (document.querySelector('input#password') as HTMLInputElement)?.value?.length).catch(() => 0);
-    console.error(`[Canac] Password set: ${passLen} chars (expected ${password.length})`);
+    console.error(`[Canac] Password: ${passLen} chars (expected ${password.length})`);
     if (passLen !== password.length) {
-      // Fallback: try fill()
+      // Fallback: fill() which Playwright designed for React inputs
+      console.error('[Canac] Password mismatch — fallback fill()');
       await passField.fill(password);
       await page.waitForTimeout(300);
     }
