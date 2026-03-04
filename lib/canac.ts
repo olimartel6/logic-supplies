@@ -143,55 +143,86 @@ export async function loginToCanac(page: any, username: string, password: string
   const loginTitle = await page.title().catch(() => '?');
   console.error(`[Canac] Page Auth0: url=${loginUrl.slice(0, 80)} titre="${loginTitle}"`);
 
-  // Use click()+type() — triggers proper keyboard events that React processes.
-  // fill() may bypass React's synthetic onChange listeners, leaving state empty.
-  const emailField = page.locator('input#username').first();
-  await emailField.waitFor({ timeout: 15000 });
-  await emailField.click();
-  await emailField.type(username, { delay: 60 });
-  await page.waitForTimeout(400);
+  // Login with retry — Auth0 bot detection sometimes rejects attempts.
+  // Use type() for both fields (not fill()) to mimic real user keystrokes.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.error(`[Canac] Tentative login ${attempt}/3`);
 
-  // Auth0 Universal Login: password field may be hidden initially (email-first flow)
-  // or visible immediately (combined form). Handle both cases.
-  const passField = page.locator('input#password').first();
-  const passAlreadyVisible = await passField.isVisible({ timeout: 1500 }).catch(() => false);
-  console.error(`[Canac] Password visible: ${passAlreadyVisible}`);
+    // On retry, reload the Auth0 page to get a clean form
+    if (attempt > 1) {
+      console.error(`[Canac] Reload Auth0 (retry ${attempt})...`);
+      await page.waitForTimeout(attempt * 3000);
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(2000);
+    }
 
-  if (!passAlreadyVisible) {
-    // Email-first: press Enter on the email field to advance to the password step
-    await emailField.press('Enter');
-    await passField.waitFor({ timeout: 15000 });
-  }
+    const emailField = page.locator('input#username').first();
+    await emailField.waitFor({ timeout: 15000 });
+    await emailField.click();
+    await emailField.fill(''); // clear
+    await emailField.type(username, { delay: 80 });
+    await page.waitForTimeout(500);
 
-  await passField.click();
-  await passField.type(password, { delay: 60 });
-  await page.waitForTimeout(500);
+    // Auth0 Universal Login: password field may be hidden initially (email-first flow)
+    const passField = page.locator('input#password').first();
+    const passAlreadyVisible = await passField.isVisible({ timeout: 1500 }).catch(() => false);
+    if (!passAlreadyVisible) {
+      await emailField.press('Enter');
+      await passField.waitFor({ timeout: 15000 });
+    }
 
-  // Submit via Enter on the password field
-  await passField.press('Enter');
-  await page.waitForTimeout(2000); // let Auth0 respond
+    await passField.click();
+    // Set password via evaluate to guarantee special chars like $ are not lost
+    await page.evaluate((pw: string) => {
+      const input = document.querySelector('input#password') as HTMLInputElement;
+      if (!input) return;
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      nativeInputValueSetter.call(input, pw);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, password);
+    await page.waitForTimeout(500);
 
-  // Capture Auth0 response: error messages and form input values for diagnostics
-  const auth0Diag = await page.evaluate(() => {
-    const errors = Array.from(document.querySelectorAll('[class*="error"], [role="alert"], .ulp-alert, .js-errors'))
-      .map((el: any) => el.textContent?.trim()).filter((t: string) => t && t.length > 2);
-    const emailVal = (document.querySelector('input#username') as HTMLInputElement)?.value || '?';
-    const passVal = (document.querySelector('input#password') as HTMLInputElement)?.value;
-    const hasCaptcha = !!document.querySelector('iframe[src*="turnstile"], iframe[src*="hcaptcha"], .cf-turnstile, .h-captcha');
-    return { errors, emailVal, passHasValue: passVal !== undefined ? passVal.length > 0 : false, hasCaptcha };
-  }).catch(() => ({ errors: [], emailVal: '?', passHasValue: false, hasCaptcha: false }));
-  console.error(`[Canac] Auth0 diag: email="${auth0Diag.emailVal}" passHasValue=${auth0Diag.passHasValue} captcha=${auth0Diag.hasCaptcha} errors=${JSON.stringify(auth0Diag.errors)}`);
+    // Verify password was set correctly
+    const passLen = await page.evaluate(() => (document.querySelector('input#password') as HTMLInputElement)?.value?.length).catch(() => 0);
+    console.error(`[Canac] Password set: ${passLen} chars (expected ${password.length})`);
+    if (passLen !== password.length) {
+      // Fallback: try fill()
+      await passField.fill(password);
+      await page.waitForTimeout(300);
+    }
 
-  const urlAfterSubmit = page.url();
-  console.error(`[Canac] Après soumission: url=${urlAfterSubmit.slice(0, 80)}`);
+    await passField.press('Enter');
+    await page.waitForTimeout(3000);
 
-  // Wait for route interceptor to capture the OAuth code (up to 60s)
-  for (let i = 0; i < 60 && !capturedCode; i++) {
-    await page.waitForTimeout(1000);
-    if (i > 0 && i % 10 === 0) {
-      const url = page.url();
-      const title = await page.title().catch(() => '?');
-      console.error(`[Canac] Attente code OAuth t=${i}s url=${url.slice(0, 60)} titre="${title}"`);
+    // Check for errors
+    const hasError = await page.evaluate(() => {
+      const errs = document.querySelectorAll('[class*="error"], [role="alert"], .ulp-alert');
+      return Array.from(errs).some((el: any) => el.textContent?.trim().length > 2);
+    }).catch(() => false);
+
+    if (hasError && attempt < 3) {
+      console.error(`[Canac] Auth0 a rejeté la tentative ${attempt}`);
+      continue;
+    }
+
+    if (capturedCode) break;
+
+    const maxWait = attempt === 3 ? 60 : 15;
+    for (let i = 0; i < maxWait && !capturedCode; i++) {
+      await page.waitForTimeout(1000);
+      if (i > 0 && i % 10 === 0) console.error(`[Canac] Attente code OAuth t=${i}s`);
+    }
+    if (capturedCode) break;
+
+    if (attempt === 3) {
+      const diag = await page.evaluate(() => {
+        const errors = Array.from(document.querySelectorAll('[class*="error"], [role="alert"], .ulp-alert'))
+          .map((el: any) => el.textContent?.trim()).filter((t: string) => t && t.length > 2);
+        const hasCaptcha = !!document.querySelector('iframe[src*="turnstile"], iframe[src*="hcaptcha"], .cf-turnstile, .h-captcha');
+        return { errors, hasCaptcha };
+      }).catch(() => ({ errors: [], hasCaptcha: false }));
+      console.error(`[Canac] Auth0 diag final: errors=${JSON.stringify(diag.errors)} captcha=${diag.hasCaptcha}`);
     }
   }
 
@@ -291,28 +322,56 @@ export async function testCanacConnection(username: string, password: string): P
   }
 }
 
+// Search products via UI and extract numeric codes from result URLs
+async function searchCanacProducts(page: any, product: string): Promise<{ code: string; name: string }[]> {
+  const searchBar = page.locator('input[placeholder*="Rechercher"]').first();
+  await searchBar.waitFor({ timeout: 8000 });
+  await searchBar.click();
+  await searchBar.fill('');
+  await searchBar.type(product, { delay: 80 });
+  await searchBar.press('Enter');
+  await page.waitForTimeout(8000);
+
+  // Extract numeric product codes from URLs: /p/<slug>/<numericCode>
+  const results = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('a[href*="/p/"]')).map((el: any) => {
+      const href = el.getAttribute('href') || '';
+      const match = href.match(/\/p\/([^/?]+?)(?:\/(\d+))?(?:\?|$)/);
+      const slug = match?.[1] || '';
+      const code = match?.[2] || '';
+      const name = el.querySelector('[class*="name"], h3, h4')?.textContent?.trim() || '';
+      return { slug, code, name };
+    }).filter((p: any) => p.code);
+  }).catch(() => []);
+
+  // Deduplicate by code
+  const unique = Array.from(new Map(results.map((p: any) => [p.code, p])).values()) as { code: string; name: string }[];
+  return unique;
+}
+
 export async function getCanacPrice(username: string, password: string, product: string): Promise<number | null> {
   const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createCanacPage(browser);
     const loginResult = await loginToCanac(page, username, password);
-    if (!loginResult.success) return null;
+    if (!loginResult.success || !loginResult.accessToken) return null;
 
-    // Search for product (confirmed selector: placeholder contains "Rechercher")
-    const searchBar = page.locator('input[placeholder*="Rechercher"]').first();
-    await searchBar.waitFor({ timeout: 8000 });
-    await searchBar.click();
-    await searchBar.type(product, { delay: 100 });
-    await page.waitForTimeout(2000);
+    const products = await searchCanacProducts(page, product);
+    if (products.length === 0) return null;
 
-    // Try to find price in search results / autocomplete
-    const priceEl = page.locator('[class*="price"], [class*="prix"], .product-price, [data-price]').first();
-    if (await priceEl.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const priceText = await priceEl.textContent().catch(() => '');
-      const match = priceText?.match(/[\d]+[.,][\d]{2}/);
-      if (match) return parseFloat(match[0].replace(',', '.'));
-    }
-    return null;
+    // Look up price via apisapcc API
+    const priceResult = await page.evaluate(async ({ token, code }: any) => {
+      try {
+        const res = await fetch(`https://apisapcc.canac.ca/occ/v2/canac/products/${code}?fields=price(formattedValue,value)`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.price?.value ?? null;
+      } catch { return null; }
+    }, { token: loginResult.accessToken, code: products[0].code });
+
+    return typeof priceResult === 'number' ? priceResult : null;
   } catch {
     return null;
   } finally {
@@ -333,149 +392,159 @@ export async function placeCanacOrder(
   try {
     const page = await createCanacPage(browser);
     const loginResult = await loginToCanac(page, username, password);
-    if (!loginResult.success) {
+    if (!loginResult.success || !loginResult.accessToken) {
       console.error('[Canac] Login échoué');
       return { success: false, error: 'Login Canac échoué' };
     }
-    // Browser is on /canac/fr/2 with fresh cf_clearance.
-    // Cloudflare's WAF blocks Sec-Fetch-Mode:cors (fetch/XHR) to /canac/rest/v2/ even
-    // with a valid cf_clearance, but allows Sec-Fetch-Mode:navigate (page.goto).
-    // All operations below use full page navigation to avoid this WAF rule.
+    const accessToken = loginResult.accessToken;
 
-    // ── Step 1: Search via direct REST API navigation (Sec-Fetch-Mode:navigate) ──
-    // page.goto to /canac/rest/v2/ passes Cloudflare Bot Management (navigate mode).
-    // The browser receives raw JSON which we read from document.body.innerText.
-    const queries = [
-      product,
-      product.split(' ').slice(0, 4).join(' '),
-      product.split(' ').slice(0, 3).join(' '),
-      product.split(' ').slice(0, 2).join(' '),
-    ].filter((q, i, arr) => q.length >= 3 && arr.indexOf(q) === i);
+    // ── Step 1: Search via UI (Coveo) ─────────────────────────────────────────
+    // Cloudflare blocks all direct REST API calls and product page navigation.
+    // The Angular SPA uses Coveo for search (works from browser). We search via
+    // the UI search bar and extract numeric product codes from result URLs.
+    const products = await searchCanacProducts(page, product);
 
-    let productCode: string | null = null;
-    let productName: string | null = null;
-
-    for (const query of queries) {
-      console.error(`[Canac] Recherche API: "${query}"`);
-      await page.goto(
-        `https://www.canac.ca/canac/rest/v2/canac/products/search?query=${encodeURIComponent(query)}&lang=fr&curr=CAD&pageSize=5`,
-        { waitUntil: 'domcontentloaded', timeout: 30000 },
-      ).catch(() => {});
-
-      const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
-      const cfBlocked = bodyText.includes('Just a moment') || bodyText.includes('Un instant') || bodyText.includes('Attention Required');
-      const isJson = bodyText.trimStart().startsWith('{');
-      console.error(`[Canac] API response: CF-blocked=${cfBlocked} isJson=${isJson} preview="${bodyText.slice(0, 120).replace(/\n/g, ' ')}"`);
-
-      if (cfBlocked || !isJson) { continue; }
-
-      try {
-        const data = JSON.parse(bodyText);
-        const hits = (data.products || []).slice(0, 3).map((p: any) => ({ code: p.code, name: p.name || p.summary || '' })).filter((p: any) => p.code && p.name);
-        console.error(`[Canac] Résultats: ${hits.length} produit(s)`);
-        if (hits.length > 0) {
-          productCode = hits[0].code;
-          productName = hits[0].name;
-          console.error(`[Canac] Produit: "${productName}" code=${productCode}`);
-          break;
-        }
-      } catch { /* JSON parse failed — body wasn't real JSON */ }
-    }
-
-    if (!productCode) {
+    if (products.length === 0) {
       console.error(`[Canac] Produit "${product}" introuvable`);
       return { success: false, error: `Produit "${product}" introuvable sur Canac` };
     }
+    const productCode = products[0].code;
+    console.error(`[Canac] Produit trouvé: code=${productCode} name="${products[0].name}"`);
 
-    // ── Step 2: Add to cart via product page UI ───────────────────────────────
-    // Navigate to the product page and click "Ajouter au panier".
-    // page.goto (Sec-Fetch-Mode:navigate) passes Cloudflare; fetch() does not.
-    console.error(`[Canac] Navigation page produit: /canac/fr/p/${productCode}`);
-    await page.goto(
-      `https://www.canac.ca/canac/fr/p/${productCode}`,
-      { waitUntil: 'domcontentloaded', timeout: 30000 },
-    ).catch(() => {});
+    // ── Step 2: Add to cart via apisapcc.canac.ca API ──────────────────────────
+    // The Angular app calls apisapcc.canac.ca (SAP Commerce OCC API) for cart ops.
+    // These cross-origin API calls work from within the browser after Cloudflare warmup.
+    console.error(`[Canac] Ajout au panier via API: code=${productCode} qty=${quantity}`);
 
-    // Set quantity if > 1
-    if (quantity > 1) {
-      const qtyInput = page.locator('cx-item-counter input').first();
-      if (await qtyInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await qtyInput.fill(String(quantity));
-        await page.waitForTimeout(500);
-      }
-    }
-
-    const addToCartBtn = page.locator([
-      'cx-add-to-cart button[type="submit"]',
-      'button:has-text("Ajouter au panier")',
-      'button:has-text("Add to Cart")',
-    ].join(', ')).first();
-
-    const btnVisible = await addToCartBtn.isVisible({ timeout: 15000 }).catch(() => false);
-    if (!btnVisible) {
-      console.error('[Canac] Bouton "Ajouter au panier" introuvable');
-      return { success: false, error: 'Bouton "Ajouter au panier" introuvable' };
-    }
-    await addToCartBtn.click();
-    await page.waitForTimeout(3000);
-
-    // Confirm cart dialog appeared
-    const cartConfirmed = await page.locator([
-      '.cx-dialog-title',
-      '[class*="added-to-cart"]',
-      'cx-added-to-cart-dialog',
-    ].join(', ')).first().isVisible({ timeout: 8000 }).catch(() => false);
-    console.error(`[Canac] Ajouté au panier: ${cartConfirmed ? 'confirmé ✓' : 'incertain (bouton cliqué)'}`);
-
-    // ── Step 4: Checkout (only if delivery address + payment provided) ────────
-    if (deliveryAddress && payment) {
+    const cartResult = await page.evaluate(async ({ token, code, qty }: any) => {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
       try {
-        await page.goto('https://www.canac.ca/fr/panier', { waitUntil: 'networkidle' });
-        const checkoutBtn = page.locator('a:has-text("Commander"), button:has-text("Passer la commande")').first();
-        if (await checkoutBtn.isVisible({ timeout: 8000 })) {
-          await checkoutBtn.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
-        }
+        // Get a pickup store (required for delivery modes to work)
+        let res = await fetch('https://apisapcc.canac.ca/occ/v2/canac/stores?fields=DEFAULT&pageSize=1', { headers });
+        const storesData = res.ok ? await res.json() : {};
+        const storeName = storesData.stores?.[0]?.name;
 
-        const addressField = page.locator('input[name="address1"], input[formcontrolname*="address"]').first();
-        if (await addressField.isVisible({ timeout: 5000 })) {
-          await addressField.fill(deliveryAddress);
-        }
-        const continueBtn = page.locator('button[type="submit"]:has-text("Continuer"), cx-place-order button').first();
-        if (await continueBtn.isVisible({ timeout: 5000 })) {
-          await continueBtn.click();
-          await page.waitForTimeout(2000);
-        }
+        // Create fresh cart (avoid stale state from previous orders)
+        res = await fetch('https://apisapcc.canac.ca/occ/v2/canac/users/current/carts', { method: 'POST', headers });
+        if (!res.ok) return { error: `create-cart: ${res.status}` };
+        const cartCode = (await res.json()).code;
 
-        const cardField = page.locator('input[name*="card"], input[placeholder*="carte"]').first();
-        if (await cardField.isVisible({ timeout: 8000 })) {
-          await cardField.fill(payment.cardNumber);
-        }
-        const expiryField = page.locator('input[name*="expir"]').first();
-        if (await expiryField.isVisible({ timeout: 3000 })) {
-          await expiryField.fill(payment.cardExpiry);
-        }
-        const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"]').first();
-        if (await cvvField.isVisible({ timeout: 3000 })) {
-          await cvvField.fill(payment.cardCvv);
-        }
+        // Add product with pickup store (Canac is pickup-only)
+        const entry: any = { product: { code }, quantity: qty };
+        if (storeName) entry.deliveryPointOfService = { name: storeName };
+        res = await fetch(`https://apisapcc.canac.ca/occ/v2/canac/users/current/carts/${cartCode}/entries`, {
+          method: 'POST', headers,
+          body: JSON.stringify(entry),
+        });
+        const text = await res.text();
+        return { status: res.status, cartCode, body: text.slice(0, 500) };
+      } catch (e: any) { return { error: e.message }; }
+    }, { token: accessToken, code: productCode, qty: quantity });
 
-        const submitBtn = page.locator('cx-place-order button[type="submit"], button:has-text("Confirmer la commande")').first();
-        if (await submitBtn.isVisible({ timeout: 5000 })) {
-          await submitBtn.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
-        }
-
-        const bodyText = await page.textContent('body');
-        const orderMatch = bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
-        return { success: true, orderId: orderMatch?.[1] };
-      } catch (err: any) {
-        console.error('[Canac] Checkout error:', err.message);
-        return { success: false, inCart: true, error: `Checkout: ${err.message}` };
-      }
+    if (cartResult.error) {
+      console.error(`[Canac] Erreur panier: ${cartResult.error}`);
+      return { success: false, error: `Canac cart: ${cartResult.error}` };
     }
 
-    return { success: false, inCart: true };
+    if (cartResult.status < 200 || cartResult.status >= 300) {
+      console.error(`[Canac] Ajout échoué: status=${cartResult.status} body=${cartResult.body?.slice(0, 200)}`);
+      return { success: false, error: `Canac add-to-cart: ${cartResult.status}` };
+    }
+
+    console.error(`[Canac] Ajouté au panier ✓ cart=${cartResult.cartCode}`);
+
+    // ── Step 3: Checkout via OCC API (pickup in store) ────────────────────────
+    // Canac is pickup-only — no home delivery. The checkout flow:
+    // 1. Delete any delivery address (delivery modes are empty when address is set)
+    // 2. Set delivery mode to "pickup" (Ramassage en magasin)
+    // 3. Set payment details
+    // 4. Place order
+    if (!payment) {
+      return { success: false, inCart: true };
+    }
+
+    console.error(`[Canac] Checkout via API (pickup): cart=${cartResult.cartCode}`);
+
+    const checkoutResult = await page.evaluate(async ({ token, cartCode, pay }: any) => {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+      const base = `https://apisapcc.canac.ca/occ/v2/canac/users/current/carts/${cartCode}`;
+
+      try {
+        // Step 1: Delete delivery address — Canac only offers pickup, and delivery
+        // modes list is empty when a delivery address is set on the cart.
+        await fetch(`${base}/addresses/delivery`, { method: 'DELETE', headers });
+
+        // Step 2: Get delivery modes (should return "pickup")
+        let res = await fetch(`${base}/deliverymodes?fields=DEFAULT`, { headers });
+        if (!res.ok) return { error: `get-deliverymodes: ${res.status}` };
+        const modes = await res.json();
+        const pickupMode = modes.deliveryModes?.find((m: any) => m.code === 'pickup') || modes.deliveryModes?.[0];
+        if (!pickupMode) return { error: 'no-delivery-modes' };
+
+        // Step 3: Set delivery mode
+        res = await fetch(`${base}/deliverymode?deliveryModeId=${encodeURIComponent(pickupMode.code)}`, {
+          method: 'PUT', headers,
+        });
+        if (!res.ok) return { error: `set-deliverymode: ${res.status}` };
+
+        // Step 4: Set payment details
+        const [expMonth, expYear] = (pay.cardExpiry || '').split('/');
+        res = await fetch(`${base}/paymentdetails`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            accountHolderName: pay.cardHolder,
+            cardNumber: pay.cardNumber,
+            cardType: { code: 'visa' },
+            expiryMonth: expMonth || '01',
+            expiryYear: `20${expYear || '30'}`,
+            cvn: pay.cardCvv,
+            billingAddress: {
+              firstName: pay.cardHolder.split(' ')[0] || 'Client',
+              lastName: pay.cardHolder.split(' ').slice(1).join(' ') || 'Client',
+              line1: '123 rue Principale',
+              town: 'Montréal',
+              region: { isocode: 'CA-QC' },
+              postalCode: 'H2X 1Y1',
+              country: { isocode: 'CA' },
+            },
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          return { error: `set-payment: ${res.status} ${body.slice(0, 200)}` };
+        }
+
+        // Step 5: Place order
+        res = await fetch(`https://apisapcc.canac.ca/occ/v2/canac/users/current/orders?cartId=${cartCode}&termsChecked=true`, {
+          method: 'POST', headers,
+        });
+        const orderBody = await res.text();
+        if (!res.ok) return { error: `place-order: ${res.status} ${orderBody.slice(0, 200)}` };
+
+        const order = JSON.parse(orderBody);
+        return { success: true, orderId: order.code || order.orderCode || null };
+      } catch (e: any) { return { error: e.message }; }
+    }, {
+      token: accessToken,
+      cartCode: cartResult.cartCode,
+      pay: { cardHolder: payment.cardHolder, cardNumber: payment.cardNumber, cardExpiry: payment.cardExpiry, cardCvv: payment.cardCvv },
+    });
+
+    if (checkoutResult.error) {
+      console.error(`[Canac] Checkout échoué: ${checkoutResult.error}`);
+      return { success: false, inCart: true, error: `Canac checkout: ${checkoutResult.error}` };
+    }
+
+    console.error(`[Canac] Commande passée ✓ orderId=${checkoutResult.orderId}`);
+    return { success: true, orderId: checkoutResult.orderId || undefined };
   } catch (err: any) {
     console.error('[Canac] Erreur:', err.message);
     return { success: false, error: err.message };
