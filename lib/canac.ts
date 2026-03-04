@@ -227,10 +227,13 @@ export async function loginToCanac(page: any, username: string, password: string
     return { success: false };
   }
 
+  // Save PKCE code_verifier BEFORE re-warmup — Angular overwrites this cookie on reload
+  const cookiesBeforeGoto = await page.context().cookies();
+  let codeVerifier = cookiesBeforeGoto.find((c: any) => c.name === 'oauth_code_verifier')?.value || '';
+
   // Delete the stale cf_clearance (bound to the pre-OAuth proxy IP) so that when we
   // navigate to /canac/fr/2 Cloudflare runs a Level-1 JS challenge (~2-4s) rather
   // than a Level-2 managed challenge (120s+ that often never completes).
-  const cookiesBeforeGoto = await page.context().cookies();
   await page.context().clearCookies();
   await page.context().addCookies(cookiesBeforeGoto.filter((c: any) => c.name !== 'cf_clearance'));
 
@@ -243,7 +246,6 @@ export async function loginToCanac(page: any, username: string, password: string
     const title = await page.title().catch(() => '');
     const hasCF = cookies.some((c: any) => c.name === 'cf_clearance');
     if (i % 5 === 0) console.error(`[Canac] Re-warmup t=${i * 2}s cf_clearance=${hasCF} titre="${title}"`);
-    // Don't exit if title is blank/short (page still loading) or a CF challenge page
     const cfChallenge = title.length < 3 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
     if (hasCF && !cfChallenge) {
       console.error(`[Canac] cf_clearance valide (t=${i * 2}s)`);
@@ -252,9 +254,6 @@ export async function loginToCanac(page: any, username: string, password: string
     await page.waitForTimeout(2000);
   }
 
-  // Retrieve PKCE code_verifier set by Angular before the OAuth redirect
-  const allCookies = await page.context().cookies(['https://www.canac.ca']);
-  let codeVerifier = allCookies.find((c: any) => c.name === 'oauth_code_verifier')?.value || '';
   // Spartacus stores the cookie URL-encoded AND JSON-wrapped: %22actualValue%22
   // Step 1: URL-decode (%22 → ")
   try { codeVerifier = decodeURIComponent(codeVerifier); } catch {}
