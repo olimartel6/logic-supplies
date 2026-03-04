@@ -464,57 +464,89 @@ export async function placeCanacOrder(
 
     console.error(`[Canac] Checkout via API (pickup): cart=${cartResult.cartCode}`);
 
-    const checkoutResult = await page.evaluate(async ({ token, cartCode, pay }: any) => {
+    // Auto-detect card type from card number prefix
+    const cn = payment.cardNumber.replace(/\s/g, '');
+    let cardTypeCode = 'visa';
+    if (cn.startsWith('5') || (parseInt(cn.slice(0, 4)) >= 2221 && parseInt(cn.slice(0, 4)) <= 2720)) {
+      cardTypeCode = 'master';
+    } else if (cn.startsWith('34') || cn.startsWith('37')) {
+      cardTypeCode = 'amex';
+    }
+    console.error(`[Canac] Card type détecté: ${cardTypeCode} (prefix=${cn.slice(0, 4)})`);
+
+    // Parse delivery address for billing (fallback to generic Montréal)
+    let billingLine1 = deliveryAddress || '100 rue Principale';
+    let billingTown = 'Montréal';
+    let billingPostal = 'H2X 1Y1';
+    let billingRegion = 'CA-QC';
+    if (deliveryAddress) {
+      const parts = deliveryAddress.split(',').map(s => s.trim());
+      billingLine1 = parts[0] || billingLine1;
+      if (parts[1]) billingTown = parts[1];
+      const postalMatch = deliveryAddress.match(/[A-Z]\d[A-Z]\s?\d[A-Z]\d/i);
+      if (postalMatch) billingPostal = postalMatch[0];
+    }
+
+    const checkoutResult = await page.evaluate(async ({ token, cartCode, pay, billing, detectedCardType }: any) => {
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       };
       const base = `https://apisapcc.canac.ca/occ/v2/canac/users/current/carts/${cartCode}`;
+      const log: string[] = [];
 
       try {
         // Step 1: Delete delivery address — Canac only offers pickup, and delivery
         // modes list is empty when a delivery address is set on the cart.
-        await fetch(`${base}/addresses/delivery`, { method: 'DELETE', headers });
+        let res = await fetch(`${base}/addresses/delivery`, { method: 'DELETE', headers });
+        log.push(`delete-addr: ${res.status}`);
 
         // Step 2: Get delivery modes (should return "pickup")
-        let res = await fetch(`${base}/deliverymodes?fields=DEFAULT`, { headers });
-        if (!res.ok) return { error: `get-deliverymodes: ${res.status}` };
-        const modes = await res.json();
+        res = await fetch(`${base}/deliverymodes?fields=DEFAULT`, { headers });
+        const modesBody = await res.text();
+        log.push(`get-modes: ${res.status}`);
+        if (!res.ok) return { error: `get-deliverymodes: ${res.status}`, log };
+        const modes = JSON.parse(modesBody);
         const pickupMode = modes.deliveryModes?.find((m: any) => m.code === 'pickup') || modes.deliveryModes?.[0];
-        if (!pickupMode) return { error: 'no-delivery-modes' };
+        if (!pickupMode) return { error: 'no-delivery-modes', log, modesBody: modesBody.slice(0, 300) };
+        log.push(`pickup-mode: ${pickupMode.code}`);
 
         // Step 3: Set delivery mode
         res = await fetch(`${base}/deliverymode?deliveryModeId=${encodeURIComponent(pickupMode.code)}`, {
           method: 'PUT', headers,
         });
-        if (!res.ok) return { error: `set-deliverymode: ${res.status}` };
+        log.push(`set-mode: ${res.status}`);
+        if (!res.ok) return { error: `set-deliverymode: ${res.status}`, log };
 
         // Step 4: Set payment details
         const [expMonth, expYear] = (pay.cardExpiry || '').split('/');
+        const paymentBody = {
+          accountHolderName: pay.cardHolder,
+          cardNumber: pay.cardNumber,
+          cardType: { code: detectedCardType },
+          expiryMonth: expMonth || '01',
+          expiryYear: `20${expYear || '30'}`,
+          cvn: pay.cardCvv,
+          billingAddress: {
+            firstName: pay.cardHolder.split(' ')[0] || 'Client',
+            lastName: pay.cardHolder.split(' ').slice(1).join(' ') || 'Client',
+            line1: billing.line1,
+            town: billing.town,
+            region: { isocode: billing.region },
+            postalCode: billing.postal,
+            country: { isocode: 'CA' },
+          },
+        };
+        log.push(`payment-req: holder=${pay.cardHolder}, type=${detectedCardType}, exp=${expMonth}/${expYear}, cvnLen=${(pay.cardCvv||'').length}, numLen=${(pay.cardNumber||'').length}`);
         res = await fetch(`${base}/paymentdetails`, {
           method: 'POST', headers,
-          body: JSON.stringify({
-            accountHolderName: pay.cardHolder,
-            cardNumber: pay.cardNumber,
-            cardType: { code: 'visa' },
-            expiryMonth: expMonth || '01',
-            expiryYear: `20${expYear || '30'}`,
-            cvn: pay.cardCvv,
-            billingAddress: {
-              firstName: pay.cardHolder.split(' ')[0] || 'Client',
-              lastName: pay.cardHolder.split(' ').slice(1).join(' ') || 'Client',
-              line1: '123 rue Principale',
-              town: 'Montréal',
-              region: { isocode: 'CA-QC' },
-              postalCode: 'H2X 1Y1',
-              country: { isocode: 'CA' },
-            },
-          }),
+          body: JSON.stringify(paymentBody),
         });
+        const payRespBody = await res.text().catch(() => '');
+        log.push(`set-payment: ${res.status} ${payRespBody.slice(0, 200)}`);
         if (!res.ok) {
-          const body = await res.text().catch(() => '');
-          return { error: `set-payment: ${res.status} ${body.slice(0, 200)}` };
+          return { error: `set-payment: ${res.status} ${payRespBody.slice(0, 300)}`, log };
         }
 
         // Step 5: Place order
@@ -522,16 +554,23 @@ export async function placeCanacOrder(
           method: 'POST', headers,
         });
         const orderBody = await res.text();
-        if (!res.ok) return { error: `place-order: ${res.status} ${orderBody.slice(0, 200)}` };
+        log.push(`place-order: ${res.status} ${orderBody.slice(0, 200)}`);
+        if (!res.ok) return { error: `place-order: ${res.status} ${orderBody.slice(0, 200)}`, log };
 
         const order = JSON.parse(orderBody);
-        return { success: true, orderId: order.code || order.orderCode || null };
-      } catch (e: any) { return { error: e.message }; }
+        return { success: true, orderId: order.code || order.orderCode || null, log };
+      } catch (e: any) { return { error: e.message, log }; }
     }, {
       token: accessToken,
       cartCode: cartResult.cartCode,
       pay: { cardHolder: payment.cardHolder, cardNumber: payment.cardNumber, cardExpiry: payment.cardExpiry, cardCvv: payment.cardCvv },
+      billing: { line1: billingLine1, town: billingTown, postal: billingPostal, region: billingRegion },
+      detectedCardType: cardTypeCode,
     });
+
+    if (checkoutResult.log) {
+      for (const l of checkoutResult.log) console.error(`[Canac] checkout: ${l}`);
+    }
 
     if (checkoutResult.error) {
       console.error(`[Canac] Checkout échoué: ${checkoutResult.error}`);
