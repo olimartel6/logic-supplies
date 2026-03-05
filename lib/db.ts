@@ -552,6 +552,11 @@ function initDb(db: Database.Database) {
   if (!compCols.find(c => c.name === 'superadmin_created'))
     db.exec('ALTER TABLE companies ADD COLUMN superadmin_created INTEGER DEFAULT 0');
 
+  // Error message column on supplier_orders
+  const soCols = db.pragma('table_info(supplier_orders)') as { name: string }[];
+  if (!soCols.find(c => c.name === 'error_message'))
+    db.exec('ALTER TABLE supplier_orders ADD COLUMN error_message TEXT');
+
   // Seed unique superadmin (company_id IS NULL — cross-tenant)
   // Guard: only hash+insert if not already seeded (bcryptjs is slow ~100ms)
   const existingSuperAdmin = db.prepare("SELECT id FROM users WHERE email = 'superadmin@sparky.app'").get();

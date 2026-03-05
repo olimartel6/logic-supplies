@@ -152,9 +152,9 @@ export async function triggerApproval(
       const orderStatus = result.success ? 'confirmed' : result.inCart ? 'pending' : 'failed';
 
       db.prepare(`
-        INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(companyId, requestId, supplier, result.orderId || null, orderStatus, cancelToken, cancelExpiresAt);
+        INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at, error_message)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(companyId, requestId, supplier, result.orderId || null, orderStatus, cancelToken, cancelExpiresAt, result.error || null);
 
       const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
       const allRecipients = [

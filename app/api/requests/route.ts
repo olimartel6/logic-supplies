@@ -24,7 +24,7 @@ export async function GET() {
   } else {
     requests = db.prepare(`
       SELECT r.*, j.name as job_site_name, u.name as electrician_name, u.email as electrician_email,
-             so.status as lumen_order_status, so.supplier_order_id as lumen_order_id, so.supplier as order_supplier,
+             so.status as lumen_order_status, so.supplier_order_id as lumen_order_id, so.supplier as order_supplier, so.error_message as order_error,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
