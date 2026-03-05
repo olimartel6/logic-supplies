@@ -42,7 +42,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Non connecté' }, { status: 401 });
   }
   const db = getDb();
-  const settings = db.prepare('SELECT inventory_enabled FROM company_settings WHERE company_id = ?').get(session.companyId) as any;
+  const settings = db.prepare('SELECT inventory_enabled, marketing_enabled FROM company_settings WHERE company_id = ?').get(session.companyId) as any;
   const company = session.companyId
     ? db.prepare('SELECT subscription_status, superadmin_created FROM companies WHERE id = ?').get(session.companyId) as any
     : null;
@@ -54,6 +54,7 @@ export async function GET() {
     email: session.email,
     role: session.role,
     inventoryEnabled: !!settings?.inventory_enabled,
+    marketingEnabled: !!settings?.marketing_enabled,
     subscriptionStatus: company?.subscription_status ?? 'active',
     superadminCreated: !!company?.superadmin_created,
     language: userRow?.language ?? 'fr',

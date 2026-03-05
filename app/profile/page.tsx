@@ -5,7 +5,7 @@ import NavBar from '@/components/NavBar';
 import { useLang, useT } from '@/lib/LanguageContext';
 import type { Lang } from '@/lib/i18n';
 
-interface CurrentUser { id: number; name: string; email: string; role: string; inventoryEnabled?: boolean; }
+interface CurrentUser { id: number; name: string; email: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 
 export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -109,7 +109,7 @@ export default function ProfilePage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={currentUser.role} name={currentUser.name} inventoryEnabled={currentUser.inventoryEnabled} />
+      <NavBar role={currentUser.role} name={currentUser.name} inventoryEnabled={currentUser.inventoryEnabled} marketingEnabled={currentUser.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-gray-900 mb-1">{t('profile_title')}</h1>
         <p className="text-sm text-gray-500 mb-6">{currentUser.name}</p>

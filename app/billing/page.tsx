@@ -7,6 +7,7 @@ interface User {
   name: string;
   role: string;
   inventoryEnabled?: boolean;
+  marketingEnabled?: boolean;
   subscriptionStatus?: string;
   superadminCreated?: boolean;
 }
@@ -50,7 +51,7 @@ export default function BillingPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-gray-900 mb-6">💳 Facturation</h1>
 

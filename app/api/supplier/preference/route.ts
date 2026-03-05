@@ -9,7 +9,7 @@ export async function GET() {
   // User-level preference overrides company default
   const userPref = db.prepare('SELECT supplier_preference FROM users WHERE id = ?').get(ctx.userId) as any;
   const settings = db.prepare(
-    'SELECT supplier_preference, lumen_rep_email, large_order_threshold, office_address, default_delivery, google_review_url, company_logo_url FROM company_settings WHERE company_id = ?'
+    'SELECT supplier_preference, lumen_rep_email, large_order_threshold, office_address, default_delivery, google_review_url, company_logo_url, marketing_enabled FROM company_settings WHERE company_id = ?'
   ).get(ctx.companyId) as any;
   return NextResponse.json({
     preference: userPref?.supplier_preference || settings?.supplier_preference || 'cheapest',
@@ -19,6 +19,7 @@ export async function GET() {
     defaultDelivery: settings?.default_delivery || 'office',
     googleReviewUrl: settings?.google_review_url || '',
     companyLogoUrl: settings?.company_logo_url || '',
+    marketingEnabled: !!settings?.marketing_enabled,
   });
 }
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   if ('error' in ctx) return ctx.error;
 
   const body = await req.json();
-  const { preference, lumenRepEmail, largeOrderThreshold, officeAddress, defaultDelivery, googleReviewUrl, companyLogoUrl } = body;
+  const { preference, lumenRepEmail, largeOrderThreshold, officeAddress, defaultDelivery, googleReviewUrl, companyLogoUrl, marketingEnabled } = body;
 
   if (preference !== undefined && !['cheapest', 'fastest'].includes(preference)) {
     return NextResponse.json({ error: 'Préférence invalide' }, { status: 400 });
@@ -57,9 +58,10 @@ export async function POST(req: NextRequest) {
       default_delivery = COALESCE(?, default_delivery),
       google_review_url = COALESCE(?, google_review_url),
       company_logo_url = COALESCE(?, company_logo_url),
+      marketing_enabled = COALESCE(?, marketing_enabled),
       updated_at = CURRENT_TIMESTAMP
     WHERE company_id = ?
-  `).run(preference ?? null, lumenRepEmail ?? null, largeOrderThreshold ?? null, officeAddress ?? null, defaultDelivery ?? null, googleReviewUrl ?? null, companyLogoUrl ?? null, ctx.companyId);
+  `).run(preference ?? null, lumenRepEmail ?? null, largeOrderThreshold ?? null, officeAddress ?? null, defaultDelivery ?? null, googleReviewUrl ?? null, companyLogoUrl ?? null, marketingEnabled !== undefined ? (marketingEnabled ? 1 : 0) : null, ctx.companyId);
 
   return NextResponse.json({ ok: true });
 }

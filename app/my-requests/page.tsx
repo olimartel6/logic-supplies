@@ -22,6 +22,7 @@ interface User {
   name: string;
   role: string;
   inventoryEnabled?: boolean;
+  marketingEnabled?: boolean;
 }
 
 export default function MyRequestsPage() {
@@ -55,7 +56,7 @@ export default function MyRequestsPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">{t('my_requests_title')}</h1>

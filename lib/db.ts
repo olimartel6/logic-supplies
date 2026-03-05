@@ -527,6 +527,9 @@ function initDb(db: Database.Database) {
   if (!csColumns.find(c => c.name === 'inventory_enabled')) {
     db.exec(`ALTER TABLE company_settings ADD COLUMN inventory_enabled INTEGER DEFAULT 0`);
   }
+  if (!csColumns.find(c => c.name === 'marketing_enabled')) {
+    db.exec(`ALTER TABLE company_settings ADD COLUMN marketing_enabled INTEGER DEFAULT 0`);
+  }
 
   // User-level supplier preference (overrides company setting when set)
   const userCols = db.pragma('table_info(users)') as { name: string }[];

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 
-interface User { name: string; role: string; inventoryEnabled?: boolean; }
+interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 interface InventoryItem { id: number; barcode: string; name: string; unit: string; description: string | null; total_stock: number; }
 interface StockRow { item_id: number; location_id: number; quantity: number; item_name: string; barcode: string; unit: string; location_name: string; location_type: string; }
 interface Location { id: number; name: string; type: string; job_site_name: string | null; }
@@ -85,7 +85,7 @@ export default function InventoryPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Inventaire</h1>

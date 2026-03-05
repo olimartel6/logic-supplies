@@ -24,7 +24,7 @@ interface Request {
   order_supplier: string | null;
   unit_price: number | null;
 }
-interface User { name: string; role: string; inventoryEnabled?: boolean; }
+interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 
 function ApprovalsContent() {
   const [user, setUser] = useState<User | null>(null);
@@ -154,7 +154,7 @@ function ApprovalsContent() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">

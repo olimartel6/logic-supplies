@@ -153,7 +153,7 @@ export default function ProjectsPage() {
   if (!selectedSite) {
     return (
       <div className="pb-20">
-        <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+        <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
         <div className="max-w-lg mx-auto px-4 py-6">
           <h1 className="text-xl font-bold text-gray-900 mb-4">Projets terminés</h1>
           {sites.length === 0 && (
@@ -181,7 +181,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <button onClick={() => setSelectedSite(null)} className="text-blue-600 text-sm mb-4 flex items-center gap-1">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>

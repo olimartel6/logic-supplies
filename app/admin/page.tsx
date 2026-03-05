@@ -8,7 +8,7 @@ import type { Lang } from '@/lib/i18n';
 
 interface User { id: number; name: string; email: string; role: string; auto_approve: number; }
 interface JobSite { id: number; name: string; address: string; }
-interface CurrentUser { name: string; role: string; inventoryEnabled?: boolean; }
+interface CurrentUser { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 
 export default function AdminPage() {
   const { setLang } = useLang();
@@ -115,7 +115,7 @@ export default function AdminPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={currentUser.role} name={currentUser.name} inventoryEnabled={currentUser.inventoryEnabled} />
+      <NavBar role={currentUser.role} name={currentUser.name} inventoryEnabled={currentUser.inventoryEnabled} marketingEnabled={currentUser.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-gray-600">

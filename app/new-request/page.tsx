@@ -5,7 +5,7 @@ import NavBar from '@/components/NavBar';
 import { useLang, useT } from '@/lib/LanguageContext';
 import type { Lang } from '@/lib/i18n';
 
-interface User { name: string; role: string; inventoryEnabled?: boolean; }
+interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 interface JobSite { id: number; name: string; address: string; }
 interface Product {
   name: string;
@@ -286,7 +286,7 @@ export default function NewRequestPage() {
 
   return (
     <div className="pb-24">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} hideTopOnMobile />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} hideTopOnMobile />
 
       {/* Sticky search bar */}
       <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-0 sm:top-[56px] z-20 shadow-md">

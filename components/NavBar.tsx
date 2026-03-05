@@ -7,6 +7,7 @@ interface NavBarProps {
   role: string;
   name: string;
   inventoryEnabled?: boolean;
+  marketingEnabled?: boolean;
   hideTopOnMobile?: boolean;
 }
 
@@ -71,7 +72,7 @@ const IconMegaphone = () => (
   </svg>
 );
 
-export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }: NavBarProps) {
+export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, hideTopOnMobile }: NavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
@@ -164,10 +165,12 @@ export default function NavBar({ role, name, inventoryEnabled, hideTopOnMobile }
                 </span>
                 <span>{t('nav_budget')}</span>
               </button>
+              {marketingEnabled && (
               <button onClick={() => router.push('/projects')} className={linkClass('/projects')}>
                 <IconMegaphone />
-                <span>Projets</span>
+                <span>Marketing</span>
               </button>
+              )}
               {inventoryEnabled && (
                 <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
                   <IconBox />

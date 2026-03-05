@@ -291,6 +291,7 @@ export default function SettingsPage() {
   const [savingThreshold, setSavingThreshold] = useState(false);
   const [thresholdSaved, setThresholdSaved] = useState(false);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
+  const [marketingEnabled, setMarketingEnabled] = useState(false);
 
   const [supplierVisibility, setSupplierVisibility] = useState<SupplierVisibility[]>([]);
   const [togglingSupplier, setTogglingSupplier] = useState<string | null>(null);
@@ -344,7 +345,7 @@ export default function SettingsPage() {
       if (a) { setAccount(a); setUsername(a.username); }
     });
     fetch('/api/supplier/visibility').then(r => r.json()).then(setSupplierVisibility);
-    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite'; googleReviewUrl?: string; companyLogoUrl?: string }) => {
+    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite'; googleReviewUrl?: string; companyLogoUrl?: string; marketingEnabled?: boolean }) => {
       if (data?.preference) setPreference(data.preference);
       if (data?.lumenRepEmail !== undefined) setLumenRepEmail(data.lumenRepEmail);
       if (data?.largeOrderThreshold !== undefined) setLargeOrderThreshold(String(data.largeOrderThreshold));
@@ -352,6 +353,7 @@ export default function SettingsPage() {
       if (data?.defaultDelivery !== undefined) setDefaultDelivery(data.defaultDelivery);
       if (data?.googleReviewUrl !== undefined) setGoogleReviewUrl(data.googleReviewUrl);
       if (data?.companyLogoUrl !== undefined) setCompanyLogoUrl(data.companyLogoUrl);
+      if (data?.marketingEnabled !== undefined) setMarketingEnabled(data.marketingEnabled);
     });
     fetch('/api/settings/payment').then(r => r.json()).then(setPayment).catch(() => {});
   }, [router]);
@@ -445,6 +447,16 @@ export default function SettingsPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inventory_enabled: next }),
+    });
+  }
+
+  async function handleMarketingToggle() {
+    const next = !marketingEnabled;
+    setMarketingEnabled(next);
+    await fetch('/api/supplier/preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketingEnabled: next }),
     });
   }
 
@@ -543,7 +555,7 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={inventoryEnabled} marketingEnabled={marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-gray-700">
@@ -877,6 +889,18 @@ export default function SettingsPage() {
           isOpen={openSection === 'marketing'}
           onToggle={() => toggleSection('marketing')}
         >
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Activer Marketing</h2>
+                <p className="text-xs text-gray-500">Affiche l&apos;onglet Marketing dans la navigation</p>
+              </div>
+              <button onClick={handleMarketingToggle} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${marketingEnabled ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${marketingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          </div>
+
           <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
             <h2 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-yellow-500 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" /></svg>

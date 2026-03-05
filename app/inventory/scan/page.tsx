@@ -13,7 +13,7 @@ const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
   ),
 });
 
-interface User { name: string; role: string; inventoryEnabled?: boolean; }
+interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 interface FoundItem {
   id: number; barcode: string; name: string; unit: string;
   stock: Array<{ location_id: number; location_name: string; location_type: string; quantity: number; }>;
@@ -169,7 +169,7 @@ export default function ScanPage() {
 
   return (
     <div className="pb-24">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-4">
 
         <div className="flex items-center justify-between mb-4">

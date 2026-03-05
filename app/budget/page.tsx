@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 
-interface User { name: string; role: string; inventoryEnabled?: boolean; }
+interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 interface JobSiteBudget {
   id: number; name: string; address: string; status: string;
   budget_total: number | null; budget_committed: number;
@@ -143,7 +143,7 @@ export default function BudgetPage() {
 
   return (
     <div className="pb-20">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Budget des projets</h1>
 
