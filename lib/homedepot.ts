@@ -143,26 +143,30 @@ export async function loginToHomeDepot(page: any, username: string, password: st
     await page.waitForTimeout(1000);
   }
 
-  // Click "Sign In" link naturally instead of direct URL navigation
-  const signInLink = page.locator('a[href*="myaccount"], a:has-text("Sign In"), a:has-text("Connexion"), a:has-text("Se connecter")').first();
-  if (await signInLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-    console.error('[HomeDepot] Clicking Sign In link');
-    // Use force:true in case another overlay partially covers the link
-    await signInLink.click({ force: true });
-    await page.waitForTimeout(6000);
-  } else {
-    console.error('[HomeDepot] No Sign In link found, navigating directly');
-    await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(6000);
-  }
+  // Navigate to login page — Akamai has enough warmup data from homepage browsing
+  console.error('[HomeDepot] Navigating to login page');
+  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(6000);  // Let Akamai sensor re-run on new page
 
-  // Dismiss store picker modal
-  const closeBtn = page.locator('button.acl-modal__close').first();
-  if (await closeBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await closeBtn.click();
+  // Dismiss localization/store picker modal (appears on every first visit)
+  const storeCloseBtn = page.locator([
+    'localization-confirmation-container button.acl-modal__close',
+    'button.acl-modal__close',
+    'localization-confirmation-container button:has-text("Confirm")',
+    'localization-confirmation-container button:has-text("Confirmer")',
+  ].join(', ')).first();
+  if (await storeCloseBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+    console.error('[HomeDepot] Dismissing store picker modal');
+    await storeCloseBtn.click();
+    await page.waitForTimeout(2000);
+  }
+  // Also try backdrop click to dismiss any remaining modal
+  const backdrop = page.locator('.acl-modal__backdrop--open');
+  if (await backdrop.isVisible({ timeout: 1000 }).catch(() => false)) {
+    console.error('[HomeDepot] Clicking backdrop to dismiss modal');
+    await backdrop.click({ force: true, position: { x: 10, y: 10 } });
     await page.waitForTimeout(1500);
   }
-  await page.waitForTimeout(1000);
   console.error('[HomeDepot] Login page URL:', page.url());
 
   // Step 1: Fill email — natural mouse movement to field
@@ -186,11 +190,13 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   await emailField.press('Enter');
   await page.waitForTimeout(10000);  // HD validates email server-side — can take several seconds
 
-  // Step 3: Wait for password field
+  // Step 3: Wait for password field (HD validates email server-side — can take a while)
   const passField = page.locator('input[type="password"]').first();
-  const passVisible = await passField.isVisible({ timeout: 8000 }).catch(() => false);
+  const passVisible = await passField.isVisible({ timeout: 15000 }).catch(() => false);
   if (!passVisible) {
-    console.error('[HomeDepot] Password field not visible after email submit');
+    // Check for error messages (wrong email, Akamai block, etc.)
+    const errorMsg = await page.locator('[class*="error"], [class*="alert"], .acl-type--negative').first().textContent().catch(() => '');
+    console.error(`[HomeDepot] Password field not visible — error msg: "${errorMsg?.trim()}" url: ${page.url()}`);
     return false;
   }
 
