@@ -103,30 +103,42 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   }
 
   // 2. Form login (two-step: email first, then password)
-  // Go to homepage first so Akamai's sensor collects enough behavior data before login.
-  // Jumping straight to /myaccount triggers "unexpected error" because the legitimacy
-  // score hasn't been established yet.
+  // Akamai Bot Manager requires enough "human" behavior before login.
+  // Strategy: visit homepage → browse naturally → click sign-in link → fill form
+  console.error('[HomeDepot] Starting form login (no saved cookies)');
+
+  // Homepage warmup — Akamai sensor needs time to collect data
   await page.goto('https://www.homedepot.ca', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(5000);  // Let Akamai JS sensor run
+  await page.waitForTimeout(6000);  // Let Akamai JS sensor fully initialize
 
-  // Simulate light browsing: scroll down a bit, then back up
-  await page.mouse.move(640, 400);
-  await page.waitForTimeout(500);
-  await page.evaluate(() => window.scrollBy(0, 300));
-  await page.waitForTimeout(800);
-  await page.evaluate(() => window.scrollBy(0, -300));
-  await page.waitForTimeout(500);
+  // Simulate natural browsing: random mouse movement + scrolling
+  await page.mouse.move(200 + Math.random() * 800, 200 + Math.random() * 400);
+  await page.waitForTimeout(500 + Math.random() * 500);
+  await page.evaluate(() => window.scrollBy(0, 200 + Math.random() * 400));
+  await page.waitForTimeout(1000 + Math.random() * 500);
+  await page.mouse.move(300 + Math.random() * 600, 100 + Math.random() * 300);
+  await page.waitForTimeout(300 + Math.random() * 300);
+  await page.evaluate(() => window.scrollBy(0, -100));
+  await page.waitForTimeout(500 + Math.random() * 500);
 
-  // OneTrust cookie consent banner (may appear on homepage)
+  // OneTrust cookie consent banner
   const cookieBtn = page.locator('#onetrust-accept-btn-handler').first();
   if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await cookieBtn.click();
     await page.waitForTimeout(1000);
   }
 
-  // Now navigate to login page
-  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(5000);  // Let Akamai sensor re-run on new page
+  // Click "Sign In" link naturally instead of direct URL navigation
+  const signInLink = page.locator('a[href*="myaccount"], a:has-text("Sign In"), a:has-text("Connexion"), a:has-text("Se connecter")').first();
+  if (await signInLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+    console.error('[HomeDepot] Clicking Sign In link');
+    await signInLink.click();
+    await page.waitForTimeout(6000);
+  } else {
+    console.error('[HomeDepot] No Sign In link found, navigating directly');
+    await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(6000);
+  }
 
   // Dismiss store picker modal
   const closeBtn = page.locator('button.acl-modal__close').first();
@@ -135,39 +147,52 @@ export async function loginToHomeDepot(page: any, username: string, password: st
     await page.waitForTimeout(1500);
   }
   await page.waitForTimeout(1000);
+  console.error('[HomeDepot] Login page URL:', page.url());
 
-  // Step 1: Fill email — move mouse to field naturally before clicking
+  // Step 1: Fill email — natural mouse movement to field
   const emailField = page.locator('input[type="email"]').first();
-  await emailField.waitFor({ timeout: 10000 });
+  await emailField.waitFor({ timeout: 15000 });
   await emailField.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(500);
-  await emailField.click();
-  await page.waitForTimeout(400);
-  await emailField.type(username, { delay: 80 });
   await page.waitForTimeout(800);
+  // Move mouse toward the field before clicking
+  const emailBox = await emailField.boundingBox();
+  if (emailBox) {
+    await page.mouse.move(emailBox.x + emailBox.width / 2, emailBox.y + emailBox.height / 2, { steps: 10 });
+    await page.waitForTimeout(200);
+  }
+  await emailField.click();
+  await page.waitForTimeout(500);
+  await emailField.type(username, { delay: 90 + Math.random() * 40 });
+  await page.waitForTimeout(1000);
 
-  // Step 2: Submit email by pressing Enter — avoids Akamai detecting a forced button click.
-  // The two-step form validates the email server-side before showing the password field.
+  // Step 2: Submit email — press Enter
+  console.error('[HomeDepot] Submitting email...');
   await emailField.press('Enter');
-  await page.waitForTimeout(8000);  // HD validates email server-side — can take several seconds
+  await page.waitForTimeout(10000);  // HD validates email server-side — can take several seconds
 
-  // Step 3: Wait for password field — only appears if email is recognized by HD
+  // Step 3: Wait for password field
   const passField = page.locator('input[type="password"]').first();
-  const passVisible = await passField.isVisible({ timeout: 5000 }).catch(() => false);
-  if (!passVisible) return false;
+  const passVisible = await passField.isVisible({ timeout: 8000 }).catch(() => false);
+  if (!passVisible) {
+    console.error('[HomeDepot] Password field not visible after email submit');
+    return false;
+  }
 
+  await page.waitForTimeout(500);
   await passField.click();
-  await passField.type(password, { delay: 60 });
-  await page.waitForTimeout(400);
+  await passField.type(password, { delay: 70 + Math.random() * 40 });
+  await page.waitForTimeout(600);
+  console.error('[HomeDepot] Submitting password...');
   await passField.press('Enter');
 
-  // Wait for login to process (reCAPTCHA v3 runs in background, no manual challenge)
-  await page.waitForTimeout(7000);
+  // Wait for login to process
+  await page.waitForTimeout(8000);
 
-  // Success: sign-in inputs are gone (redirected to account page or SPA updated)
-  const emailStillVisible = await page.locator('input[type="email"]').isVisible({ timeout: 1000 }).catch(() => false);
+  // Success check
+  const emailStillVisible = await page.locator('input[type="email"]').isVisible({ timeout: 2000 }).catch(() => false);
   const passStillVisible = await page.locator('input[type="password"]').isVisible({ timeout: 1000 }).catch(() => false);
   const loggedIn = !emailStillVisible && !passStillVisible;
+  console.error(`[HomeDepot] Login result: ${loggedIn ? 'SUCCESS' : 'FAILED'} url=${page.url()}`);
 
   // 3. Save session cookies so future calls skip the login form
   if (loggedIn) {
@@ -268,9 +293,10 @@ export async function placeHomeDepotOrder(
       const url = page.url();
       const emailVisible = await page.locator('input[type="email"]').isVisible({ timeout: 1000 }).catch(() => false);
       const passVisible = await page.locator('input[type="password"]').isVisible({ timeout: 1000 }).catch(() => false);
-      const bodySnippet = (await page.textContent('body').catch(() => '')).slice(0, 200).replace(/\s+/g, ' ');
-      console.error(`[HomeDepot] Login échoué — url=${url} email=${emailVisible} pass=${passVisible} body="${bodySnippet}"`);
-      return { success: false, error: 'Login Home Depot échoué' };
+      const bodySnippet = (await page.textContent('body').catch(() => '')).slice(0, 300).replace(/\s+/g, ' ');
+      const errorDetail = `Login échoué url=${url} email_visible=${emailVisible} pass_visible=${passVisible} body="${bodySnippet}"`;
+      console.error(`[HomeDepot] ${errorDetail}`);
+      return { success: false, error: errorDetail };
     }
 
     // Navigate to home page so the search bar is accessible
