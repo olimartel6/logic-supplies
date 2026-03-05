@@ -338,18 +338,6 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        {media.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-4">
-            <h2 className="font-semibold text-gray-900 mb-3">Télécharger les photos</h2>
-            <div className="space-y-2">
-              {media.filter(m => m.type === 'image').map(m => (
-                <a key={m.id} href={m.url} download className="block text-blue-600 text-sm hover:underline truncate">
-                  {m.url.split('/').pop()}
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
