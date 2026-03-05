@@ -121,6 +121,21 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   await page.evaluate(() => window.scrollBy(0, -100));
   await page.waitForTimeout(500 + Math.random() * 500);
 
+  // Dismiss localization/store confirmation modal (blocks all interaction)
+  const localizationClose = page.locator([
+    'localization-confirmation-container button',
+    'button.acl-modal__close',
+    'button:has-text("Confirm")',
+    'button:has-text("Confirmer")',
+    'button:has-text("OK")',
+    '.acl-modal__backdrop--open ~ * button',
+  ].join(', ')).first();
+  if (await localizationClose.isVisible({ timeout: 5000 }).catch(() => false)) {
+    console.error('[HomeDepot] Dismissing localization modal');
+    await localizationClose.click();
+    await page.waitForTimeout(1500);
+  }
+
   // OneTrust cookie consent banner
   const cookieBtn = page.locator('#onetrust-accept-btn-handler').first();
   if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -132,7 +147,8 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   const signInLink = page.locator('a[href*="myaccount"], a:has-text("Sign In"), a:has-text("Connexion"), a:has-text("Se connecter")').first();
   if (await signInLink.isVisible({ timeout: 5000 }).catch(() => false)) {
     console.error('[HomeDepot] Clicking Sign In link');
-    await signInLink.click();
+    // Use force:true in case another overlay partially covers the link
+    await signInLink.click({ force: true });
     await page.waitForTimeout(6000);
   } else {
     console.error('[HomeDepot] No Sign In link found, navigating directly');
