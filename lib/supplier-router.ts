@@ -228,6 +228,7 @@ export async function selectAndOrder(
     ...accounts.filter(a => a.supplier !== selected.account.supplier),
   ];
 
+  const errors: string[] = [];
   for (let i = 0; i < orderedAccounts.length; i++) {
     const acc = orderedAccounts[i];
     const result = await placeOrder(acc, product, quantity, deliveryAddress, payment);
@@ -238,10 +239,11 @@ export async function selectAndOrder(
           : `Fallback vers ${supplierLabel(acc.supplier)} (${supplierLabel(selected.account.supplier)} indisponible)`;
       return { result, supplier: acc.supplier, reason };
     }
+    errors.push(`${acc.supplier}: ${result.error || 'échec inconnu'}`);
   }
 
   return {
-    result: { success: false, error: 'Tous les fournisseurs ont échoué' },
+    result: { success: false, error: errors.join(' | ') || 'Tous les fournisseurs ont échoué' },
     supplier: selected.account.supplier,
     reason: selected.reason,
   };

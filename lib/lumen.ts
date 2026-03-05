@@ -247,15 +247,33 @@ export async function placeLumenOrder(
         console.error('[Lumen] Step 1: Navigating to cart');
         await page.goto('https://www.lumen.ca/en/cart', { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(3000);
-        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-cart.png' }).catch(() => {});
         console.error('[Lumen] Cart URL:', page.url());
+        // Log what buttons/links are visible on the cart page
+        const cartButtons = await page.locator('a, button').evaluateAll((els: Element[]) =>
+          els.slice(0, 30).map(e => ({ tag: e.tagName, text: (e as HTMLElement).innerText?.slice(0, 50), href: (e as HTMLAnchorElement).href || '' }))
+        ).catch(() => []);
+        console.error('[Lumen] Cart page buttons:', JSON.stringify(cartButtons.filter((b: any) => b.text?.trim())));
 
-        // Step 2: Click checkout button
-        console.error('[Lumen] Step 2: Clicking checkout');
-        const checkoutBtn = page.locator('a:has-text("Checkout"), button:has-text("Checkout"), a:has-text("Passer la commande"), a:has-text("Proceed"), a[href*="checkout"]').first();
-        await checkoutBtn.click({ timeout: 10000 });
-        await page.waitForTimeout(5000);
-        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-checkout.png' }).catch(() => {});
+        // Step 2: Click checkout button or navigate directly to checkout
+        console.error('[Lumen] Step 2: Going to checkout');
+        const checkoutBtn = page.locator([
+          'a:has-text("Checkout")', 'button:has-text("Checkout")',
+          'a:has-text("Passer à la caisse")', 'button:has-text("Passer à la caisse")',
+          'a:has-text("Proceed to Checkout")', 'a:has-text("Proceed")',
+          'a:has-text("Commander")', 'button:has-text("Commander")',
+          'a:has-text("Passer la commande")',
+          'a[href*="checkout"]', 'a[href*="Checkout"]',
+          '.checkout-btn', '.btn-checkout', '[class*="checkout"]',
+        ].join(', ')).first();
+        if (await checkoutBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+          await checkoutBtn.click();
+          await page.waitForTimeout(5000);
+        } else {
+          // Fallback: navigate directly to checkout page
+          console.error('[Lumen] No checkout button found, navigating directly to /en/checkout');
+          await page.goto('https://www.lumen.ca/en/checkout', { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForTimeout(3000);
+        }
         console.error('[Lumen] Checkout URL:', page.url());
 
         // Step 3: Fill delivery address
