@@ -33,7 +33,7 @@ async function layout2(photos: Buffer[]): Promise<Buffer> {
   }).composite([
     { input: top, top: 0, left: 0 },
     { input: bottom, top: Math.floor(h) + GAP, left: 0 },
-  ]).toBuffer();
+  ]).png().toBuffer();
 }
 
 /** 3 photos: 1 large left + 2 small right */
@@ -53,7 +53,7 @@ async function layout3(photos: Buffer[]): Promise<Buffer> {
     { input: left, top: 0, left: 0 },
     { input: topRight, top: 0, left: leftW + GAP },
     { input: bottomRight, top: rightH + GAP, left: leftW + GAP },
-  ]).toBuffer();
+  ]).png().toBuffer();
 }
 
 /** 4+ photos: 2x2 grid */
@@ -71,7 +71,7 @@ async function layout4(photos: Buffer[]): Promise<Buffer> {
     { input: tr, top: 0, left: cell + GAP },
     { input: bl, top: cell + GAP, left: 0 },
     { input: br, top: cell + GAP, left: cell + GAP },
-  ]).toBuffer();
+  ]).png().toBuffer();
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
