@@ -9,7 +9,7 @@ export async function GET() {
   // User-level preference overrides company default
   const userPref = db.prepare('SELECT supplier_preference FROM users WHERE id = ?').get(ctx.userId) as any;
   const settings = db.prepare(
-    'SELECT supplier_preference, lumen_rep_email, large_order_threshold, office_address, default_delivery FROM company_settings WHERE company_id = ?'
+    'SELECT supplier_preference, lumen_rep_email, large_order_threshold, office_address, default_delivery, google_review_url, company_logo_url FROM company_settings WHERE company_id = ?'
   ).get(ctx.companyId) as any;
   return NextResponse.json({
     preference: userPref?.supplier_preference || settings?.supplier_preference || 'cheapest',
@@ -17,6 +17,8 @@ export async function GET() {
     largeOrderThreshold: settings?.large_order_threshold ?? 2000,
     officeAddress: settings?.office_address || '',
     defaultDelivery: settings?.default_delivery || 'office',
+    googleReviewUrl: settings?.google_review_url || '',
+    companyLogoUrl: settings?.company_logo_url || '',
   });
 }
 
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   if ('error' in ctx) return ctx.error;
 
   const body = await req.json();
-  const { preference, lumenRepEmail, largeOrderThreshold, officeAddress, defaultDelivery } = body;
+  const { preference, lumenRepEmail, largeOrderThreshold, officeAddress, defaultDelivery, googleReviewUrl, companyLogoUrl } = body;
 
   if (preference !== undefined && !['cheapest', 'fastest'].includes(preference)) {
     return NextResponse.json({ error: 'Préférence invalide' }, { status: 400 });
@@ -53,9 +55,11 @@ export async function POST(req: NextRequest) {
       large_order_threshold = COALESCE(?, large_order_threshold),
       office_address = COALESCE(?, office_address),
       default_delivery = COALESCE(?, default_delivery),
+      google_review_url = COALESCE(?, google_review_url),
+      company_logo_url = COALESCE(?, company_logo_url),
       updated_at = CURRENT_TIMESTAMP
     WHERE company_id = ?
-  `).run(preference ?? null, lumenRepEmail ?? null, largeOrderThreshold ?? null, officeAddress ?? null, defaultDelivery ?? null, ctx.companyId);
+  `).run(preference ?? null, lumenRepEmail ?? null, largeOrderThreshold ?? null, officeAddress ?? null, defaultDelivery ?? null, googleReviewUrl ?? null, companyLogoUrl ?? null, ctx.companyId);
 
   return NextResponse.json({ ok: true });
 }

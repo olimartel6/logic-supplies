@@ -326,3 +326,36 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
   });
   if (error) throw new Error(error.message);
 }
+
+export async function sendReviewRequestEmail(
+  to: string,
+  clientName: string,
+  companyName: string,
+  googleReviewUrl: string,
+) {
+  if (!process.env.RESEND_API_KEY) return;
+  try {
+    await getResend().emails.send({
+      from: getFrom(),
+      to,
+      subject: 'Merci pour votre confiance',
+      html: `
+        <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px">
+          <p>Bonjour${clientName ? ` ${clientName}` : ''},</p>
+          <p>Nous espérons que vous êtes satisfait du travail réalisé par <strong>${companyName}</strong>.</p>
+          <p>Votre avis aide énormément notre entreprise à grandir.</p>
+          <p>Vous pouvez laisser un commentaire ici :</p>
+          <p style="text-align:center;margin:24px 0">
+            <a href="${googleReviewUrl}" style="background:#1a73e8;color:white;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:bold;display:inline-block">
+              Laisser un avis Google
+            </a>
+          </p>
+          <p>Merci beaucoup pour votre confiance.</p>
+          <p style="color:#666;font-size:13px;margin-top:32px">— L'équipe ${companyName}</p>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error('[Email] Review request error:', err);
+  }
+}

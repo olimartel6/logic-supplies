@@ -103,7 +103,7 @@ export default function AdminPage() {
   }
 
   async function handleDeleteSite(id: number) {
-    if (!confirm('Archiver ce chantier ?')) return;
+    if (!confirm('Marquer ce projet comme terminé ?')) return;
     await fetch(`/api/job-sites/${id}`, { method: 'DELETE' });
     loadSites();
   }
@@ -263,7 +263,7 @@ export default function AdminPage() {
                       onClick={() => handleDeleteSite(s.id)}
                       className="text-red-400 hover:text-red-600 text-sm font-medium transition"
                     >
-                      Archiver
+                      Projet terminé
                     </button>
                   </div>
                 </div>

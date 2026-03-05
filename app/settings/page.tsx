@@ -311,6 +311,11 @@ export default function SettingsPage() {
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [deliverySaved, setDeliverySaved] = useState(false);
 
+  // Marketing
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('');
+  const [savingReviewUrl, setSavingReviewUrl] = useState(false);
+  const [reviewUrlSaved, setReviewUrlSaved] = useState(false);
+
   // Accordion open/close state
   const [openSection, setOpenSection] = useState<string | null>(null);
 
@@ -336,12 +341,13 @@ export default function SettingsPage() {
       if (a) { setAccount(a); setUsername(a.username); }
     });
     fetch('/api/supplier/visibility').then(r => r.json()).then(setSupplierVisibility);
-    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite' }) => {
+    fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite'; googleReviewUrl?: string; companyLogoUrl?: string }) => {
       if (data?.preference) setPreference(data.preference);
       if (data?.lumenRepEmail !== undefined) setLumenRepEmail(data.lumenRepEmail);
       if (data?.largeOrderThreshold !== undefined) setLargeOrderThreshold(String(data.largeOrderThreshold));
       if (data?.officeAddress !== undefined) setOfficeAddress(data.officeAddress);
       if (data?.defaultDelivery !== undefined) setDefaultDelivery(data.defaultDelivery);
+      if (data?.googleReviewUrl !== undefined) setGoogleReviewUrl(data.googleReviewUrl);
     });
     fetch('/api/settings/payment').then(r => r.json()).then(setPayment).catch(() => {});
   }, [router]);
@@ -475,6 +481,20 @@ export default function SettingsPage() {
     setSavingDelivery(false);
     setDeliverySaved(true);
     setTimeout(() => setDeliverySaved(false), 3000);
+  }
+
+  async function handleSaveReviewUrl(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingReviewUrl(true);
+    setReviewUrlSaved(false);
+    await fetch('/api/supplier/preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleReviewUrl }),
+    });
+    setSavingReviewUrl(false);
+    setReviewUrlSaved(true);
+    setTimeout(() => setReviewUrlSaved(false), 3000);
   }
 
   async function handleManageSubscription() {
@@ -823,6 +843,40 @@ export default function SettingsPage() {
                 />
               </button>
             </div>
+          </div>
+        </AccordionSection>
+
+        {/* ─── MARKETING ─── */}
+        <AccordionSection
+          title="Marketing"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46" /></svg>}
+          isOpen={openSection === 'marketing'}
+          onToggle={() => toggleSection('marketing')}
+        >
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+            <h2 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-yellow-500 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" /></svg>
+              Avis Google
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Lien vers votre page d&apos;avis Google. Utilisé pour demander des avis aux clients après un projet complété.
+            </p>
+            <form onSubmit={handleSaveReviewUrl} className="flex gap-2">
+              <input
+                type="url"
+                value={googleReviewUrl}
+                onChange={e => { setGoogleReviewUrl(e.target.value); setReviewUrlSaved(false); }}
+                placeholder="https://g.page/r/..."
+                className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={savingReviewUrl}
+                className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition whitespace-nowrap"
+              >
+                {savingReviewUrl ? '...' : reviewUrlSaved ? '✅' : 'Sauvegarder'}
+              </button>
+            </form>
           </div>
         </AccordionSection>
 

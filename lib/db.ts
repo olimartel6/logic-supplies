@@ -606,4 +606,30 @@ function initDb(db: Database.Database) {
   db.prepare(
     "UPDATE supplier_categories SET enabled = 1 WHERE supplier = 'bmr' AND category_name IN ('Disjoncteurs', 'Boîtes électriques')"
   ).run();
+
+  // --- Marketing features ---
+  try { db.exec('ALTER TABLE company_settings ADD COLUMN google_review_url TEXT'); } catch {}
+  try { db.exec('ALTER TABLE company_settings ADD COLUMN company_logo_url TEXT'); } catch {}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS job_site_media (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_site_id INTEGER NOT NULL REFERENCES job_sites(id),
+      company_id INTEGER NOT NULL REFERENCES companies(id),
+      url TEXT NOT NULL,
+      type TEXT DEFAULT 'image',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_site_id INTEGER NOT NULL REFERENCES job_sites(id),
+      company_id INTEGER NOT NULL REFERENCES companies(id),
+      client_email TEXT NOT NULL,
+      client_name TEXT,
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
