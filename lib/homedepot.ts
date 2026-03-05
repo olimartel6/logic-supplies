@@ -143,10 +143,12 @@ export async function loginToHomeDepot(page: any, username: string, password: st
     await page.waitForTimeout(1000);
   }
 
-  // Navigate to login page — Akamai has enough warmup data from homepage browsing
+  // Navigate to login page — use networkidle to ensure Angular SPA has fully rendered
   console.error('[HomeDepot] Navigating to login page');
-  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(6000);  // Let Akamai sensor re-run on new page
+  await page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'networkidle', timeout: 45000 }).catch(() =>
+    page.goto('https://www.homedepot.ca/myaccount', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  );
+  await page.waitForTimeout(8000);  // Extra time for Angular SPA to initialize + Akamai sensor
 
   // Dismiss localization/store picker modal (appears on every first visit)
   const storeCloseBtn = page.locator([
