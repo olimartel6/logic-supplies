@@ -169,12 +169,21 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   }
   console.error('[HomeDepot] Login page URL:', page.url());
 
-  // Step 1: Fill email — natural mouse movement to field
+  // Log all visible inputs to verify we're on the login form
+  const visibleInputs = await page.locator('input:visible').evaluateAll((els: Element[]) =>
+    els.map(e => ({ type: (e as HTMLInputElement).type, name: (e as HTMLInputElement).name, id: e.id, placeholder: (e as HTMLInputElement).placeholder }))
+  ).catch(() => []);
+  console.error('[HomeDepot] Visible inputs:', JSON.stringify(visibleInputs));
+
+  // Step 1: Fill email — find the login email field specifically (not search bar)
   const emailField = page.locator('input[type="email"]').first();
-  await emailField.waitFor({ timeout: 15000 });
+  const emailExists = await emailField.isVisible({ timeout: 15000 }).catch(() => false);
+  if (!emailExists) {
+    console.error('[HomeDepot] No email input found on page');
+    return false;
+  }
   await emailField.scrollIntoViewIfNeeded();
   await page.waitForTimeout(800);
-  // Move mouse toward the field before clicking
   const emailBox = await emailField.boundingBox();
   if (emailBox) {
     await page.mouse.move(emailBox.x + emailBox.width / 2, emailBox.y + emailBox.height / 2, { steps: 10 });
@@ -184,19 +193,27 @@ export async function loginToHomeDepot(page: any, username: string, password: st
   await page.waitForTimeout(500);
   await emailField.type(username, { delay: 90 + Math.random() * 40 });
   await page.waitForTimeout(1000);
+  console.error('[HomeDepot] Email typed, value:', await emailField.inputValue().catch(() => '?'));
 
-  // Step 2: Submit email — press Enter
+  // Step 2: Submit email — click the submit button (more reliable than Enter)
   console.error('[HomeDepot] Submitting email...');
-  await emailField.press('Enter');
-  await page.waitForTimeout(10000);  // HD validates email server-side — can take several seconds
+  const emailSubmitBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Continuer")').first();
+  if (await emailSubmitBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await emailSubmitBtn.click();
+  } else {
+    await emailField.press('Enter');
+  }
+  await page.waitForTimeout(10000);  // HD validates email server-side
 
-  // Step 3: Wait for password field (HD validates email server-side — can take a while)
+  // Step 3: Wait for password field
   const passField = page.locator('input[type="password"]').first();
   const passVisible = await passField.isVisible({ timeout: 15000 }).catch(() => false);
   if (!passVisible) {
-    // Check for error messages (wrong email, Akamai block, etc.)
-    const errorMsg = await page.locator('[class*="error"], [class*="alert"], .acl-type--negative').first().textContent().catch(() => '');
-    console.error(`[HomeDepot] Password field not visible — error msg: "${errorMsg?.trim()}" url: ${page.url()}`);
+    const errorMsg = await page.locator('[class*="error"], [class*="alert"], .acl-type--negative, [class*="Error"]').first().textContent().catch(() => '');
+    const currentInputs = await page.locator('input:visible').evaluateAll((els: Element[]) =>
+      els.map(e => ({ type: (e as HTMLInputElement).type, name: (e as HTMLInputElement).name }))
+    ).catch(() => []);
+    console.error(`[HomeDepot] Password field not visible — error: "${errorMsg?.trim()}" inputs: ${JSON.stringify(currentInputs)} url: ${page.url()}`);
     return false;
   }
 
