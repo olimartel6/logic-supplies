@@ -104,12 +104,12 @@ export default function ProjectsPage() {
   async function handleGenerateImage() {
     if (!selectedSite || media.length === 0) return;
     setGeneratingImage(true);
-    const photo = media.find(m => m.type === 'image');
-    if (!photo) { setGeneratingImage(false); return; }
+    const images = media.filter(m => m.type === 'image');
+    if (images.length === 0) { setGeneratingImage(false); return; }
     const res = await fetch(`/api/job-sites/${selectedSite.id}/marketing/instagram-image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ photoUrl: photo.url, text: description.slice(0, 60) }),
+      body: JSON.stringify({ photoUrls: images.map(m => m.url), text: description.slice(0, 60) }),
     });
     const data = await res.json();
     setGeneratedImage(data.image || '');

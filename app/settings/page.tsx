@@ -315,6 +315,9 @@ export default function SettingsPage() {
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [savingReviewUrl, setSavingReviewUrl] = useState(false);
   const [reviewUrlSaved, setReviewUrlSaved] = useState(false);
+  const [companyLogoUrl, setCompanyLogoUrl] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoSaved, setLogoSaved] = useState(false);
 
   // Accordion open/close state
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -348,6 +351,7 @@ export default function SettingsPage() {
       if (data?.officeAddress !== undefined) setOfficeAddress(data.officeAddress);
       if (data?.defaultDelivery !== undefined) setDefaultDelivery(data.defaultDelivery);
       if (data?.googleReviewUrl !== undefined) setGoogleReviewUrl(data.googleReviewUrl);
+      if (data?.companyLogoUrl !== undefined) setCompanyLogoUrl(data.companyLogoUrl);
     });
     fetch('/api/settings/payment').then(r => r.json()).then(setPayment).catch(() => {});
   }, [router]);
@@ -495,6 +499,26 @@ export default function SettingsPage() {
     setSavingReviewUrl(false);
     setReviewUrlSaved(true);
     setTimeout(() => setReviewUrlSaved(false), 3000);
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setLogoSaved(false);
+    const buffer = await file.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    const dataUri = `data:${file.type};base64,${base64}`;
+    await fetch('/api/supplier/preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyLogoUrl: dataUri }),
+    });
+    setCompanyLogoUrl(dataUri);
+    setUploadingLogo(false);
+    setLogoSaved(true);
+    setTimeout(() => setLogoSaved(false), 3000);
+    e.target.value = '';
   }
 
   async function handleManageSubscription() {
@@ -877,6 +901,29 @@ export default function SettingsPage() {
                 {savingReviewUrl ? '...' : reviewUrlSaved ? '✅' : 'Sauvegarder'}
               </button>
             </form>
+          </div>
+
+          {/* Logo compagnie */}
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mt-3">
+            <h2 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-blue-500 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 7.5h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" /></svg>
+              Logo de la compagnie
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Votre logo sera affiché sur les montages Instagram générés.
+            </p>
+            {companyLogoUrl && (
+              <div className="mb-3 flex items-center gap-3">
+                <img src={companyLogoUrl} alt="Logo" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white" />
+                <span className="text-xs text-green-600 font-medium">Logo configuré</span>
+              </div>
+            )}
+            <label className="block">
+              <span className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium cursor-pointer transition">
+                {uploadingLogo ? 'Envoi...' : logoSaved ? 'Logo sauvegardé' : companyLogoUrl ? 'Changer le logo' : 'Importer un logo'}
+              </span>
+              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={uploadingLogo} />
+            </label>
           </div>
         </AccordionSection>
 
