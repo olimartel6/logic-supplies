@@ -22,9 +22,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const company = db.prepare('SELECT name FROM companies WHERE id = ?').get(ctx.companyId) as any;
   const settings = db.prepare('SELECT company_logo_url FROM company_settings WHERE company_id = ?').get(ctx.companyId) as any;
 
-  // Fetch the photo
-  const photoRes = await fetch(photoUrl);
-  const photoBuffer = Buffer.from(await photoRes.arrayBuffer());
+  // Decode the photo (base64 data URI or remote URL)
+  let photoBuffer: Buffer;
+  if (photoUrl.startsWith('data:')) {
+    const base64Data = photoUrl.split(',')[1];
+    photoBuffer = Buffer.from(base64Data, 'base64');
+  } else {
+    const photoRes = await fetch(photoUrl);
+    photoBuffer = Buffer.from(await photoRes.arrayBuffer());
+  }
 
   // Resize/crop photo to fill 1080x1080
   const photo = await sharp(photoBuffer)

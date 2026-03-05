@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
-import { uploadToR2 } from '@/lib/r2';
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
@@ -38,15 +39,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const uploaded: { id: number; url: string; type: string }[] = [];
 
   for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: `Fichier trop gros (max 10 MB): ${file.name}` }, { status: 400 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const type = file.type.startsWith('video/') ? 'video' : 'image';
-    const url = await uploadToR2(buffer, file.type, `projects/${ctx.companyId}/${id}`);
+    const mimeType = file.type || (type === 'video' ? 'video/mp4' : 'image/jpeg');
+    const dataUri = `data:${mimeType};base64,${buffer.toString('base64')}`;
 
     const result = db.prepare(
       'INSERT INTO job_site_media (job_site_id, company_id, url, type) VALUES (?, ?, ?, ?)'
-    ).run(id, ctx.companyId, url, type);
+    ).run(id, ctx.companyId, dataUri, type);
 
-    uploaded.push({ id: Number(result.lastInsertRowid), url, type });
+    uploaded.push({ id: Number(result.lastInsertRowid), url: dataUri, type });
   }
 
   return NextResponse.json({ uploaded });
