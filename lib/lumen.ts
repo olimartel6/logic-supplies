@@ -243,54 +243,102 @@ export async function placeLumenOrder(
     // ── Checkout automatique si adresse et paiement fournis ──
     if (deliveryAddress && payment) {
       try {
-        // Navigate to cart then checkout
-        await page.goto('https://www.lumen.ca/en/cart', { waitUntil: 'networkidle' });
-        await page.click('text=Checkout', { timeout: 10000 });
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+        // Step 1: Navigate to cart
+        console.error('[Lumen] Step 1: Navigating to cart');
+        await page.goto('https://www.lumen.ca/en/cart', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(3000);
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-cart.png' }).catch(() => {});
+        console.error('[Lumen] Cart URL:', page.url());
 
-        // Delivery address
-        const addressField = page.locator('input[name="address1"], input[placeholder*="Address"], input[placeholder*="adresse"]').first();
-        if (await addressField.isVisible({ timeout: 5000 })) {
+        // Step 2: Click checkout button
+        console.error('[Lumen] Step 2: Clicking checkout');
+        const checkoutBtn = page.locator('a:has-text("Checkout"), button:has-text("Checkout"), a:has-text("Passer la commande"), a:has-text("Proceed"), a[href*="checkout"]').first();
+        await checkoutBtn.click({ timeout: 10000 });
+        await page.waitForTimeout(5000);
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-checkout.png' }).catch(() => {});
+        console.error('[Lumen] Checkout URL:', page.url());
+
+        // Step 3: Fill delivery address
+        console.error('[Lumen] Step 3: Filling delivery address');
+        const addressField = page.locator('input[name="address1"], input[name*="address"], input[placeholder*="Address"], input[placeholder*="adresse"], input[id*="address"]').first();
+        if (await addressField.isVisible({ timeout: 8000 })) {
           await addressField.fill(deliveryAddress);
+          console.error('[Lumen] Address filled');
+        } else {
+          console.error('[Lumen] No address field found — may already be saved');
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-address.png' }).catch(() => {});
 
-        // Continue to payment
-        const continueBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Continuer")').first();
+        // Step 4: Continue to payment
+        console.error('[Lumen] Step 4: Continue to payment');
+        const continueBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Continuer"), button:has-text("Next")').first();
         if (await continueBtn.isVisible({ timeout: 5000 })) {
           await continueBtn.click();
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(3000);
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-payment.png' }).catch(() => {});
+        console.error('[Lumen] Payment page URL:', page.url());
 
-        // Enter card details
-        const cardNumberField = page.locator('input[name*="card"], input[placeholder*="card number"], iframe[title*="Card Number"]').first();
-        if (await cardNumberField.isVisible({ timeout: 8000 })) {
-          await cardNumberField.fill(payment.cardNumber);
+        // Step 5: Enter card details (try iframe first, then direct input)
+        console.error('[Lumen] Step 5: Filling card details');
+        const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[title*="card"], iframe[name*="card"], iframe[id*="card"]').first();
+        const iframeCardInput = cardFrame.locator('input[name*="cardnumber"], input[placeholder*="Card number"], input[autocomplete="cc-number"], input').first();
+        if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+          console.error('[Lumen] Card in iframe — filling');
+          await iframeCardInput.fill(payment.cardNumber);
+          const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
+          if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await iframeExpiry.fill(payment.cardExpiry);
+          }
+          const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"]').first();
+          if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await iframeCvv.fill(payment.cardCvv);
+          }
+        } else {
+          console.error('[Lumen] Card direct input — filling');
+          const cardNumberField = page.locator('input[name*="card"], input[id*="card"], input[placeholder*="card number"], input[autocomplete="cc-number"]').first();
+          if (await cardNumberField.isVisible({ timeout: 5000 })) {
+            await cardNumberField.fill(payment.cardNumber);
+          }
+          const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[placeholder*="expiry"], input[autocomplete="cc-exp"]').first();
+          if (await expiryField.isVisible({ timeout: 3000 })) {
+            await expiryField.fill(payment.cardExpiry);
+          }
+          const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"], input[autocomplete="cc-csc"]').first();
+          if (await cvvField.isVisible({ timeout: 3000 })) {
+            await cvvField.fill(payment.cardCvv);
+          }
         }
-        const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[placeholder*="expiry"]').first();
-        if (await expiryField.isVisible({ timeout: 3000 })) {
-          await expiryField.fill(payment.cardExpiry);
-        }
-        const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"], input[placeholder*="CVC"]').first();
-        if (await cvvField.isVisible({ timeout: 3000 })) {
-          await cvvField.fill(payment.cardCvv);
-        }
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-card-filled.png' }).catch(() => {});
 
-        // Submit the order
-        const submitBtn = page.locator('button[type="submit"]:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order")').first();
+        // Step 6: Submit the order
+        console.error('[Lumen] Step 6: Placing order');
+        const submitBtn = page.locator('button[type="submit"]:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order"), button:has-text("Complete"), button:has-text("Pay")').first();
         if (await submitBtn.isVisible({ timeout: 5000 })) {
           await submitBtn.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForTimeout(8000);
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-confirmation.png' }).catch(() => {});
+        console.error('[Lumen] Final URL:', page.url());
 
-        // Capture order number
+        // Step 7: Capture order number
         const confirmationText = await page.textContent('body');
-        const orderMatch = confirmationText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
+        const orderMatch = confirmationText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+          || confirmationText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
+          || confirmationText?.match(/confirmation\s*#?\s*([A-Z0-9-]{5,20})/i);
         const orderId = orderMatch?.[1];
+        console.error('[Lumen] Order ID:', orderId || 'not found');
 
-        return { success: true, orderId: orderId || undefined };
+        if (orderId) {
+          return { success: true, orderId };
+        }
+        // Check for payment error in body text
+        const bodySnippet = confirmationText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+        console.error('[Lumen] Page body snippet:', bodySnippet);
+        return { success: true, orderId: undefined };
       } catch (checkoutErr: any) {
-        // Checkout failed — return inCart: true for manual notification
         console.error('[Lumen] Checkout error:', checkoutErr.message);
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-error.png' }).catch(() => {});
         return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
       }
     }

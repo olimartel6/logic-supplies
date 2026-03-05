@@ -189,51 +189,102 @@ export async function placeGuillevinOrder(
 
         if (deliveryAddress && payment) {
           try {
-            await page.goto('https://www.guillevin.com/cart', { waitUntil: 'networkidle' });
-            const checkoutBtn = page.locator('button[name="checkout"], input[name="checkout"]').first();
+            // Step 1: Navigate to cart
+            console.error('[Guillevin] Step 1: Navigating to cart');
+            await page.goto('https://www.guillevin.com/cart', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(3000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-cart.png' }).catch(() => {});
+
+            // Step 2: Click checkout
+            console.error('[Guillevin] Step 2: Clicking checkout');
+            const checkoutBtn = page.locator('button[name="checkout"], input[name="checkout"], a[href*="checkout"]').first();
             if (await checkoutBtn.isVisible({ timeout: 8000 })) {
               await checkoutBtn.click();
-              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+              await page.waitForTimeout(5000);
             }
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-checkout.png' }).catch(() => {});
+            console.error('[Guillevin] Checkout URL:', page.url());
 
-            const addressField = page.locator('#checkout_shipping_address_address1').first();
+            // Step 3: Fill shipping address
+            console.error('[Guillevin] Step 3: Filling shipping address');
+            const addressField = page.locator('#checkout_shipping_address_address1, input[name*="address1"], input[placeholder*="Address"]').first();
             if (await addressField.isVisible({ timeout: 8000 })) {
               await addressField.fill(deliveryAddress);
+              console.error('[Guillevin] Address filled');
+            } else {
+              console.error('[Guillevin] No address field — may already be saved');
             }
 
-            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping")').first();
+            // Step 4: Continue to shipping
+            console.error('[Guillevin] Step 4: Continue to shipping');
+            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping"), button:has-text("Continuer")').first();
             if (await continueBtn.isVisible({ timeout: 5000 })) {
               await continueBtn.click();
-              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+              await page.waitForTimeout(5000);
             }
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-shipping.png' }).catch(() => {});
 
-            const shippingContinue = page.locator('button:has-text("Continue to payment")').first();
+            // Step 5: Continue to payment
+            console.error('[Guillevin] Step 5: Continue to payment');
+            const shippingContinue = page.locator('button:has-text("Continue to payment"), button:has-text("Continuer vers le paiement"), #continue_button').first();
             if (await shippingContinue.isVisible({ timeout: 5000 })) {
               await shippingContinue.click();
-              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+              await page.waitForTimeout(5000);
             }
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-payment.png' }).catch(() => {});
+            console.error('[Guillevin] Payment URL:', page.url());
 
+            // Step 6: Fill card details (Shopify iframes)
+            console.error('[Guillevin] Step 6: Filling card details');
             const cardFrame = page.frameLocator('iframe[id*="card-fields-number"]').first();
-            const cardInput = cardFrame.locator('input[placeholder*="Card number"]');
+            const cardInput = cardFrame.locator('input[placeholder*="Card number"], input[autocomplete="cc-number"], input').first();
             if (await cardInput.isVisible({ timeout: 8000 }).catch(() => false)) {
               await cardInput.fill(payment.cardNumber);
+              console.error('[Guillevin] Card number filled');
               const expiryFrame = page.frameLocator('iframe[id*="card-fields-expiry"]').first();
               await expiryFrame.locator('input').first().fill(payment.cardExpiry);
+              console.error('[Guillevin] Expiry filled');
               const cvvFrame = page.frameLocator('iframe[id*="card-fields-verification"]').first();
               await cvvFrame.locator('input').first().fill(payment.cardCvv);
+              console.error('[Guillevin] CVV filled');
+              // Name on card (some Shopify themes)
+              const nameFrame = page.frameLocator('iframe[id*="card-fields-name"]').first();
+              const nameInput = nameFrame.locator('input').first();
+              if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await nameInput.fill(payment.cardHolder);
+                console.error('[Guillevin] Card holder filled');
+              }
+            } else {
+              console.error('[Guillevin] Card iframe not found — trying direct inputs');
+              const directCard = page.locator('input[name*="card"], input[id*="card-number"]').first();
+              if (await directCard.isVisible({ timeout: 3000 })) await directCard.fill(payment.cardNumber);
             }
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-card-filled.png' }).catch(() => {});
 
-            const payBtn = page.locator('button[id="continue_button"]:has-text("Pay"), button:has-text("Complete order")').first();
+            // Step 7: Place order
+            console.error('[Guillevin] Step 7: Placing order');
+            const payBtn = page.locator('#continue_button, button:has-text("Pay now"), button:has-text("Complete order"), button:has-text("Payer maintenant")').first();
             if (await payBtn.isVisible({ timeout: 5000 })) {
               await payBtn.click();
-              await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+              await page.waitForTimeout(10000);
             }
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-confirmation.png' }).catch(() => {});
+            console.error('[Guillevin] Final URL:', page.url());
 
+            // Step 8: Capture order number
             const bodyText = await page.textContent('body');
-            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
-            return { success: true, orderId: orderMatch?.[1] };
+            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
+            const orderId = orderMatch?.[1];
+            console.error('[Guillevin] Order ID:', orderId || 'not found');
+            if (!orderId) {
+              const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+              console.error('[Guillevin] Page body snippet:', bodySnippet);
+            }
+            return { success: true, orderId };
           } catch (err: any) {
             console.error('[Guillevin] Checkout error:', err.message);
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-error.png' }).catch(() => {});
             return { success: false, inCart: true, error: `Checkout: ${err.message}` };
           }
         }

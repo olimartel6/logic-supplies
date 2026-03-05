@@ -332,54 +332,97 @@ export async function placeHomeDepotOrder(
 
     if (deliveryAddress && payment) {
       try {
-        await page.goto('https://www.homedepot.ca/en/home/cart.html', { waitUntil: 'networkidle' });
-        const checkoutBtn = page.locator('button:has-text("Checkout"), button:has-text("Passer à la caisse")').first();
+        // Step 1: Navigate to cart
+        console.error('[HomeDepot] Step 1: Navigating to cart');
+        await page.goto('https://www.homedepot.ca/en/home/cart.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(4000);
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-cart.png' }).catch(() => {});
+
+        // Step 2: Click checkout
+        console.error('[HomeDepot] Step 2: Clicking checkout');
+        const checkoutBtn = page.locator('button:has-text("Checkout"), button:has-text("Passer à la caisse"), a:has-text("Checkout"), a:has-text("Passer à la caisse")').first();
         if (await checkoutBtn.isVisible({ timeout: 8000 })) {
           await checkoutBtn.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForTimeout(6000);
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-checkout.png' }).catch(() => {});
+        console.error('[HomeDepot] Checkout URL:', page.url());
 
-        const addressField = page.locator('input[id*="address"], input[name*="address"]').first();
+        // Step 3: Fill delivery address
+        console.error('[HomeDepot] Step 3: Filling delivery address');
+        const addressField = page.locator('input[id*="address"], input[name*="address"], input[placeholder*="Address"], input[placeholder*="adresse"]').first();
         if (await addressField.isVisible({ timeout: 8000 })) {
           await addressField.fill(deliveryAddress);
           await page.keyboard.press('Enter');
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(3000);
+          console.error('[HomeDepot] Address filled');
+        } else {
+          console.error('[HomeDepot] No address field — may already be saved');
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-address.png' }).catch(() => {});
 
+        // Step 4: Continue to payment
+        console.error('[HomeDepot] Step 4: Continue to payment');
         const continueBtn = page.locator('button:has-text("Continue"), button:has-text("Continuer")').first();
         if (await continueBtn.isVisible({ timeout: 5000 })) {
           await continueBtn.click();
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(4000);
         }
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-payment.png' }).catch(() => {});
+        console.error('[HomeDepot] Payment page URL:', page.url());
 
-        const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[name*="card"]').first();
+        // Step 5: Fill card details (try iframe first, then direct)
+        console.error('[HomeDepot] Step 5: Filling card details');
+        const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[name*="card"], iframe[id*="card"]').first();
         const cardInput = cardFrame.locator('input').first();
         if (await cardInput.isVisible({ timeout: 8000 }).catch(() => false)) {
+          console.error('[HomeDepot] Card in iframe — filling');
           await cardInput.fill(payment.cardNumber);
         } else {
-          const directCard = page.locator('input[id*="cardNumber"], input[name*="cardNumber"]').first();
-          if (await directCard.isVisible({ timeout: 3000 })) {
+          console.error('[HomeDepot] Card direct input — filling');
+          const directCard = page.locator('input[id*="cardNumber"], input[name*="cardNumber"], input[id*="card-number"], input[autocomplete="cc-number"]').first();
+          if (await directCard.isVisible({ timeout: 5000 })) {
             await directCard.fill(payment.cardNumber);
           }
         }
 
-        const expiryField = page.locator('input[id*="expiry"], input[name*="expiry"]').first();
-        if (await expiryField.isVisible({ timeout: 3000 })) await expiryField.fill(payment.cardExpiry);
-
-        const cvvField = page.locator('input[id*="cvv"], input[name*="cvv"]').first();
-        if (await cvvField.isVisible({ timeout: 3000 })) await cvvField.fill(payment.cardCvv);
-
-        const placeOrderBtn = page.locator('button:has-text("Place Order"), button:has-text("Passer la commande")').first();
-        if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
-          await placeOrderBtn.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 });
+        const expiryField = page.locator('input[id*="expiry"], input[name*="expiry"], input[autocomplete="cc-exp"]').first();
+        if (await expiryField.isVisible({ timeout: 3000 })) {
+          await expiryField.fill(payment.cardExpiry);
+          console.error('[HomeDepot] Expiry filled');
         }
 
+        const cvvField = page.locator('input[id*="cvv"], input[name*="cvv"], input[autocomplete="cc-csc"]').first();
+        if (await cvvField.isVisible({ timeout: 3000 })) {
+          await cvvField.fill(payment.cardCvv);
+          console.error('[HomeDepot] CVV filled');
+        }
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-card-filled.png' }).catch(() => {});
+
+        // Step 6: Place order
+        console.error('[HomeDepot] Step 6: Placing order');
+        const placeOrderBtn = page.locator('button:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order")').first();
+        if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
+          await placeOrderBtn.click();
+          await page.waitForTimeout(10000);
+        }
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-confirmation.png' }).catch(() => {});
+        console.error('[HomeDepot] Final URL:', page.url());
+
+        // Step 7: Capture order number
         const bodyText = await page.textContent('body');
-        const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i);
-        return { success: true, orderId: orderMatch?.[1] };
+        const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+          || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
+        const orderId = orderMatch?.[1];
+        console.error('[HomeDepot] Order ID:', orderId || 'not found');
+        if (!orderId) {
+          const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+          console.error('[HomeDepot] Page body snippet:', bodySnippet);
+        }
+        return { success: true, orderId };
       } catch (err: any) {
         console.error('[HomeDepot] Checkout error:', err.message);
+        await page.screenshot({ path: process.cwd() + '/public/debug-hd-error.png' }).catch(() => {});
         return { success: false, inCart: true, error: `Checkout: ${err.message}` };
       }
     }

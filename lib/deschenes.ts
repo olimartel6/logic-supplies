@@ -147,6 +147,103 @@ export async function placeDeschenesOrder(
         await addToCartBtn.click();
         await page.waitForTimeout(2000);
         console.error(`[Deschênes] Added to cart: ${product}`);
+
+        // ── Checkout automatique si adresse et paiement fournis ──
+        if (deliveryAddress && payment) {
+          try {
+            // Step 1: Navigate to cart (Salesforce Commerce / B2B)
+            console.error('[Deschênes] Step 1: Navigating to cart');
+            await page.goto('https://www.deschenes.qc.ca/s/cart?language=fr', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(3000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-cart.png' }).catch(() => {});
+            console.error('[Deschênes] Cart URL:', page.url());
+
+            // Step 2: Click checkout / proceed
+            console.error('[Deschênes] Step 2: Clicking checkout');
+            const checkoutBtn = page.locator('button:has-text("Commander"), button:has-text("Passer la commande"), button:has-text("Checkout"), button:has-text("Proceed"), a:has-text("Commander"), a[href*="checkout"]').first();
+            await checkoutBtn.click({ timeout: 10000 });
+            await page.waitForTimeout(5000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-checkout.png' }).catch(() => {});
+            console.error('[Deschênes] Checkout URL:', page.url());
+
+            // Step 3: Fill delivery address (B2B — may have PO number or saved addresses)
+            console.error('[Deschênes] Step 3: Filling delivery address');
+            // Try PO number field first (common in B2B)
+            const poField = page.locator('input[name*="poNumber"], input[name*="po_number"], input[placeholder*="PO"], input[placeholder*="bon de commande"]').first();
+            if (await poField.isVisible({ timeout: 3000 }).catch(() => false)) {
+              await poField.fill('AUTO-' + Date.now().toString().slice(-6));
+              console.error('[Deschênes] PO number filled');
+            }
+            const addressField = page.locator('input[name*="address"], input[name*="street"], input[placeholder*="Adresse"], input[placeholder*="Address"]').first();
+            if (await addressField.isVisible({ timeout: 5000 }).catch(() => false)) {
+              await addressField.fill(deliveryAddress);
+              console.error('[Deschênes] Address filled');
+            } else {
+              console.error('[Deschênes] No address field — may already be saved');
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-address.png' }).catch(() => {});
+
+            // Step 4: Continue to payment
+            console.error('[Deschênes] Step 4: Continue to payment');
+            const continueBtn = page.locator('button:has-text("Continuer"), button:has-text("Continue"), button:has-text("Suivant"), button:has-text("Next"), button[type="submit"]').first();
+            if (await continueBtn.isVisible({ timeout: 5000 })) {
+              await continueBtn.click();
+              await page.waitForTimeout(4000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-payment.png' }).catch(() => {});
+            console.error('[Deschênes] Payment URL:', page.url());
+
+            // Step 5: Fill card details
+            console.error('[Deschênes] Step 5: Filling card details');
+            const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[title*="card"], iframe[id*="card"], iframe[name*="card"]').first();
+            const iframeCardInput = cardFrame.locator('input[name*="cardnumber"], input[autocomplete="cc-number"], input').first();
+            if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+              console.error('[Deschênes] Card in iframe — filling');
+              await iframeCardInput.fill(payment.cardNumber);
+              const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
+              if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) await iframeExpiry.fill(payment.cardExpiry);
+              const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"]').first();
+              if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) await iframeCvv.fill(payment.cardCvv);
+            } else {
+              console.error('[Deschênes] Card direct input — filling');
+              const cardNumberField = page.locator('input[name*="card"], input[id*="card"], input[autocomplete="cc-number"]').first();
+              if (await cardNumberField.isVisible({ timeout: 5000 })) await cardNumberField.fill(payment.cardNumber);
+              const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[autocomplete="cc-exp"]').first();
+              if (await expiryField.isVisible({ timeout: 3000 })) await expiryField.fill(payment.cardExpiry);
+              const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[autocomplete="cc-csc"]').first();
+              if (await cvvField.isVisible({ timeout: 3000 })) await cvvField.fill(payment.cardCvv);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-card-filled.png' }).catch(() => {});
+
+            // Step 6: Place order
+            console.error('[Deschênes] Step 6: Placing order');
+            const placeOrderBtn = page.locator('button:has-text("Passer la commande"), button:has-text("Place Order"), button:has-text("Commander"), button:has-text("Confirmer")').first();
+            if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
+              await placeOrderBtn.click();
+              await page.waitForTimeout(10000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-confirmation.png' }).catch(() => {});
+            console.error('[Deschênes] Final URL:', page.url());
+
+            // Step 7: Capture order number
+            const bodyText = await page.textContent('body');
+            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/confirmation\s*#?\s*([A-Z0-9-]{5,20})/i);
+            const orderId = orderMatch?.[1];
+            console.error('[Deschênes] Order ID:', orderId || 'not found');
+            if (!orderId) {
+              const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+              console.error('[Deschênes] Page body snippet:', bodySnippet);
+            }
+            return { success: true, orderId };
+          } catch (checkoutErr: any) {
+            console.error('[Deschênes] Checkout error:', checkoutErr.message);
+            await page.screenshot({ path: process.cwd() + '/public/debug-deschenes-error.png' }).catch(() => {});
+            return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+          }
+        }
+
         return { success: false, inCart: true };
       }
     }

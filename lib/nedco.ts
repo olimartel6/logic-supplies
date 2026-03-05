@@ -134,6 +134,119 @@ export async function placeNedcoOrder(
         await addToCartBtn.click();
         await page.waitForTimeout(2000);
         console.error(`[Nedco] Added to cart: ${product}`);
+
+        // ── Checkout automatique si adresse et paiement fournis ──
+        if (deliveryAddress && payment) {
+          try {
+            // Step 1: Navigate to cart (SAP Hybris)
+            console.error('[Nedco] Step 1: Navigating to cart');
+            await page.goto('https://www.nedco.ca/cnd/cart', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(3000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-cart.png' }).catch(() => {});
+            console.error('[Nedco] Cart URL:', page.url());
+
+            // Step 2: Click checkout (Hybris)
+            console.error('[Nedco] Step 2: Clicking checkout');
+            const checkoutBtn = page.locator('button:has-text("Checkout"), button:has-text("Proceed to Checkout"), a:has-text("Checkout"), a[href*="checkout"]').first();
+            await checkoutBtn.click({ timeout: 10000 });
+            await page.waitForTimeout(5000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-checkout.png' }).catch(() => {});
+            console.error('[Nedco] Checkout URL:', page.url());
+
+            // Step 3: Fill delivery/shipping info
+            console.error('[Nedco] Step 3: Filling delivery address');
+            // B2B Hybris often has PO number
+            const poField = page.locator('input[name*="purchaseOrderNumber"], input[id*="purchaseOrder"], input[name*="poNumber"], input[placeholder*="PO"]').first();
+            if (await poField.isVisible({ timeout: 3000 }).catch(() => false)) {
+              await poField.fill('AUTO-' + Date.now().toString().slice(-6));
+              console.error('[Nedco] PO number filled');
+            }
+            const addressField = page.locator('input[name*="address"], input[id*="address"], input[name*="line1"], input[placeholder*="Address"]').first();
+            if (await addressField.isVisible({ timeout: 5000 }).catch(() => false)) {
+              await addressField.fill(deliveryAddress);
+              console.error('[Nedco] Address filled');
+            } else {
+              // Try selecting a saved address
+              const savedAddr = page.locator('select[id*="address"], select[name*="address"]').first();
+              if (await savedAddr.isVisible({ timeout: 3000 }).catch(() => false)) {
+                // Select first non-empty option
+                await savedAddr.selectOption({ index: 1 });
+                console.error('[Nedco] Selected saved address');
+              } else {
+                console.error('[Nedco] No address field — may already be set');
+              }
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-address.png' }).catch(() => {});
+
+            // Step 4: Continue to payment
+            console.error('[Nedco] Step 4: Continue to payment');
+            const continueBtn = page.locator('button:has-text("Continue"), button:has-text("Next"), button:has-text("Continuer"), button[type="submit"]').first();
+            if (await continueBtn.isVisible({ timeout: 5000 })) {
+              await continueBtn.click();
+              await page.waitForTimeout(4000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-payment.png' }).catch(() => {});
+            console.error('[Nedco] Payment URL:', page.url());
+
+            // Step 5: Fill card details
+            console.error('[Nedco] Step 5: Filling card details');
+            const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[title*="card"], iframe[id*="card"], iframe[name*="card"]').first();
+            const iframeCardInput = cardFrame.locator('input[name*="cardnumber"], input[autocomplete="cc-number"], input').first();
+            if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+              console.error('[Nedco] Card in iframe — filling');
+              await iframeCardInput.fill(payment.cardNumber);
+              const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
+              if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) await iframeExpiry.fill(payment.cardExpiry);
+              const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"]').first();
+              if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) await iframeCvv.fill(payment.cardCvv);
+            } else {
+              console.error('[Nedco] Card direct input — filling');
+              const cardNumberField = page.locator('input[id*="card_cardNumber"], input[name*="card_cardNumber"], input[id*="cardNumber"], input[autocomplete="cc-number"]').first();
+              if (await cardNumberField.isVisible({ timeout: 5000 })) await cardNumberField.fill(payment.cardNumber);
+              const expiryMonth = page.locator('select[id*="ExpiryMonth"], select[name*="card_expirationMonth"]').first();
+              if (await expiryMonth.isVisible({ timeout: 3000 }).catch(() => false)) {
+                const [month] = payment.cardExpiry.split('/');
+                await expiryMonth.selectOption(month.trim());
+              }
+              const expiryYear = page.locator('select[id*="ExpiryYear"], select[name*="card_expirationYear"]').first();
+              if (await expiryYear.isVisible({ timeout: 3000 }).catch(() => false)) {
+                const [, year] = payment.cardExpiry.split('/');
+                await expiryYear.selectOption(`20${year.trim()}`);
+              }
+              const cvvField = page.locator('input[id*="card_cvNumber"], input[name*="card_cvNumber"], input[autocomplete="cc-csc"]').first();
+              if (await cvvField.isVisible({ timeout: 3000 })) await cvvField.fill(payment.cardCvv);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-card-filled.png' }).catch(() => {});
+
+            // Step 6: Place order
+            console.error('[Nedco] Step 6: Placing order');
+            const placeOrderBtn = page.locator('button:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order"), button[id*="placeOrder"]').first();
+            if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
+              await placeOrderBtn.click();
+              await page.waitForTimeout(10000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-confirmation.png' }).catch(() => {});
+            console.error('[Nedco] Final URL:', page.url());
+
+            // Step 7: Capture order number
+            const bodyText = await page.textContent('body');
+            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/confirmation\s*:?\s*([A-Z0-9-]{5,20})/i);
+            const orderId = orderMatch?.[1];
+            console.error('[Nedco] Order ID:', orderId || 'not found');
+            if (!orderId) {
+              const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+              console.error('[Nedco] Page body snippet:', bodySnippet);
+            }
+            return { success: true, orderId };
+          } catch (checkoutErr: any) {
+            console.error('[Nedco] Checkout error:', checkoutErr.message);
+            await page.screenshot({ path: process.cwd() + '/public/debug-nedco-error.png' }).catch(() => {});
+            return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+          }
+        }
+
         return { success: false, inCart: true };
       }
     }

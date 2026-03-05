@@ -177,6 +177,104 @@ export async function placeRonaOrder(
         await addToCartBtn.click();
         await page.waitForTimeout(2000);
         console.error(`[Rona] Added to cart: ${product}`);
+
+        // ── Checkout automatique si adresse et paiement fournis ──
+        if (deliveryAddress && payment) {
+          try {
+            // Step 1: Navigate to cart
+            console.error('[Rona] Step 1: Navigating to cart');
+            await page.goto('https://www.rona.ca/fr/panier', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(3000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-cart.png' }).catch(() => {});
+            console.error('[Rona] Cart URL:', page.url());
+
+            // Step 2: Click checkout
+            console.error('[Rona] Step 2: Clicking checkout');
+            const checkoutBtn = page.locator('button:has-text("Passer à la caisse"), button:has-text("Checkout"), a:has-text("Passer à la caisse"), a:has-text("Proceed to Checkout"), a[href*="checkout"]').first();
+            await checkoutBtn.click({ timeout: 10000 });
+            await page.waitForTimeout(5000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-checkout.png' }).catch(() => {});
+            console.error('[Rona] Checkout URL:', page.url());
+
+            // Step 3: Fill delivery address
+            console.error('[Rona] Step 3: Filling delivery address');
+            const addressField = page.locator('input[name*="address"], input[id*="address"], input[placeholder*="Adresse"], input[placeholder*="Address"], input[autocomplete="street-address"]').first();
+            if (await addressField.isVisible({ timeout: 8000 })) {
+              await addressField.fill(deliveryAddress);
+              await page.waitForTimeout(1000);
+              // Select first autocomplete suggestion if dropdown appears
+              const suggestion = page.locator('[class*="suggestion"], [class*="autocomplete"] li, [role="option"]').first();
+              if (await suggestion.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await suggestion.click();
+                await page.waitForTimeout(1000);
+              }
+              console.error('[Rona] Address filled');
+            } else {
+              console.error('[Rona] No address field — may already be saved');
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-address.png' }).catch(() => {});
+
+            // Step 4: Continue to payment
+            console.error('[Rona] Step 4: Continue to payment');
+            const continueBtn = page.locator('button:has-text("Continuer"), button:has-text("Continue"), button[type="submit"]').first();
+            if (await continueBtn.isVisible({ timeout: 5000 })) {
+              await continueBtn.click();
+              await page.waitForTimeout(4000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-payment.png' }).catch(() => {});
+            console.error('[Rona] Payment URL:', page.url());
+
+            // Step 5: Fill card details (try iframe first, then direct)
+            console.error('[Rona] Step 5: Filling card details');
+            const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[title*="card"], iframe[name*="card"], iframe[id*="card"], iframe[title*="credit"]').first();
+            const iframeCardInput = cardFrame.locator('input[name*="cardnumber"], input[autocomplete="cc-number"], input').first();
+            if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+              console.error('[Rona] Card in iframe — filling');
+              await iframeCardInput.fill(payment.cardNumber);
+              const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
+              if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) await iframeExpiry.fill(payment.cardExpiry);
+              const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"]').first();
+              if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) await iframeCvv.fill(payment.cardCvv);
+            } else {
+              console.error('[Rona] Card direct input — filling');
+              const cardNumberField = page.locator('input[name*="card"], input[id*="card-number"], input[autocomplete="cc-number"]').first();
+              if (await cardNumberField.isVisible({ timeout: 5000 })) await cardNumberField.fill(payment.cardNumber);
+              const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[autocomplete="cc-exp"]').first();
+              if (await expiryField.isVisible({ timeout: 3000 })) await expiryField.fill(payment.cardExpiry);
+              const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[autocomplete="cc-csc"]').first();
+              if (await cvvField.isVisible({ timeout: 3000 })) await cvvField.fill(payment.cardCvv);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-card-filled.png' }).catch(() => {});
+
+            // Step 6: Place order
+            console.error('[Rona] Step 6: Placing order');
+            const placeOrderBtn = page.locator('button:has-text("Passer la commande"), button:has-text("Place Order"), button:has-text("Submit Order"), button:has-text("Commander")').first();
+            if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
+              await placeOrderBtn.click();
+              await page.waitForTimeout(10000);
+            }
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-confirmation.png' }).catch(() => {});
+            console.error('[Rona] Final URL:', page.url());
+
+            // Step 7: Capture order number
+            const bodyText = await page.textContent('body');
+            const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
+              || bodyText?.match(/confirmation\s*#?\s*([A-Z0-9-]{5,20})/i);
+            const orderId = orderMatch?.[1];
+            console.error('[Rona] Order ID:', orderId || 'not found');
+            if (!orderId) {
+              const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+              console.error('[Rona] Page body snippet:', bodySnippet);
+            }
+            return { success: true, orderId };
+          } catch (checkoutErr: any) {
+            console.error('[Rona] Checkout error:', checkoutErr.message);
+            await page.screenshot({ path: process.cwd() + '/public/debug-rona-error.png' }).catch(() => {});
+            return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+          }
+        }
+
         return { success: false, inCart: true };
       }
     }
