@@ -46,11 +46,18 @@ export async function importRonaCatalog(
 
     // Login — Rona is a React SPA; networkidle needed to render form fields
     await page.goto('https://www.rona.ca/fr/connexion', {
-      waitUntil: 'networkidle', timeout: 45000,
-    }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
       waitUntil: 'domcontentloaded', timeout: 30000,
-    }));
-    await page.waitForTimeout(4000);
+    });
+
+    // Cloudflare warmup — wait for challenge to resolve (up to 2 minutes)
+    for (let i = 0; i < 60; i++) {
+      const title = await page.title().catch(() => '');
+      const isChallenge = title.length < 5 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment') || title.toLowerCase().includes('just a');
+      if (!isChallenge) break;
+      if (i === 59) return { total: 0, error: 'Cloudflare challenge Rona non résolu après 2 minutes' };
+      await page.waitForTimeout(2000);
+    }
+    await page.waitForTimeout(3000);
 
     // Dismiss OneTrust cookie banner
     const cookieBtn = page.locator([
