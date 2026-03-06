@@ -74,13 +74,28 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   console.log('[Guillevin] Submit clicked, waiting for redirect...');
 
   // Wait for redirect back to guillevin.com
-  await page.waitForFunction(
+  const redirected = await page.waitForFunction(
     () => window.location.hostname.includes('guillevin.com'),
     { timeout: 30000 }
-  ).catch(() => {});
-  await page.waitForTimeout(3000);
+  ).then(() => true).catch(() => false);
 
+  if (!redirected) {
+    // Check what happened — still on Auth0? Error message?
+    const afterUrl = page.url();
+    const afterTitle = await page.title().catch(() => '');
+    const errorText = await page.locator('[id*="error"], [class*="error"], [role="alert"]').first()
+      .textContent({ timeout: 2000 }).catch(() => '');
+    console.log(`[Guillevin] Redirect failed — URL: ${afterUrl}, title: ${afterTitle}, error: ${errorText}`);
+    throw new Error(
+      errorText?.trim()
+        ? `Guillevin: ${errorText.trim()}`
+        : `Connexion échouée — vérifiez vos identifiants Guillevin (URL: ${afterUrl})`
+    );
+  }
+
+  await page.waitForTimeout(3000);
   const url = page.url();
+  console.log('[Guillevin] Final URL:', url);
   return url.includes('guillevin.com') && !url.includes('login');
 }
 
