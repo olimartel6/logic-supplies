@@ -85,8 +85,10 @@ export default function InventoryPage() {
     loadData();
   }, [router]);
 
+  const receivedProductNames = new Set(receivedOrders.map(o => o.product.toLowerCase()));
   const filteredItems = items.filter(i =>
-    i.name.toLowerCase().includes(search.toLowerCase()) || i.barcode.includes(search)
+    (i.name.toLowerCase().includes(search.toLowerCase()) || i.barcode.includes(search))
+    && !receivedProductNames.has(i.name.toLowerCase())
   );
 
   async function handleAddItem(e: React.FormEvent) {
