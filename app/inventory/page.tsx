@@ -41,7 +41,7 @@ export default function InventoryPage() {
   const [newMinStock, setNewMinStock] = useState('');
   const [trackedOrders, setTrackedOrders] = useState<ReceivedOrder[]>([]);
   const [trackingFilter, setTrackingFilter] = useState<'ordered' | 'shipped' | 'received'>('ordered');
-  const [pickupOrders, setPickupOrders] = useState<ReceivedOrder[]>([]);
+  const [receivedOrders, setReceivedOrders] = useState<ReceivedOrder[]>([]);
   const router = useRouter();
 
   function loadData(tracking?: string) {
@@ -51,8 +51,8 @@ export default function InventoryPage() {
       fetch('/api/inventory/locations').then(r => r.json()),
       fetch('/api/inventory/stock').then(r => r.json()),
       fetch(`/api/requests?tracking=${tf}&limit=50`).then(r => r.json()).then(data => data.requests || []),
-      fetch('/api/requests?tracking=received&limit=50').then(r => r.json()).then(data => (data.requests || []).filter((o: ReceivedOrder) => !o.picked_up_by_name)),
-    ]).then(([i, l, s, to, pu]) => { setItems(i); setLocations(l); setStock(s); setTrackedOrders(to); setPickupOrders(pu); });
+      fetch('/api/requests?tracking=received&limit=50').then(r => r.json()).then(data => data.requests || []),
+    ]).then(([i, l, s, to, ro]) => { setItems(i); setLocations(l); setStock(s); setTrackedOrders(to); setReceivedOrders(ro); });
   }
 
   async function handleTrackingUpdate(id: number, newStatus: string) {
@@ -70,6 +70,12 @@ export default function InventoryPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
+    loadData();
+  }
+
+  async function handleDeleteOrder(id: number) {
+    if (!confirm('Supprimer cette commande ?')) return;
+    await fetch(`/api/requests/${id}`, { method: 'DELETE' });
     loadData();
   }
 
@@ -212,7 +218,6 @@ export default function InventoryPage() {
               {([
                 { key: 'ordered', label: '📦 Commandées', color: 'blue' },
                 { key: 'shipped', label: '🚚 Expédiées', color: 'violet' },
-                { key: 'received', label: '✅ Reçues', color: 'emerald' },
               ] as const).map(f => (
                 <button
                   key={f.key}
@@ -228,7 +233,7 @@ export default function InventoryPage() {
               ))}
             </div>
             {trackedOrders.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">Aucune commande {trackingFilter === 'ordered' ? 'commandée' : trackingFilter === 'shipped' ? 'expédiée' : 'reçue'}</p>
+              <p className="text-xs text-gray-400 text-center py-4">Aucune commande {trackingFilter === 'ordered' ? 'commandée' : 'expédiée'}</p>
             ) : (
               <div className="space-y-2">
                 {trackedOrders.map(o => (
@@ -236,15 +241,6 @@ export default function InventoryPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{o.product}</p>
                       <p className="text-xs text-gray-500">{o.quantity} {o.unit}{o.job_site_name ? ` · ${o.job_site_name}` : ''}{o.order_supplier ? ` · ${o.order_supplier}` : o.supplier ? ` · ${o.supplier}` : ''}</p>
-                      {o.tracking_status === 'received' && o.picked_up_by_name ? (
-                        <p className="text-xs text-emerald-600 mt-0.5">
-                          Récupéré par {o.picked_up_by_name}
-                          {o.picked_up_job_site_name && ` pour ${o.picked_up_job_site_name}`}
-                          {o.picked_up_at && ` le ${new Date(o.picked_up_at).toLocaleDateString('fr-CA')}`}
-                        </p>
-                      ) : o.tracking_status === 'received' ? (
-                        <p className="text-xs text-blue-600 mt-0.5">Disponible au bureau</p>
-                      ) : null}
                     </div>
                     <div className="shrink-0 ml-2 flex items-center gap-2">
                       {o.tracking_status === 'ordered' && (
@@ -263,19 +259,15 @@ export default function InventoryPage() {
                           ✅ Reçu
                         </button>
                       )}
-                      {o.tracking_status === 'received' && !o.picked_up_by_name && (
-                        <button
-                          onClick={() => handlePickup(o.id)}
-                          className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg font-medium hover:bg-orange-200 transition"
-                        >
-                          📥 Récupérer
-                        </button>
-                      )}
-                      {o.tracking_status === 'received' && o.picked_up_by_name && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
-                          Récupéré
-                        </span>
-                      )}
+                      <button
+                        onClick={() => handleDeleteOrder(o.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 transition p-1"
+                        title="Supprimer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -296,24 +288,46 @@ export default function InventoryPage() {
           </div>
         )}
 
-        {pickupOrders.length > 0 && (
-          <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl p-4">
-            <h2 className="text-sm font-semibold text-orange-800 mb-2">
-              📥 À récupérer ({pickupOrders.length})
-            </h2>
+        {receivedOrders.length > 0 && (
+          <div className="mb-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+            <h2 className="text-sm font-bold text-gray-900 mb-3">✅ Reçues</h2>
             <div className="space-y-2">
-              {pickupOrders.map(o => (
-                <div key={o.id} className="flex items-center justify-between bg-white rounded-xl p-3">
+              {receivedOrders.map(o => (
+                <div key={o.id} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{o.product}</p>
                     <p className="text-xs text-gray-500">{o.quantity} {o.unit}{o.job_site_name ? ` · ${o.job_site_name}` : ''}</p>
+                    {o.picked_up_by_name ? (
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        Récupéré par {o.picked_up_by_name}
+                        {o.picked_up_job_site_name && ` pour ${o.picked_up_job_site_name}`}
+                        {o.picked_up_at && ` le ${new Date(o.picked_up_at).toLocaleDateString('fr-CA')}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-blue-600 mt-0.5">Disponible au bureau</p>
+                    )}
                   </div>
-                  <button
-                    onClick={() => handlePickup(o.id)}
-                    className="shrink-0 ml-2 text-xs bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-orange-700 transition"
-                  >
-                    Récupérer
-                  </button>
+                  <div className="shrink-0 ml-2 flex items-center gap-2">
+                    {!o.picked_up_by_name && (
+                      <button
+                        onClick={() => handlePickup(o.id)}
+                        className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg font-medium hover:bg-orange-200 transition"
+                      >
+                        📥 Récupérer
+                      </button>
+                    )}
+                    {isManager && (
+                      <button
+                        onClick={() => handleDeleteOrder(o.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 transition p-1"
+                        title="Supprimer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
