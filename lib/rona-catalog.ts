@@ -1,9 +1,27 @@
-import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
-import { decrypt } from './encrypt';
 
 import type { ImportProgress } from './westburne-catalog';
 export type { ImportProgress };
+
+// Rona uses Constructor.io for product search/browse
+const CNSTRC_KEY = 'key_DezNd1p5HBzjHuxk';
+const CNSTRC_BASE = 'https://ac.cnstrc.com';
+
+// Map category names to Constructor.io group_ids via autocomplete
+async function findGroupId(categoryName: string): Promise<string | null> {
+  const resp = await fetch(
+    `${CNSTRC_BASE}/autocomplete/${encodeURIComponent(categoryName)}?key=${CNSTRC_KEY}&num_results=3`,
+    { headers: { 'Accept': 'application/json' } }
+  );
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  const suggestions = data.sections?.['Search Suggestions'] || [];
+  for (const s of suggestions) {
+    const groups = s.data?.groups || [];
+    if (groups.length > 0) return groups[0].group_id;
+  }
+  return null;
+}
 
 export async function importRonaCatalog(
   onProgress?: (p: ImportProgress) => void,
@@ -11,17 +29,10 @@ export async function importRonaCatalog(
 ): Promise<{ total: number; error?: string }> {
   const db = getDb();
 
-  const account = db.prepare(
-    "SELECT * FROM supplier_accounts WHERE supplier = 'rona' AND active = 1 AND company_id = ? LIMIT 1"
-  ).get(companyId ?? null) as any;
-  if (!account) return { total: 0, error: 'Aucun compte Rona configuré' };
-
   const categories = db.prepare(
     "SELECT * FROM supplier_categories WHERE supplier = 'rona' AND enabled = 1 AND company_id = ?"
   ).all(companyId ?? null) as any[];
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
-
-  const password = decrypt(account.password_encrypted);
 
   const upsert = db.prepare(`
     INSERT INTO products (supplier, sku, name, image_url, price, unit, category, last_synced)
@@ -31,184 +42,77 @@ export async function importRonaCatalog(
       unit = excluded.unit, category = excluded.category, last_synced = CURRENT_TIMESTAMP
   `);
 
-  const browser = await createBrowserbaseBrowser({ proxies: true });
   let totalImported = 0;
 
   try {
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'fr-CA',
-    });
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    });
-    const page = await context.newPage();
-
-    // Step 1: Warm up on homepage to get DataDome cookies
-    console.error('[Rona catalog] Step 1: Warming up on homepage');
-    await page.goto('https://www.rona.ca/fr', {
-      waitUntil: 'domcontentloaded', timeout: 30000,
-    });
-
-    // Wait for DataDome challenge to resolve (up to 2 minutes)
-    for (let i = 0; i < 60; i++) {
-      const hasDataDome = await page.evaluate(() =>
-        document.body?.innerHTML?.includes('captcha-delivery.com') || false
-      ).catch(() => false);
-      const title = await page.title().catch(() => '');
-      const isBlocked = hasDataDome || title.length < 5 || title === 'rona.ca';
-      if (!isBlocked) {
-        console.error(`[Rona catalog] DataDome resolved after ${i * 2}s, title="${title}"`);
-        break;
-      }
-      if (i === 59) return { total: 0, error: 'DataDome captcha Rona non résolu après 2 minutes' };
-      await page.waitForTimeout(2000);
-    }
-    await page.waitForTimeout(3000);
-
-    // Dismiss OneTrust cookie banner
-    const cookieBtn = page.locator([
-      '#onetrust-accept-btn-handler',
-      'button:has-text("Accepter tout")',
-      'button:has-text("Accept All")',
-      'button:has-text("Tout accepter")',
-      'button:has-text("J\'accepte")',
-    ].join(', ')).first();
-    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await cookieBtn.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Step 2: Navigate to login page (now with DataDome cookies)
-    console.error('[Rona catalog] Step 2: Navigating to login page');
-    await page.goto('https://www.rona.ca/fr/connexion', {
-      waitUntil: 'networkidle', timeout: 45000,
-    }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
-      waitUntil: 'domcontentloaded', timeout: 30000,
-    }));
-    await page.waitForTimeout(5000);
-
-    // Check if DataDome blocked login page too
-    const loginHasDD = await page.evaluate(() =>
-      document.body?.innerHTML?.includes('captcha-delivery.com') || false
-    ).catch(() => false);
-    const loginTitle = await page.title().catch(() => '');
-    const loginInputs = await page.locator('input:not([type="hidden"])').count().catch(() => 0);
-    console.error(`[Rona catalog] login page: title="${loginTitle}" datadome=${loginHasDD} inputs=${loginInputs} url=${page.url()}`);
-
-    // If still blocked, try one more reload
-    if (loginHasDD || loginInputs === 0) {
-      console.error('[Rona catalog] Still blocked, waiting 10s and reloading');
-      await page.waitForTimeout(10000);
-      await page.reload({ waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
-      await page.waitForTimeout(5000);
-      const retryInputs = await page.locator('input:not([type="hidden"])').count().catch(() => 0);
-      console.error(`[Rona catalog] after retry: inputs=${retryInputs} url=${page.url()}`);
-    }
-
-    const emailField = page.locator([
-      'input[name="email"]',
-      'input[id="email"]',
-      'input[autocomplete="email"]',
-      'input[type="email"]',
-      'input[name="logonId"]',
-      'input[id*="logon"]',
-      'input[placeholder*="courriel"]',
-      'input[placeholder*="email"]',
-      'input[type="text"]',
-    ].join(', ')).first();
-    await emailField.waitFor({ timeout: 30000 });
-    await emailField.fill(account.username);
-    await page.waitForTimeout(300);
-
-    const passwordField = page.locator([
-      'input[name="password"]',
-      'input[id="password"]',
-      'input[type="password"]',
-    ].join(', ')).first();
-    await passwordField.waitFor({ timeout: 10000 });
-    await passwordField.fill(password);
-    await page.waitForTimeout(300);
-
-    await passwordField.press('Enter');
-    await page.waitForFunction(
-      () => !window.location.pathname.includes('/connexion') && !window.location.pathname.includes('/login'),
-      { timeout: 20000 }
-    ).catch(() => {});
-    await page.waitForTimeout(1500);
-
-    if (!page.url().includes('rona.ca') || page.url().includes('/connexion') || page.url().includes('/login')) {
-      return { total: 0, error: 'Login Rona échoué' };
-    }
-
     for (const cat of categories) {
+      // Find Constructor.io group_id for this category
+      const groupId = await findGroupId(cat.category_name);
+      console.error(`[Rona catalog] Category "${cat.category_name}" → group_id: ${groupId || 'not found'}`);
+
       let pageNum = 1;
       let categoryTotal = 0;
+      let totalResults = 0;
       onProgress?.({ category: cat.category_name, imported: 0, total: 0, done: false });
 
       while (true) {
-        const url = `https://www.rona.ca${cat.category_url}?page=${pageNum}`;
-        let products: any[] = [];
+        let results: any[] = [];
 
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await page.waitForTimeout(2000);
-
-          products = await page.evaluate(() => {
-            const items: any[] = [];
-            const cards = document.querySelectorAll(
-              'article[class*="product"], .product-card, [class*="product-tile"]'
+          if (groupId) {
+            // Browse by category group_id
+            const resp = await fetch(
+              `${CNSTRC_BASE}/browse/group_id/${groupId}?key=${CNSTRC_KEY}&page=${pageNum}&num_results_per_page=100&section=Products`,
+              { headers: { 'Accept': 'application/json' } }
             );
-            for (const card of Array.from(cards)) {
-              const nameEl = card.querySelector('a[class*="product-name"], .product-name');
-              const name = nameEl?.textContent?.trim() || '';
-              if (name.length < 3) continue;
-
-              const imgEl = card.querySelector('img[class*="product"], .product-image img') as HTMLImageElement | null;
-              const image_url = imgEl?.src || '';
-
-              const skuEl = card.querySelector('[class*="sku"], [data-sku]');
-              const sku = skuEl?.textContent?.trim() || name.slice(0, 40);
-
-              const priceEl = card.querySelector('[class*="price"]:not([class*="old"])');
-              const priceText = priceEl?.textContent?.trim() || '';
-              const priceMatch = priceText.match(/[\d]+[.,][\d]{2}/);
-              const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : null;
-
-              items.push({ name, sku, image_url, price, unit: 'units' });
-            }
-            return items;
-          });
+            if (!resp.ok) break;
+            const data = await resp.json();
+            results = data.response?.results || [];
+            totalResults = data.response?.total_num_results || 0;
+          } else {
+            // Fallback: search by category name
+            const resp = await fetch(
+              `${CNSTRC_BASE}/search/${encodeURIComponent(cat.category_name)}?key=${CNSTRC_KEY}&page=${pageNum}&num_results_per_page=100&section=Products`,
+              { headers: { 'Accept': 'application/json' } }
+            );
+            if (!resp.ok) break;
+            const data = await resp.json();
+            results = data.response?.results || [];
+            totalResults = data.response?.total_num_results || 0;
+          }
         } catch {
           break;
         }
 
-        if (products.length === 0) break;
+        if (results.length === 0) break;
 
-        const insertMany = db.transaction((prods: any[]) => {
-          for (const p of prods) {
-            try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch {}
+        const insertMany = db.transaction((items: any[]) => {
+          for (const r of items) {
+            const sku = r.data?.item_number || r.data?.id || '';
+            const name = r.value || '';
+            const image_url = r.data?.image_url || '';
+            if (!sku || name.length < 3) continue;
+            try { upsert.run(sku, name, image_url, null, 'unité', cat.category_name); } catch {}
           }
         });
-        insertMany(products);
+        insertMany(results);
 
-        categoryTotal += products.length;
-        totalImported += products.length;
-        onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
+        categoryTotal += results.length;
+        totalImported += results.length;
+        onProgress?.({ category: cat.category_name, imported: categoryTotal, total: totalResults, done: false });
 
-        if (products.length < 20) break;
+        if (results.length < 100) break;
         pageNum++;
         if (pageNum > 50) break;
       }
 
+      console.error(`[Rona catalog] "${cat.category_name}": ${categoryTotal} products imported`);
       onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: true });
     }
 
     return { total: totalImported };
   } catch (err: any) {
     return { total: totalImported, error: err.message };
-  } finally {
-    await browser.close();
   }
 }
 
