@@ -119,12 +119,12 @@ export async function getBmrPrice(username: string, password: string, product: s
     if (!loggedIn) return null;
 
     await page.goto(
-      `https://www.bmr.ca/fr/search/?q=${encodeURIComponent(product)}`,
+      `https://www.bmr.ca/fr/catalogsearch/result/?q=${encodeURIComponent(product)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    const priceEl = page.locator('.price .price, [data-price-type="finalPrice"] .price, .price-wrapper .price').first();
+    const priceEl = page.locator('.price-box .price, [data-price-type="finalPrice"] .price, .price-wrapper .price').first();
     if (await priceEl.isVisible({ timeout: 3000 }).catch(() => false)) {
       const text = await priceEl.textContent().catch(() => '');
       const match = text?.match(/[\d]+[.,][\d]{2}/);
@@ -158,19 +158,19 @@ export async function placeBmrOrder(
 
     log.push(`Searching for product: ${product}`);
     await page.goto(
-      `https://www.bmr.ca/fr/search/?q=${encodeURIComponent(product)}`,
+      `https://www.bmr.ca/fr/catalogsearch/result/?q=${encodeURIComponent(product)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
     console.error(`[BMR] Searching for: ${product}`);
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     const firstProduct = page.locator(
-      'a.product-item-link, .product-name a, h3 a[href*="/fr/"]'
-    ).first();
+      '.product-item-info a.link, .link-product a.link, a.product-item-link'
+    ).filter({ hasText: /\w{5,}/ }).first();
     if (await firstProduct.isVisible({ timeout: 5000 }).catch(() => false)) {
       log.push('Found product, clicking');
       await firstProduct.click();
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
 
       const qtyInput = page.locator('input#qty, input[name="qty"], input[title*="qty"]').first();
       if (await qtyInput.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -205,8 +205,9 @@ export async function placeBmrOrder(
             // Step 2: Click checkout (Magento: "Passer à la caisse")
             log.push('Step 2: Clicking checkout button');
             console.error('[BMR] Step 2: Clicking checkout');
-            const checkoutBtn = page.locator('button:has-text("Passer à la caisse"), button:has-text("Proceed to Checkout"), button[data-role="proceed-to-checkout"], a[href*="checkout"]').first();
-            await checkoutBtn.click({ timeout: 10000 });
+            const checkoutBtn = page.locator('button:has-text("Passer à la caisse"), button:has-text("Proceed to Checkout"), button[data-role="proceed-to-checkout"], a.action.primary.checkout[href*="checkout"]').first();
+            await checkoutBtn.waitFor({ timeout: 10000 });
+            await checkoutBtn.click();
             await page.waitForTimeout(5000);
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-checkout.png' }).catch(() => {});
             log.push(`Checkout URL: ${page.url()}`);

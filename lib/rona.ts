@@ -30,15 +30,25 @@ async function createRonaPage(browser: any) {
 }
 
 async function loginToRona(page: any, username: string, password: string): Promise<boolean> {
-  // networkidle waits for the React SPA to finish rendering the login form
-  await page.goto('https://www.rona.ca/fr/connexion', {
-    waitUntil: 'networkidle', timeout: 45000,
-  }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
-    waitUntil: 'domcontentloaded', timeout: 30000,
-  }));
-  await page.waitForTimeout(4000);
+  // Step 1: Warm up on homepage to get DataDome/Cloudflare cookies
+  console.error('[Rona] Step 1: Homepage warmup');
+  await page.goto('https://www.rona.ca/fr', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  for (let i = 0; i < 30; i++) {
+    const hasDD = await page.evaluate(() => document.body?.innerHTML?.includes('captcha-delivery.com') || false).catch(() => false);
+    const title = await page.title().catch(() => '');
+    if (!hasDD && title.length > 5) {
+      console.error(`[Rona] Homepage OK after ${i * 2}s`);
+      break;
+    }
+    if (i === 29) {
+      console.error('[Rona] Homepage blocked');
+      return false;
+    }
+    await page.waitForTimeout(2000);
+  }
+  await page.waitForTimeout(5000);
 
-  // Dismiss OneTrust cookie banner — must happen before interacting with form
+  // Dismiss OneTrust cookie banner
   const cookieBtn = page.locator([
     '#onetrust-accept-btn-handler',
     'button:has-text("Accepter tout")',
@@ -51,7 +61,27 @@ async function loginToRona(page: any, username: string, password: string): Promi
     await page.waitForTimeout(1000);
   }
 
-  // Log page state for debugging
+  // Step 2: Navigate to login page with DataDome cookies
+  console.error('[Rona] Step 2: Navigating to login page');
+  await page.goto('https://www.rona.ca/fr/connexion', {
+    waitUntil: 'networkidle', timeout: 60000,
+  }).catch(() => {});
+
+  // Wait for the Cloudflare challenge + React SPA to render
+  for (let i = 0; i < 30; i++) {
+    const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => 0);
+    if (inputCount >= 2) {
+      console.error(`[Rona] Login form rendered after ${i * 2}s`);
+      break;
+    }
+    if (i === 29) {
+      const pageTitle = await page.title().catch(() => '');
+      console.error(`[Rona] Login form did not render after 60s, title="${pageTitle}"`);
+      return false;
+    }
+    await page.waitForTimeout(2000);
+  }
+
   const pageUrl = page.url();
   const pageTitle = await page.title().catch(() => '?');
   const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
@@ -97,7 +127,7 @@ async function loginToRona(page: any, username: string, password: string): Promi
 }
 
 export async function testRonaConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createRonaPage(browser);
     const loggedIn = await loginToRona(page, username, password);
@@ -111,7 +141,7 @@ export async function testRonaConnection(username: string, password: string): Pr
 }
 
 export async function getRonaPrice(username: string, password: string, product: string): Promise<number | null> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createRonaPage(browser);
     const loggedIn = await loginToRona(page, username, password);
@@ -142,7 +172,7 @@ export async function placeRonaOrder(
   deliveryAddress?: string, payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
   const log: string[] = [];
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     log.push('Creating browser page');
     const page = await createRonaPage(browser);
