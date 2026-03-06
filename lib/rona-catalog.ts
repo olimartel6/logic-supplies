@@ -44,17 +44,24 @@ export async function importRonaCatalog(
     });
     const page = await context.newPage();
 
-    // Login — Rona is a React SPA; networkidle needed to render form fields
-    await page.goto('https://www.rona.ca/fr/connexion', {
+    // Step 1: Warm up on homepage to get DataDome cookies
+    console.error('[Rona catalog] Step 1: Warming up on homepage');
+    await page.goto('https://www.rona.ca/fr', {
       waitUntil: 'domcontentloaded', timeout: 30000,
     });
 
-    // Cloudflare warmup — wait for challenge to resolve (up to 2 minutes)
+    // Wait for DataDome challenge to resolve (up to 2 minutes)
     for (let i = 0; i < 60; i++) {
+      const hasDataDome = await page.evaluate(() =>
+        document.body?.innerHTML?.includes('captcha-delivery.com') || false
+      ).catch(() => false);
       const title = await page.title().catch(() => '');
-      const isChallenge = title.length < 5 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment') || title.toLowerCase().includes('just a');
-      if (!isChallenge) break;
-      if (i === 59) return { total: 0, error: 'Cloudflare challenge Rona non résolu après 2 minutes' };
+      const isBlocked = hasDataDome || title.length < 5 || title === 'rona.ca';
+      if (!isBlocked) {
+        console.error(`[Rona catalog] DataDome resolved after ${i * 2}s, title="${title}"`);
+        break;
+      }
+      if (i === 59) return { total: 0, error: 'DataDome captcha Rona non résolu après 2 minutes' };
       await page.waitForTimeout(2000);
     }
     await page.waitForTimeout(3000);
@@ -72,30 +79,31 @@ export async function importRonaCatalog(
       await page.waitForTimeout(1000);
     }
 
-    // Log page state for debugging
-    const pageUrl = page.url();
-    const pageTitle = await page.title().catch(() => '?');
-    const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
-    const iframeCount = await page.locator('iframe').count().catch(() => -1);
-    const bodySnippet = await page.evaluate(() => document.body?.innerHTML?.slice(0, 1000) || '').catch(() => '');
-    console.error(`[Rona catalog] login page: url=${pageUrl} title="${pageTitle}" visible-inputs=${inputCount} iframes=${iframeCount}`);
-    console.error(`[Rona catalog] body snippet: ${bodySnippet.slice(0, 500)}`);
+    // Step 2: Navigate to login page (now with DataDome cookies)
+    console.error('[Rona catalog] Step 2: Navigating to login page');
+    await page.goto('https://www.rona.ca/fr/connexion', {
+      waitUntil: 'networkidle', timeout: 45000,
+    }).catch(() => page.goto('https://www.rona.ca/fr/connexion', {
+      waitUntil: 'domcontentloaded', timeout: 30000,
+    }));
+    await page.waitForTimeout(5000);
 
-    // Rona SPA may need extra time to render — wait for any input to appear
-    await page.waitForSelector('input:not([type="hidden"])', { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(2000);
+    // Check if DataDome blocked login page too
+    const loginHasDD = await page.evaluate(() =>
+      document.body?.innerHTML?.includes('captcha-delivery.com') || false
+    ).catch(() => false);
+    const loginTitle = await page.title().catch(() => '');
+    const loginInputs = await page.locator('input:not([type="hidden"])').count().catch(() => 0);
+    console.error(`[Rona catalog] login page: title="${loginTitle}" datadome=${loginHasDD} inputs=${loginInputs} url=${page.url()}`);
 
-    // Re-check after wait
-    const inputCount2 = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
-    console.error(`[Rona catalog] after extra wait: visible-inputs=${inputCount2} url=${page.url()}`);
-
-    // If still no inputs, try reloading the page
-    if (inputCount2 === 0) {
-      console.error('[Rona catalog] No inputs found, reloading page');
-      await page.reload({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+    // If still blocked, try one more reload
+    if (loginHasDD || loginInputs === 0) {
+      console.error('[Rona catalog] Still blocked, waiting 10s and reloading');
+      await page.waitForTimeout(10000);
+      await page.reload({ waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
       await page.waitForTimeout(5000);
-      const inputCount3 = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
-      console.error(`[Rona catalog] after reload: visible-inputs=${inputCount3} url=${page.url()}`);
+      const retryInputs = await page.locator('input:not([type="hidden"])').count().catch(() => 0);
+      console.error(`[Rona catalog] after retry: inputs=${retryInputs} url=${page.url()}`);
     }
 
     const emailField = page.locator([
