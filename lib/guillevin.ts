@@ -40,12 +40,29 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
-  // Wait for Shopify redirect + SPA render
-  await page.waitForTimeout(8000);
 
-  // Debug: log current URL and try to find any input
+  // Cloudflare Turnstile warmup — wait for challenge to resolve
+  console.log('[Guillevin] Waiting for Cloudflare challenge to resolve...');
+  for (let i = 0; i < 60; i++) {
+    const title = await page.title().catch(() => '');
+    const url = page.url();
+    if (i % 5 === 0) console.log(`[Guillevin] Warmup t=${i * 2}s title="${title}" url=${url}`);
+    // Challenge resolved when title changes from "Un instant…" / "Just a moment"
+    const isChallenge = title.length < 5 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
+    if (!isChallenge) {
+      console.log(`[Guillevin] Challenge resolved at t=${i * 2}s, title="${title}"`);
+      break;
+    }
+    if (i === 59) {
+      throw new Error('Cloudflare challenge non résolu après 2 minutes');
+    }
+    await page.waitForTimeout(2000);
+  }
+  // Extra wait for SPA render after challenge
+  await page.waitForTimeout(4000);
+
   const currentUrl = page.url();
-  console.log('[Guillevin] Page URL after navigation:', currentUrl);
+  console.log('[Guillevin] Page URL after warmup:', currentUrl);
 
   // Step 1: find email field — try multiple strategies
   // Strategy A: standard selectors (works if no shadow DOM)
@@ -204,7 +221,7 @@ async function loginToGuillevin(page: any, username: string, password: string): 
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);
@@ -222,7 +239,7 @@ export async function getGuillevinPrice(
   password: string,
   product: string
 ): Promise<number | null> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);
@@ -258,7 +275,7 @@ export async function placeGuillevinOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
-  const browser = await createBrowserbaseBrowser();
+  const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
     const page = await createGuillevinPage(browser);
     const loggedIn = await loginToGuillevin(page, username, password);
