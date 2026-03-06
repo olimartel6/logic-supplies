@@ -245,7 +245,7 @@ function ApprovalsContent() {
   return (
     <div className={`${selectMode && selectedIds.size > 0 ? 'pb-36' : 'pb-20'} md:pb-6 md:ml-56`}>
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
-      <div className="md:flex md:h-[calc(100vh-56px)]">
+      <div className="md:flex md:h-screen">
         {/* ── LEFT PANEL: filters + request list ── */}
         <div className="max-w-lg mx-auto px-4 py-6 md:max-w-none md:mx-0 md:w-[420px] md:flex-shrink-0 md:overflow-y-auto md:border-r md:border-gray-200">
         <div className="flex items-center justify-between mb-4">
