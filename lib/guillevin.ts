@@ -73,30 +73,29 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   await submitBtn.click();
   console.log('[Guillevin] Submit clicked, waiting for redirect...');
 
-  // Wait for redirect back to guillevin.com
+  // Wait for redirect away from Auth0 (goes to guillevin.com or shopify.com/60111716441)
   const redirected = await page.waitForFunction(
-    () => window.location.hostname.includes('guillevin.com'),
+    () => !window.location.hostname.includes('auth0.com'),
     { timeout: 30000 }
   ).then(() => true).catch(() => false);
 
   if (!redirected) {
-    // Check what happened — still on Auth0? Error message?
     const afterUrl = page.url();
-    const afterTitle = await page.title().catch(() => '');
     const errorText = await page.locator('[id*="error"], [class*="error"], [role="alert"]').first()
       .textContent({ timeout: 2000 }).catch(() => '');
-    console.log(`[Guillevin] Redirect failed — URL: ${afterUrl}, title: ${afterTitle}, error: ${errorText}`);
+    console.log(`[Guillevin] Login failed — URL: ${afterUrl}, error: ${errorText}`);
     throw new Error(
       errorText?.trim()
         ? `Guillevin: ${errorText.trim()}`
-        : `Connexion échouée — vérifiez vos identifiants Guillevin (URL: ${afterUrl})`
+        : 'Identifiants Guillevin invalides'
     );
   }
 
   await page.waitForTimeout(3000);
   const url = page.url();
   console.log('[Guillevin] Final URL:', url);
-  return url.includes('guillevin.com') && !url.includes('login');
+  // Success if redirected to guillevin.com or Shopify account (shop 60111716441)
+  return (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !url.includes('login');
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
