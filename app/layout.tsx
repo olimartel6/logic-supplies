@@ -1,10 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = localFont({
+  src: "./fonts/InterVariable.woff2",
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "logicSupplies",
