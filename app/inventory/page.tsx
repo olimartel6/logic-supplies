@@ -41,6 +41,7 @@ export default function InventoryPage() {
   const [newMinStock, setNewMinStock] = useState('');
   const [trackedOrders, setTrackedOrders] = useState<ReceivedOrder[]>([]);
   const [trackingFilter, setTrackingFilter] = useState<'ordered' | 'shipped' | 'received'>('ordered');
+  const [pickupOrders, setPickupOrders] = useState<ReceivedOrder[]>([]);
   const router = useRouter();
 
   function loadData(tracking?: string) {
@@ -50,7 +51,8 @@ export default function InventoryPage() {
       fetch('/api/inventory/locations').then(r => r.json()),
       fetch('/api/inventory/stock').then(r => r.json()),
       fetch(`/api/requests?tracking=${tf}&limit=50`).then(r => r.json()).then(data => data.requests || []),
-    ]).then(([i, l, s, to]) => { setItems(i); setLocations(l); setStock(s); setTrackedOrders(to); });
+      fetch('/api/requests?tracking=received&limit=50').then(r => r.json()).then(data => (data.requests || []).filter((o: ReceivedOrder) => !o.picked_up_by_name)),
+    ]).then(([i, l, s, to, pu]) => { setItems(i); setLocations(l); setStock(s); setTrackedOrders(to); setPickupOrders(pu); });
   }
 
   async function handleTrackingUpdate(id: number, newStatus: string) {
@@ -291,6 +293,30 @@ export default function InventoryPage() {
             </div>
             <p className="text-sm">{search ? 'Aucun article trouvé' : 'Aucun article en inventaire'}</p>
             {!search && <p className="text-xs mt-1">Scannez un code-barres ou utilisez "+ Article" pour ajouter</p>}
+          </div>
+        )}
+
+        {pickupOrders.length > 0 && (
+          <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl p-4">
+            <h2 className="text-sm font-semibold text-orange-800 mb-2">
+              📥 À récupérer ({pickupOrders.length})
+            </h2>
+            <div className="space-y-2">
+              {pickupOrders.map(o => (
+                <div key={o.id} className="flex items-center justify-between bg-white rounded-xl p-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{o.product}</p>
+                    <p className="text-xs text-gray-500">{o.quantity} {o.unit}{o.job_site_name ? ` · ${o.job_site_name}` : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => handlePickup(o.id)}
+                    className="shrink-0 ml-2 text-xs bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-orange-700 transition"
+                  >
+                    Récupérer
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
