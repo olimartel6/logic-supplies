@@ -52,6 +52,20 @@ const themes: Record<string, SectionTheme> = {
     subtext: 'text-gray-700',
     checkboxAccent: 'accent-gray-600',
   },
+  green: {
+    bg: 'bg-lime-50',
+    border: 'border-lime-200',
+    heading: 'text-lime-900',
+    subtext: 'text-lime-700',
+    checkboxAccent: 'accent-lime-600',
+  },
+  cyan: {
+    bg: 'bg-cyan-50',
+    border: 'border-cyan-200',
+    heading: 'text-cyan-900',
+    subtext: 'text-cyan-700',
+    checkboxAccent: 'accent-cyan-600',
+  },
 };
 
 function AccordionSection({
@@ -101,7 +115,7 @@ function SupplierSection({
   toggling = false,
   onToggleVisible,
 }: {
-  supplierKey: 'canac' | 'homedepot' | 'guillevin';
+  supplierKey: 'canac' | 'homedepot' | 'guillevin' | 'bmr' | 'rona';
   label: string;
   showManualSession?: boolean;
   theme: SectionTheme;
@@ -782,6 +796,32 @@ export default function SettingsPage() {
           />
           </div>
 
+          {/* ─── BMR ─── */}
+          <div>
+          <p className="text-xs font-bold text-lime-500 uppercase tracking-widest mb-2 px-1">BMR</p>
+          <SupplierSection
+            supplierKey="bmr"
+            label="BMR"
+            theme={themes.green}
+            visible={supplierVisibility.find(v => v.supplier === 'bmr')?.visible ?? false}
+            toggling={togglingSupplier === 'bmr'}
+            onToggleVisible={v => handleToggleVisibility('bmr', v)}
+          />
+          </div>
+
+          {/* ─── RONA ─── */}
+          <div>
+          <p className="text-xs font-bold text-cyan-500 uppercase tracking-widest mb-2 px-1">Rona</p>
+          <SupplierSection
+            supplierKey="rona"
+            label="Rona"
+            theme={themes.cyan}
+            visible={supplierVisibility.find(v => v.supplier === 'rona')?.visible ?? false}
+            toggling={togglingSupplier === 'rona'}
+            onToggleVisible={v => handleToggleVisibility('rona', v)}
+          />
+          </div>
+
           </div>
           {/* end supplier credential forms grid */}
 
@@ -794,8 +834,6 @@ export default function SettingsPage() {
               { key: 'nedco',     label: 'Nedco',     dot: 'bg-pink-500'   },
               { key: 'futech',    label: 'Futech',    dot: 'bg-indigo-500' },
               { key: 'deschenes', label: 'Deschênes', dot: 'bg-teal-500'   },
-              { key: 'bmr',       label: 'BMR',       dot: 'bg-lime-600'   },
-              { key: 'rona',      label: 'Rona',      dot: 'bg-cyan-500'   },
             ].map(s => {
               const isVisible = supplierVisibility.find(v => v.supplier === s.key)?.visible ?? false;
               return (
