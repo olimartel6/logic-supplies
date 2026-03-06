@@ -38,16 +38,27 @@ export default function InventoryPage() {
   const [savingItem, setSavingItem] = useState(false);
   const [itemError, setItemError] = useState('');
   const [newMinStock, setNewMinStock] = useState('');
-  const [receivedOrders, setReceivedOrders] = useState<ReceivedOrder[]>([]);
+  const [trackedOrders, setTrackedOrders] = useState<ReceivedOrder[]>([]);
+  const [trackingFilter, setTrackingFilter] = useState<'ordered' | 'shipped' | 'received'>('ordered');
   const router = useRouter();
 
-  function loadData() {
+  function loadData(tracking?: string) {
+    const tf = tracking || trackingFilter;
     return Promise.all([
       fetch('/api/inventory/items').then(r => r.json()),
       fetch('/api/inventory/locations').then(r => r.json()),
       fetch('/api/inventory/stock').then(r => r.json()),
-      fetch('/api/requests?tracking=received&limit=10').then(r => r.json()).then(data => data.requests || []),
-    ]).then(([i, l, s, ro]) => { setItems(i); setLocations(l); setStock(s); setReceivedOrders(ro); });
+      fetch(`/api/requests?tracking=${tf}&limit=50`).then(r => r.json()).then(data => data.requests || []),
+    ]).then(([i, l, s, to]) => { setItems(i); setLocations(l); setStock(s); setTrackedOrders(to); });
+  }
+
+  async function handleTrackingUpdate(id: number, newStatus: string) {
+    await fetch(`/api/requests/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking_status: newStatus }),
+    });
+    loadData();
   }
 
   useEffect(() => {
@@ -182,33 +193,76 @@ export default function InventoryPage() {
           ))}
         </div>
 
-        {receivedOrders.length > 0 && (
+        {isManager && (
           <div className="mb-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-            <h2 className="text-sm font-bold text-gray-900 mb-3">📦 Commandes reçues</h2>
-            <div className="space-y-2">
-              {receivedOrders.map(o => (
-                <div key={o.id} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{o.product}</p>
-                    <p className="text-xs text-gray-500">{o.quantity} {o.unit}{o.job_site_name ? ` · ${o.job_site_name}` : ''}</p>
-                    {o.picked_up_by_name ? (
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        Récupéré par {o.picked_up_by_name}
-                        {o.picked_up_job_site_name && ` pour ${o.picked_up_job_site_name}`}
-                        {o.picked_up_at && ` le ${new Date(o.picked_up_at).toLocaleDateString('fr-CA')}`}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-blue-600 mt-0.5">Disponible au bureau</p>
-                    )}
-                  </div>
-                  <span className={`shrink-0 ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${
-                    o.picked_up_by_name ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {o.picked_up_by_name ? 'Récupéré' : 'Au bureau'}
-                  </span>
-                </div>
+            <h2 className="text-sm font-bold text-gray-900 mb-3">Suivi des commandes</h2>
+            <div className="flex gap-2 mb-3">
+              {([
+                { key: 'ordered', label: '📦 Commandées', color: 'blue' },
+                { key: 'shipped', label: '🚚 Expédiées', color: 'violet' },
+                { key: 'received', label: '✅ Reçues', color: 'emerald' },
+              ] as const).map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => { setTrackingFilter(f.key); loadData(f.key); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                    trackingFilter === f.key
+                      ? f.color === 'blue' ? 'bg-blue-600 text-white' : f.color === 'violet' ? 'bg-violet-600 text-white' : 'bg-emerald-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-600'
+                  }`}
+                >
+                  {f.label}
+                </button>
               ))}
             </div>
+            {trackedOrders.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">Aucune commande {trackingFilter === 'ordered' ? 'commandée' : trackingFilter === 'shipped' ? 'expédiée' : 'reçue'}</p>
+            ) : (
+              <div className="space-y-2">
+                {trackedOrders.map(o => (
+                  <div key={o.id} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{o.product}</p>
+                      <p className="text-xs text-gray-500">{o.quantity} {o.unit}{o.job_site_name ? ` · ${o.job_site_name}` : ''}{o.order_supplier ? ` · ${o.order_supplier}` : o.supplier ? ` · ${o.supplier}` : ''}</p>
+                      {o.tracking_status === 'received' && o.picked_up_by_name ? (
+                        <p className="text-xs text-emerald-600 mt-0.5">
+                          Récupéré par {o.picked_up_by_name}
+                          {o.picked_up_job_site_name && ` pour ${o.picked_up_job_site_name}`}
+                          {o.picked_up_at && ` le ${new Date(o.picked_up_at).toLocaleDateString('fr-CA')}`}
+                        </p>
+                      ) : o.tracking_status === 'received' ? (
+                        <p className="text-xs text-blue-600 mt-0.5">Disponible au bureau</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 ml-2 flex items-center gap-2">
+                      {o.tracking_status === 'ordered' && (
+                        <button
+                          onClick={() => handleTrackingUpdate(o.id, 'shipped')}
+                          className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-lg font-medium hover:bg-violet-200 transition"
+                        >
+                          🚚 Expédié
+                        </button>
+                      )}
+                      {o.tracking_status === 'shipped' && (
+                        <button
+                          onClick={() => handleTrackingUpdate(o.id, 'received')}
+                          className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-medium hover:bg-emerald-200 transition"
+                        >
+                          ✅ Reçu
+                        </button>
+                      )}
+                      {o.tracking_status === 'received' && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          o.picked_up_by_name ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {o.picked_up_by_name ? 'Récupéré' : 'Au bureau'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

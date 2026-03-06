@@ -267,9 +267,6 @@ function ApprovalsContent() {
     { key: 'pending', label: 'En attente' },
     { key: 'approved', label: 'Approuvées' },
     { key: 'rejected', label: 'Rejetées' },
-    { key: 'tracking:ordered', label: 'Commandées' },
-    { key: 'tracking:shipped', label: 'Expédiées' },
-    { key: 'tracking:received', label: 'Reçues' },
   ];
 
   return (
