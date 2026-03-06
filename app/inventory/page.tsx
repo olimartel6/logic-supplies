@@ -61,6 +61,15 @@ export default function InventoryPage() {
     loadData();
   }
 
+  async function handlePickup(id: number) {
+    await fetch(`/api/requests/${id}/pickup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    loadData();
+  }
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) { router.push('/'); return; } return r.json(); })
       .then(u => { if (u) setUser(u); });
@@ -251,11 +260,17 @@ export default function InventoryPage() {
                           ✅ Reçu
                         </button>
                       )}
-                      {o.tracking_status === 'received' && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          o.picked_up_by_name ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {o.picked_up_by_name ? 'Récupéré' : 'Au bureau'}
+                      {o.tracking_status === 'received' && !o.picked_up_by_name && (
+                        <button
+                          onClick={() => handlePickup(o.id)}
+                          className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg font-medium hover:bg-orange-200 transition"
+                        >
+                          📥 Récupérer
+                        </button>
+                      )}
+                      {o.tracking_status === 'received' && o.picked_up_by_name && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                          Récupéré
                         </span>
                       )}
                     </div>
