@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail } from './email';
+import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail, sendOrderFailureEmail } from './email';
 import { selectAndOrder } from './supplier-router';
 import { randomUUID } from 'crypto';
 import { decrypt } from './encrypt';
@@ -39,9 +39,24 @@ export async function triggerApproval(
       const settings = db.prepare('SELECT large_order_threshold FROM company_settings WHERE company_id = ?').get(companyId) as any;
       const threshold: number = settings?.large_order_threshold ?? 2000;
 
-      const productRow = db.prepare(
-        "SELECT price FROM products WHERE LOWER(name) LIKE LOWER(?) ORDER BY price ASC LIMIT 1"
-      ).get(`%${request.product}%`) as any;
+      // Stage 1: exact name match on the request's supplier
+      let productRow = db.prepare(
+        "SELECT price FROM products WHERE LOWER(name) = LOWER(?) AND supplier = ? ORDER BY price ASC LIMIT 1"
+      ).get(request.product, request.supplier || 'lumen') as any;
+
+      // Stage 2: exact name match on any supplier
+      if (!productRow) {
+        productRow = db.prepare(
+          "SELECT price FROM products WHERE LOWER(name) = LOWER(?) ORDER BY price ASC LIMIT 1"
+        ).get(request.product) as any;
+      }
+
+      // Stage 3: LIKE fallback scoped to request's supplier
+      if (!productRow) {
+        productRow = db.prepare(
+          "SELECT price FROM products WHERE LOWER(name) LIKE LOWER(?) AND supplier = ? ORDER BY price ASC LIMIT 1"
+        ).get(`%${request.product}%`, request.supplier || 'lumen') as any;
+      }
       const unitPrice: number = productRow?.price ?? 0;
       const orderAmount: number = unitPrice * request.quantity;
 
@@ -135,8 +150,14 @@ export async function triggerApproval(
   }
 
   ;(async () => {
+    let orderError: string | null = null;
+    let orderStatus: 'confirmed' | 'pending' | 'failed' = 'failed';
+    let result: any = null;
+    let supplier = request.supplier || 'unknown';
+    let reason = '';
+
     try {
-      const { result, supplier, reason } = await selectAndOrder(
+      const ordered = await selectAndOrder(
         preference,
         request.job_site_address || '',
         request.product,
@@ -146,39 +167,53 @@ export async function triggerApproval(
         deliveryAddress || undefined,
         payment,
       );
-
-      const cancelToken = randomUUID();
-      const cancelExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-      const orderStatus = result.success ? 'confirmed' : result.inCart ? 'pending' : 'failed';
-
-      db.prepare(`
-        INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at, error_message)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(companyId, requestId, supplier, result.orderId || null, orderStatus, cancelToken, cancelExpiresAt, result.error || null);
-
-      const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
-      const allRecipients = [
-        ...officeUsers,
-        { email: request.electrician_email, language: request.electrician_language },
-      ].filter(u => u.email);
-
-      if (result.success) {
-        for (const u of allRecipients) {
-          sendOrderConfirmationEmail(u.email, {
-            product: request.product, quantity: request.quantity, unit: request.unit,
-            jobSite: request.job_site_name, supplier, reason, orderId: result.orderId!, cancelToken,
-          }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
-        }
-      } else if (result.inCart) {
-        for (const u of allRecipients) {
-          sendCartNotificationEmail(u.email, {
-            product: request.product, quantity: request.quantity, unit: request.unit,
-            jobSite: request.job_site_name, supplier, reason,
-          }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
-        }
-      }
-    } catch (err) {
+      result = ordered.result;
+      supplier = ordered.supplier;
+      reason = ordered.reason;
+      orderStatus = result.success ? 'confirmed' : result.inCart ? 'pending' : 'failed';
+      orderError = result.error || null;
+    } catch (err: any) {
       console.error('Supplier ordering failed:', err);
+      orderError = err?.message || 'Erreur inconnue';
+      orderStatus = 'failed';
+    }
+
+    // Always write supplier_orders row — even on failure
+    const cancelToken = randomUUID();
+    const cancelExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    db.prepare(`
+      INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(companyId, requestId, supplier, result?.orderId || null, orderStatus, cancelToken, cancelExpiresAt, orderError);
+
+    const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
+    const allRecipients = [
+      ...officeUsers,
+      { email: request.electrician_email, language: request.electrician_language },
+    ].filter(u => u.email);
+
+    if (orderStatus === 'confirmed' && result) {
+      for (const u of allRecipients) {
+        sendOrderConfirmationEmail(u.email, {
+          product: request.product, quantity: request.quantity, unit: request.unit,
+          jobSite: request.job_site_name, supplier, reason, orderId: result.orderId!, cancelToken,
+        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+      }
+    } else if (orderStatus === 'pending' && result) {
+      for (const u of allRecipients) {
+        sendCartNotificationEmail(u.email, {
+          product: request.product, quantity: request.quantity, unit: request.unit,
+          jobSite: request.job_site_name, supplier, reason,
+        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+      }
+    } else {
+      // Send failure notification to office users
+      for (const u of officeUsers) {
+        sendOrderFailureEmail(u.email, {
+          product: request.product, quantity: request.quantity, unit: request.unit,
+          jobSite: request.job_site_name, errorMessage: orderError || 'Erreur inconnue',
+        }).catch(console.error);
+      }
     }
   })();
 }

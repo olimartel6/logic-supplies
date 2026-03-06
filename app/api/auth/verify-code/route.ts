@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   const { email, code } = await req.json();
 
   if (!email || !code) {
     return NextResponse.json({ error: 'Champs manquants.' }, { status: 400 });
+  }
+
+  const { allowed } = checkRateLimit('verify-code', email.toLowerCase(), 5, 900_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Trop de tentatives. Demandez un nouveau code.' }, { status: 429 });
   }
 
   const db = getDb();

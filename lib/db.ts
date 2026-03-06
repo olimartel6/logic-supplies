@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import bcrypt from 'bcryptjs';
 
 let db: Database.Database;
@@ -531,6 +532,12 @@ function initDb(db: Database.Database) {
     db.exec(`ALTER TABLE company_settings ADD COLUMN marketing_enabled INTEGER DEFAULT 0`);
   }
 
+  // Low-stock alert threshold
+  const invItemCols = db.pragma('table_info(inventory_items)') as { name: string }[];
+  if (!invItemCols.find(c => c.name === 'min_stock')) {
+    db.exec('ALTER TABLE inventory_items ADD COLUMN min_stock REAL DEFAULT NULL');
+  }
+
   // User-level supplier preference (overrides company setting when set)
   const userCols = db.pragma('table_info(users)') as { name: string }[];
   if (!userCols.find(c => c.name === 'supplier_preference')) {
@@ -561,10 +568,17 @@ function initDb(db: Database.Database) {
     db.exec('ALTER TABLE supplier_orders ADD COLUMN error_message TEXT');
 
   // Seed unique superadmin (company_id IS NULL — cross-tenant)
-  // Guard: only hash+insert if not already seeded (bcryptjs is slow ~100ms)
   const existingSuperAdmin = db.prepare("SELECT id FROM users WHERE email = 'superadmin@sparky.app'").get();
   if (!existingSuperAdmin) {
-    const superHash = bcrypt.hashSync('changeme123', 10);
+    const superPassword: string = process.env.SUPERADMIN_PASSWORD || require('crypto').randomBytes(16).toString('hex');
+    if (!process.env.SUPERADMIN_PASSWORD) {
+      console.log('========================================');
+      console.log('[SUPERADMIN] No SUPERADMIN_PASSWORD env var set.');
+      console.log(`[SUPERADMIN] Generated password: ${superPassword}`);
+      console.log('[SUPERADMIN] Set SUPERADMIN_PASSWORD to use a fixed password.');
+      console.log('========================================');
+    }
+    const superHash = bcrypt.hashSync(superPassword, 10);
     db.prepare(`
       INSERT INTO users (company_id, name, email, password, role)
       VALUES (NULL, 'Super Admin', 'superadmin@sparky.app', ?, 'superadmin')
@@ -615,6 +629,17 @@ function initDb(db: Database.Database) {
   try { db.exec('ALTER TABLE company_settings ADD COLUMN company_logo_url TEXT'); } catch {}
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS request_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id INTEGER NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+      company_id INTEGER NOT NULL REFERENCES companies(id),
+      url TEXT NOT NULL,
+      type TEXT DEFAULT 'image',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS job_site_media (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       job_site_id INTEGER NOT NULL REFERENCES job_sites(id),
@@ -635,4 +660,36 @@ function initDb(db: Database.Database) {
       sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  scheduleBackup();
+}
+
+export async function backupDb(): Promise<string> {
+  const db = getDb();
+  const backupDir = process.env.BACKUP_DIR || path.join(process.cwd(), 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const backupPath = path.join(backupDir, `sparky-${timestamp}.db`);
+  await db.backup(backupPath);
+  console.log(`[Backup] Database backed up to ${backupPath}`);
+  // Prune backups older than 7 days
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('sparky-') && f.endsWith('.db'));
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const f of files) {
+    const fPath = path.join(backupDir, f);
+    if (fs.statSync(fPath).mtimeMs < cutoff) {
+      fs.unlinkSync(fPath);
+      console.log(`[Backup] Pruned old backup: ${f}`);
+    }
+  }
+  return backupPath;
+}
+
+let backupTimer: ReturnType<typeof setInterval> | null = null;
+export function scheduleBackup() {
+  if (backupTimer) return;
+  backupDb().catch(err => console.error('[Backup] Initial backup failed:', err));
+  backupTimer = setInterval(() => {
+    backupDb().catch(err => console.error('[Backup] Scheduled backup failed:', err));
+  }, 24 * 60 * 60 * 1000);
 }

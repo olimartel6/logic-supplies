@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { sendVerificationCodeEmail } from '@/lib/email';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { randomInt } from 'crypto';
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  const ipCheck = checkRateLimit('send-verification-ip', ip, 3, 60_000);
+  if (!ipCheck.allowed) {
+    return NextResponse.json({ error: 'Trop de tentatives. Réessayez dans une minute.' }, { status: 429 });
+  }
+
   const { email } = await req.json();
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return NextResponse.json({ error: 'Email invalide.' }, { status: 400 });
+  }
+
+  const emailCheck = checkRateLimit('send-verification-email', email.toLowerCase(), 3, 300_000);
+  if (!emailCheck.allowed) {
+    return NextResponse.json({ error: 'Code déjà envoyé. Vérifiez vos emails.' }, { status: 429 });
   }
 
   if (!process.env.RESEND_API_KEY) {
@@ -21,7 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cet email est déjà utilisé.' }, { status: 409 });
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(randomInt(100000, 999999));
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
   // Upsert: replace any previous code for this email

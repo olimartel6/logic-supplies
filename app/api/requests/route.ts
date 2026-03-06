@@ -4,24 +4,83 @@ import { getTenantContext } from '@/lib/tenant';
 import { sendNewRequestEmail } from '@/lib/email';
 import { triggerApproval } from '@/lib/approval';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
 
   const db = getDb();
-  let requests;
+
+  const url = new URL(req.url);
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)));
+  const search = url.searchParams.get('search') || '';
+  const status = url.searchParams.get('status') || '';
+  const dateFrom = url.searchParams.get('dateFrom') || '';
+  const dateTo = url.searchParams.get('dateTo') || '';
+  const offset = (page - 1) * limit;
+
+  // Build dynamic WHERE clauses and params
+  const conditions: string[] = [];
+  const params: (string | number | null)[] = [];
 
   if (ctx.role === 'electrician') {
+    conditions.push('r.electrician_id = ?', 'r.company_id = ?');
+    params.push(ctx.userId, ctx.companyId);
+  } else {
+    conditions.push('r.company_id = ?');
+    params.push(ctx.companyId);
+  }
+
+  if (search) {
+    conditions.push('(LOWER(r.product) LIKE LOWER(?) OR LOWER(j.name) LIKE LOWER(?))');
+    params.push(`%${search}%`, `%${search}%`);
+  }
+  if (status) {
+    conditions.push('r.status = ?');
+    params.push(status);
+  }
+  if (dateFrom) {
+    conditions.push('r.created_at >= ?');
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    conditions.push("r.created_at <= ? || 'T23:59:59'");
+    params.push(dateTo);
+  }
+
+  const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+  let requests;
+  let total: number;
+
+  if (ctx.role === 'electrician') {
+    const countRow = db.prepare(`
+      SELECT COUNT(*) as cnt
+      FROM requests r
+      LEFT JOIN job_sites j ON r.job_site_id = j.id
+      ${whereClause}
+    `).get(...params) as { cnt: number };
+    total = countRow.cnt;
+
     requests = db.prepare(`
       SELECT r.*, j.name as job_site_name, u.name as electrician_name,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
       LEFT JOIN users u ON r.electrician_id = u.id
-      WHERE r.electrician_id = ? AND r.company_id = ?
+      ${whereClause}
       ORDER BY r.created_at DESC
-    `).all(ctx.userId, ctx.companyId);
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
   } else {
+    const countRow = db.prepare(`
+      SELECT COUNT(*) as cnt
+      FROM requests r
+      LEFT JOIN job_sites j ON r.job_site_id = j.id
+      ${whereClause}
+    `).get(...params) as { cnt: number };
+    total = countRow.cnt;
+
     requests = db.prepare(`
       SELECT r.*, j.name as job_site_name, u.name as electrician_name, u.email as electrician_email,
              so.status as lumen_order_status, so.supplier_order_id as lumen_order_id, so.supplier as order_supplier, so.error_message as order_error,
@@ -30,13 +89,14 @@ export async function GET() {
       LEFT JOIN job_sites j ON r.job_site_id = j.id
       LEFT JOIN users u ON r.electrician_id = u.id
       LEFT JOIN supplier_orders so ON so.request_id = r.id
-      WHERE r.company_id = ?
+      ${whereClause}
       ORDER BY r.urgency DESC, r.created_at DESC
-    `).all(ctx.companyId);
-    // r.supplier is already included via r.*
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
   }
 
-  return NextResponse.json(requests);
+  const pages = Math.ceil(total / limit);
+  return NextResponse.json({ requests, total, page, pages });
 }
 
 export async function POST(req: NextRequest) {

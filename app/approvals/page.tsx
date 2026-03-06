@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import { Suspense } from 'react';
 import { useLang, useT } from '@/lib/LanguageContext';
@@ -37,6 +37,7 @@ function ApprovalsContent() {
   const [deliveryOverride, setDeliveryOverride] = useState<'office' | 'jobsite' | null>(null);
   const [paymentConfigured, setPaymentConfigured] = useState(false);
   const [defaultDelivery, setDefaultDelivery] = useState<'office' | 'jobsite'>('office');
+  const [selectedPhotos, setSelectedPhotos] = useState<{ id: number; url: string }[]>([]);
 
   // "Finaliser la commande" modal state
   const [orderModal, setOrderModal] = useState<Request | null>(null);
@@ -45,6 +46,20 @@ function ApprovalsContent() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  // Filter & pagination state
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  // Bulk selection state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const { setLang } = useLang();
   const t = useT();
@@ -65,14 +80,38 @@ function ApprovalsContent() {
     setSendError(null);
   }
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const showAll = searchParams.get('all') === '1';
 
-  const loadRequests = useCallback(async () => {
-    const res = await fetch('/api/requests');
+  // Debounce ref for search
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+
+  const loadRequests = useCallback(async (pageNum = 1, append = false) => {
+    const params = new URLSearchParams();
+    params.set('page', String(pageNum));
+    params.set('limit', '20');
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+
+    const res = await fetch(`/api/requests?${params.toString()}`);
     const data = await res.json();
-    setRequests(data);
-  }, []);
+
+    if (append) {
+      setRequests(prev => [...prev, ...data.requests]);
+    } else {
+      setRequests(data.requests);
+    }
+    setTotal(data.total);
+    setHasMore(data.page < data.pages);
+    setPage(data.page);
+  }, [search, statusFilter, dateFrom, dateTo]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+    loadRequests(1, false);
+  }, [search, statusFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
@@ -84,8 +123,8 @@ function ApprovalsContent() {
       setUser(u);
       setLang((u.language as Lang) || 'fr');
     });
-    loadRequests();
-    const interval = setInterval(loadRequests, 10000);
+    loadRequests(1, false);
+    const interval = setInterval(() => loadRequests(1, false), 10000);
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { largeOrderThreshold?: number; defaultDelivery?: string }) => {
       if (d.largeOrderThreshold != null) setLargeOrderThreshold(d.largeOrderThreshold);
       if (d.defaultDelivery) {
@@ -95,13 +134,26 @@ function ApprovalsContent() {
     }).catch(() => {});
     fetch('/api/settings/payment').then(r => r.json()).then((d: any) => setPaymentConfigured(d.configured)).catch(() => {});
     return () => clearInterval(interval);
-  }, [router, loadRequests]);
+  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!selected) { setSelectedPhotos([]); return; }
+    fetch(`/api/requests/${selected.id}/photos`)
+      .then(r => r.json())
+      .then(setSelectedPhotos)
+      .catch(() => setSelectedPhotos([]));
+  }, [selected]);
+
+  function handleLoadMore() {
+    const next = page + 1;
+    loadRequests(next, true);
+  }
 
   async function handleDelete(id: number) {
     if (!window.confirm('Supprimer cette demande ?')) return;
     setDeletingId(id);
     await fetch(`/api/requests/${id}`, { method: 'DELETE' });
-    await loadRequests();
+    await loadRequests(1, false);
     setDeletingId(null);
   }
 
@@ -114,13 +166,46 @@ function ApprovalsContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, office_comment: comment, delivery_override: deliveryOverride }),
     });
-    await loadRequests();
+    await loadRequests(1, false);
     setSelected(null);
     setComment('');
     setLoading(false);
     if (status === 'approved' && approvedRequest.supplier === 'lumen') {
       setOrderModal(approvedRequest);
     }
+  }
+
+  // Bulk selection helpers
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const pendingIds = requests.filter(r => r.status === 'pending').map(r => r.id);
+    if (pendingIds.length > 0 && pendingIds.every(id => selectedIds.has(id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingIds));
+    }
+  }
+
+  async function handleBulkAction(status: 'approved' | 'rejected') {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    await fetch('/api/requests/bulk', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedIds), status, office_comment: '' }),
+    });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setBulkLoading(false);
+    await loadRequests(1, false);
   }
 
   async function handlePreviewPdf() {
@@ -150,36 +235,121 @@ function ApprovalsContent() {
 
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
-  const displayed = showAll ? requests : requests.filter(r => r.status === 'pending');
+  const statusPills: { key: string; label: string }[] = [
+    { key: '', label: 'Toutes' },
+    { key: 'pending', label: 'En attente' },
+    { key: 'approved', label: 'Approuvées' },
+    { key: 'rejected', label: 'Rejetées' },
+  ];
 
   return (
-    <div className="pb-20">
+    <div className={selectMode && selectedIds.size > 0 ? 'pb-36' : 'pb-20'}>
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">
-            {showAll ? t('all_requests') : t('approvals_title')}
+            {statusFilter === 'pending' ? t('approvals_title') : statusFilter === '' ? t('all_requests') : statusFilter === 'approved' ? 'Approuvées' : 'Rejetées'}
           </h1>
-          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
-            {displayed.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
+              {total}
+            </span>
+            {statusFilter === 'pending' && (
+              <button
+                onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); }}
+                className={`text-xs font-medium px-3 py-1 rounded-full border transition ${selectMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}
+              >
+                {selectMode ? 'Annuler' : 'Sélectionner'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {displayed.length === 0 && (
+        {/* Filter bar */}
+        <div className="space-y-3 mb-4">
+          <input
+            type="text"
+            placeholder="Rechercher produit ou chantier..."
+            value={searchInput}
+            onChange={e => {
+              const val = e.target.value;
+              setSearchInput(val);
+              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = setTimeout(() => setSearch(val), 300);
+            }}
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
+          <div className="flex gap-1.5 overflow-x-auto">
+            {statusPills.map(pill => (
+              <button
+                key={pill.key}
+                onClick={() => { setStatusFilter(pill.key); setSelectMode(false); setSelectedIds(new Set()); }}
+                className={`whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-full border transition ${statusFilter === pill.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              placeholder="Du"
+            />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              placeholder="Au"
+            />
+          </div>
+        </div>
+
+        {requests.length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 mx-auto mb-3 text-gray-300"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-            <p>{showAll ? t('no_requests_all') : t('no_pending')}</p>
+            <p>Aucune demande trouvée</p>
+          </div>
+        )}
+
+        {/* Select all toggle */}
+        {selectMode && requests.length > 0 && statusFilter === 'pending' && (
+          <div className="mb-2">
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs text-blue-600 font-medium hover:underline"
+            >
+              {requests.filter(r => r.status === 'pending').every(r => selectedIds.has(r.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+            </button>
           </div>
         )}
 
         <div className="space-y-3">
-          {displayed.map(r => (
+          {requests.map(r => (
             <div
               key={r.id}
-              onClick={() => { setSelected(r); setComment(''); }}
-              className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:border-blue-300 hover:shadow-md transition cursor-pointer"
+              onClick={() => {
+                if (selectMode && r.status === 'pending') {
+                  toggleSelect(r.id);
+                } else {
+                  setSelected(r); setComment('');
+                }
+              }}
+              className={`w-full bg-white rounded-2xl border shadow-sm p-4 text-left hover:shadow-md transition cursor-pointer ${selectMode && selectedIds.has(r.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
             >
               <div className="flex items-start justify-between">
+                {selectMode && r.status === 'pending' && (
+                  <div className="flex items-center mr-3 mt-0.5">
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition ${selectedIds.has(r.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                      {selectedIds.has(r.id) && (
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="white" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     {r.urgency ? <span className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" /></svg></span> : null}
@@ -195,25 +365,62 @@ function ApprovalsContent() {
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
                     {statusConfig[r.status]?.label}
                   </span>
-                  {showAll && (
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(r.id); }}
-                      disabled={deletingId === r.id}
-                      className="text-gray-300 hover:text-red-500 transition disabled:opacity-40 p-1 rounded-lg hover:bg-red-50"
-                      title="Supprimer"
-                    >
-                      {deletingId === r.id
-                        ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 animate-spin"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                        : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
-                      }
-                    </button>
-                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(r.id); }}
+                    disabled={deletingId === r.id}
+                    className="text-gray-300 hover:text-red-500 transition disabled:opacity-40 p-1 rounded-lg hover:bg-red-50"
+                    title="Supprimer"
+                  >
+                    {deletingId === r.id
+                      ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 animate-spin"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                      : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+                    }
+                  </button>
                 </div>
               </div>
             </div>
           ))}
         </div>
+
+        {/* Load more */}
+        {hasMore && (
+          <div className="text-center mt-4">
+            <button
+              onClick={handleLoadMore}
+              className="text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 px-5 py-2.5 rounded-xl hover:bg-blue-100 transition"
+            >
+              Charger plus
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20 px-4 py-3">
+          <div className="max-w-lg mx-auto flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">
+              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleBulkAction('rejected')}
+                disabled={bulkLoading}
+                className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-100 disabled:opacity-50 transition"
+              >
+                {bulkLoading ? '...' : 'Rejeter tout'}
+              </button>
+              <button
+                onClick={() => handleBulkAction('approved')}
+                disabled={bulkLoading}
+                className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+              >
+                {bulkLoading ? '...' : 'Approuver tout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* "Finaliser la commande" modal — triggered after approval */}
       {orderModal && (
@@ -395,6 +602,16 @@ function ApprovalsContent() {
                 <div className="flex justify-between"><span className="text-gray-500">{t('job_site')}</span><span>{selected.job_site_name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selected.status]?.color}`}>{statusConfig[selected.status]?.label}</span></div>
                 {selected.note && <div><span className="text-gray-500">Note</span><p className="mt-1 text-gray-800">{selected.note}</p></div>}
+                {selectedPhotos.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500 mb-1">Photo(s)</p>
+                    <div className="flex gap-2 overflow-x-auto">
+                      {selectedPhotos.map(p => (
+                        <img key={p.id} src={p.url} alt="" className="w-24 h-24 object-cover rounded-xl flex-shrink-0" />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {selected.lumen_order_status && (() => {
                   const sup = selected.order_supplier || selected.supplier || '';
                   const supLabel = sup === 'canac' ? 'Canac' : sup === 'homedepot' ? 'Home Depot' : sup === 'guillevin' ? 'Guillevin' : 'Lumen';

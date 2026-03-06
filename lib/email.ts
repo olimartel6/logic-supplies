@@ -11,14 +11,33 @@ function getFrom() {
 
 type Lang = 'fr' | 'en' | 'es';
 
+const SUPPLIER_LABELS: Record<string, string> = {
+  canac: 'Canac', homedepot: 'Home Depot', lumen: 'Lumen',
+  guillevin: 'Guillevin', jsv: 'JSV', westburne: 'Westburne',
+  nedco: 'Nedco', futech: 'Futech', deschenes: 'Deschênes',
+  bmr: 'BMR', rona: 'Rona',
+};
+
+const SUPPLIER_CART_URLS: Record<string, string> = {
+  canac: 'https://www.canac.ca/panier',
+  homedepot: 'https://www.homedepot.ca/checkout/cart',
+  lumen: 'https://www.lumen.ca/en/cart',
+  guillevin: 'https://www.guillevin.com/cart',
+  jsv: 'https://jsv.ca/cart',
+  westburne: 'https://www.westburne.ca/cart',
+  nedco: 'https://www.nedco.ca/cart',
+  futech: 'https://www.futech.ca/cart',
+  deschenes: 'https://www.deschenes.ca/cart',
+  bmr: 'https://www.bmr.ca/fr/mon-panier',
+  rona: 'https://www.rona.ca/fr/panier',
+};
+
 function supplierLabel(supplier: string): string {
-  return supplier === 'canac' ? 'Canac' : supplier === 'homedepot' ? 'Home Depot' : 'Lumen';
+  return SUPPLIER_LABELS[supplier] ?? supplier;
 }
 
 function supplierCartUrl(supplier: string): string {
-  if (supplier === 'canac') return 'https://www.canac.com/fr/panier';
-  if (supplier === 'homedepot') return 'https://www.homedepot.ca/fr/accueil/panier.html';
-  return 'https://www.lumen.ca/en/cart';
+  return SUPPLIER_CART_URLS[supplier] ?? '#';
 }
 
 export async function sendNewRequestEmail(to: string, data: {
@@ -240,6 +259,33 @@ export async function sendOrderConfirmationEmail(to: string, data: {
   if (error) throw new Error(error.message);
 }
 
+export async function sendOrderFailureEmail(to: string, data: {
+  product: string; quantity: number; unit: string; jobSite: string; errorMessage: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = getResend();
+  await resend.emails.send({
+    from: getFrom(),
+    to,
+    subject: `Erreur de commande — ${data.product}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#dc2626">Erreur de commande automatique</h2>
+        <p><b>Produit :</b> ${data.product}</p>
+        <p><b>Quantité :</b> ${data.quantity} ${data.unit}</p>
+        <p><b>Chantier :</b> ${data.jobSite}</p>
+        <p><b>Erreur :</b> ${data.errorMessage}</p>
+        <br/>
+        <p>La commande devra être passée manuellement.</p>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://logic-supplies-production.up.railway.app'}/approvals"
+           style="display:inline-block;background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+          Voir les demandes
+        </a>
+      </div>
+    `,
+  });
+}
+
 export async function sendBudgetAlertEmail(to: string, data: {
   type: '80_percent' | '100_percent' | 'large_order';
   jobSite: string;
@@ -358,4 +404,29 @@ export async function sendReviewRequestEmail(
   } catch (err) {
     console.error('[Email] Review request error:', err);
   }
+}
+
+export async function sendLowStockAlertEmail(to: string, data: {
+  itemName: string; currentStock: number; minStock: number; unit: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = getResend();
+  await resend.emails.send({
+    from: getFrom(),
+    to,
+    subject: `Stock bas — ${data.itemName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#f97316">Alerte stock bas</h2>
+        <p><b>Article :</b> ${data.itemName}</p>
+        <p><b>Stock actuel :</b> ${data.currentStock} ${data.unit}</p>
+        <p><b>Minimum requis :</b> ${data.minStock} ${data.unit}</p>
+        <br/>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://logic-supplies-production.up.railway.app'}/inventory"
+           style="display:inline-block;background:#f97316;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+          Voir l'inventaire
+        </a>
+      </div>
+    `,
+  });
 }

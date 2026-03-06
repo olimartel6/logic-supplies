@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import { useLang, useT } from '@/lib/LanguageContext';
 import type { Lang } from '@/lib/i18n';
@@ -38,6 +38,10 @@ function supplierColor(supplier: string) {
 }
 
 export default function NewRequestPage() {
+  return <Suspense><NewRequestContent /></Suspense>;
+}
+
+function NewRequestContent() {
   const [user, setUser] = useState<User | null>(null);
   const [jobSites, setJobSites] = useState<JobSite[]>([]);
   const [query, setQuery] = useState('');
@@ -55,10 +59,14 @@ export default function NewRequestPage() {
   const [jobSiteId, setJobSiteId] = useState('');
   const [urgency, setUrgency] = useState(false);
   const [note, setNote] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>('');
 
   const [loading, setLoading] = useState(false);
   const [successCount, setSuccessCount] = useState(0);
   const [success, setSuccess] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
   const [preference, setPreference] = useState<'cheapest' | 'fastest'>('cheapest');
   const [cheaperModal, setCheaperModal] = useState<{ selected: Product; cheaper: Product } | null>(null);
   const [nearestBranch, setNearestBranch] = useState<{ name: string; address: string; distanceKm?: number } | null>(null);
@@ -67,6 +75,7 @@ export default function NewRequestPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const { setLang } = useLang();
   const t = useT();
@@ -103,6 +112,15 @@ export default function NewRequestPage() {
     });
     loadFavorites();
   }, [router, loadFavorites]);
+
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    setIsOffline(!navigator.onLine);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
@@ -147,6 +165,29 @@ export default function NewRequestPage() {
       setSearching(false);
     }
   }, []);
+
+  // Pre-fill from reorder URL params
+  const reorderApplied = useRef(false);
+  useEffect(() => {
+    if (reorderApplied.current) return;
+    const product = searchParams.get('product');
+    if (!product) return;
+    // Wait for job sites to load before applying reorder params
+    const jobSiteParam = searchParams.get('job_site_id');
+    if (jobSiteParam && jobSites.length === 0) return;
+
+    reorderApplied.current = true;
+    setQuery(product);
+    doSearch(product, jobSiteParam || undefined);
+
+    const quantity = searchParams.get('quantity');
+    if (quantity) setPendingQty(quantity);
+
+    const unit = searchParams.get('unit');
+    if (unit) setPendingUnit(unit);
+
+    if (jobSiteParam) setJobSiteId(jobSiteParam);
+  }, [searchParams, jobSites, doSearch]);
 
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value;
@@ -225,11 +266,50 @@ export default function NewRequestPage() {
     fetchNearestBranch(p.supplier, jobSiteId);
   }
 
+  async function queueOffline(items: CartItem[]) {
+    const dbReq = indexedDB.open('logicsupplies-offline', 1);
+    dbReq.onupgradeneeded = () => {
+      dbReq.result.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+    };
+    dbReq.onsuccess = () => {
+      const db = dbReq.result;
+      const tx = db.transaction('queue', 'readwrite');
+      const store = tx.objectStore('queue');
+      for (const item of items) {
+        store.add({
+          body: JSON.stringify({
+            product: item.product.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            job_site_id: jobSiteId,
+            urgency,
+            note,
+            supplier: item.product.supplier,
+          }),
+        });
+      }
+      tx.oncomplete = () => {
+        setQueuedCount(items.length);
+        setCart([]);
+        if ('serviceWorker' in navigator && 'SyncManager' in window) {
+          navigator.serviceWorker.ready.then(reg => (reg as any).sync.register('sync-requests'));
+        }
+      };
+    };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    if (!navigator.onLine) {
+      await queueOffline(cart);
+      return;
+    }
+
     setLoading(true);
     let count = 0;
+    let firstRequestId: number | null = null;
     for (const item of cart) {
       try {
         const res = await fetch('/api/requests', {
@@ -245,7 +325,19 @@ export default function NewRequestPage() {
             supplier: item.product.supplier,
           }),
         });
-        if (res.ok) count++;
+        if (res.ok) {
+          const data = await res.json();
+          count++;
+          if (!firstRequestId && data.id) firstRequestId = data.id;
+        }
+      } catch {}
+    }
+    // Upload photo to the first request
+    if (photoFile && firstRequestId) {
+      try {
+        const formData = new FormData();
+        formData.append('files', photoFile);
+        await fetch(`/api/requests/${firstRequestId}/photos`, { method: 'POST', body: formData });
       } catch {}
     }
     setLoading(false);
@@ -287,6 +379,17 @@ export default function NewRequestPage() {
   return (
     <div className="pb-24">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} hideTopOnMobile />
+
+      {isOffline && (
+        <div className="bg-amber-100 border-b border-amber-300 px-4 py-2 text-center text-sm text-amber-800 font-medium">
+          Mode hors-ligne — les demandes seront envoyées au retour du réseau
+        </div>
+      )}
+      {queuedCount > 0 && (
+        <div className="bg-blue-100 border-b border-blue-300 px-4 py-2 text-center text-sm text-blue-800 font-medium">
+          {queuedCount} demande{queuedCount > 1 ? 's' : ''} en file d&apos;attente
+        </div>
+      )}
 
       {/* Sticky search bar */}
       <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-0 sm:top-[56px] z-20 shadow-md">
@@ -599,6 +702,23 @@ export default function NewRequestPage() {
                   placeholder={t('note_placeholder')}
                   rows={2}
                 />
+              </div>
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Photo (optionnel)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={e => {
+                    const f = e.target.files?.[0] || null;
+                    setPhotoFile(f);
+                    setPhotoPreview(f ? URL.createObjectURL(f) : '');
+                  }}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"
+                />
+                {photoPreview && (
+                  <img src={photoPreview} alt="Preview" className="mt-2 w-full h-40 object-cover rounded-xl" />
+                )}
               </div>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 
 interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
-interface InventoryItem { id: number; barcode: string; name: string; unit: string; description: string | null; total_stock: number; }
+interface InventoryItem { id: number; barcode: string; name: string; unit: string; description: string | null; total_stock: number; min_stock: number | null; }
 interface StockRow { item_id: number; location_id: number; quantity: number; item_name: string; barcode: string; unit: string; location_name: string; location_type: string; }
 interface Location { id: number; name: string; type: string; job_site_name: string | null; }
 
@@ -24,6 +24,7 @@ export default function InventoryPage() {
   const [itemForm, setItemForm] = useState({ name: '', unit: 'unité', barcode: '' });
   const [savingItem, setSavingItem] = useState(false);
   const [itemError, setItemError] = useState('');
+  const [newMinStock, setNewMinStock] = useState('');
   const router = useRouter();
 
   function loadData() {
@@ -51,7 +52,7 @@ export default function InventoryPage() {
     const res = await fetch('/api/inventory/items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: itemForm.name, unit: itemForm.unit, barcode: itemForm.barcode || undefined }),
+      body: JSON.stringify({ name: itemForm.name, unit: itemForm.unit, barcode: itemForm.barcode || undefined, min_stock: newMinStock ? parseFloat(newMinStock) : undefined }),
     });
     if (!res.ok) {
       const d = await res.json();
@@ -62,6 +63,7 @@ export default function InventoryPage() {
     await loadData();
     setShowAddItem(false);
     setItemForm({ name: '', unit: 'unité', barcode: '' });
+    setNewMinStock('');
     setSavingItem(false);
   }
 
@@ -120,6 +122,13 @@ export default function InventoryPage() {
             <input type="text" placeholder="Unité (ex: boîte, m, pcs)" value={itemForm.unit}
               onChange={e => setItemForm({ ...itemForm, unit: e.target.value })}
               className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input
+              type="number"
+              value={newMinStock}
+              onChange={e => setNewMinStock(e.target.value)}
+              placeholder="Seuil alerte (optionnel)"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"
+            />
             {itemError && <p className="text-red-600 text-xs">{itemError}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => { setShowAddItem(false); setItemError(''); }}
@@ -169,6 +178,22 @@ export default function InventoryPage() {
             {!search && <p className="text-xs mt-1">Scannez un code-barres ou utilisez "+ Article" pour ajouter</p>}
           </div>
         )}
+
+        {(() => {
+          const lowStockItems = items.filter(i => i.min_stock !== null && i.min_stock > 0 && (i.total_stock || 0) < i.min_stock);
+          return lowStockItems.length > 0 ? (
+            <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl p-4">
+              <p className="text-sm font-semibold text-orange-800 mb-2">
+                Stock insuffisant ({lowStockItems.length} article{lowStockItems.length > 1 ? 's' : ''})
+              </p>
+              {lowStockItems.map(i => (
+                <p key={i.id} className="text-xs text-orange-700">
+                  {i.name}: {i.total_stock || 0} {i.unit} (min: {i.min_stock})
+                </p>
+              ))}
+            </div>
+          ) : null;
+        })()}
 
         <div className="space-y-3 mb-6">
           {filteredItems.map(item => {

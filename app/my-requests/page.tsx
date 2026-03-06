@@ -10,6 +10,7 @@ interface Request {
   product: string;
   quantity: number;
   unit: string;
+  job_site_id: number | null;
   job_site_name: string;
   urgency: number;
   note: string;
@@ -49,7 +50,7 @@ export default function MyRequestsPage() {
       setUser(u);
       setLang((u.language as Lang) || 'fr');
     });
-    fetch('/api/requests').then(r => r.json()).then(setRequests);
+    fetch('/api/requests').then(r => r.json()).then(data => setRequests(data.requests || data));
   }, [router]);
 
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
@@ -84,29 +85,38 @@ export default function MyRequestsPage() {
 
         <div className="space-y-3">
           {requests.map(r => (
-            <button
-              key={r.id}
-              onClick={() => setSelected(r)}
-              className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:border-blue-300 hover:shadow-md transition"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-gray-900 flex items-center gap-1.5">
-                    {r.urgency && (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-500 flex-shrink-0">
-                        <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    {r.product}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-0.5">{r.quantity} {r.unit} · {r.job_site_name}</p>
-                  <p className="text-xs text-gray-400 mt-1">{new Date(r.created_at).toLocaleDateString('fr-CA')}</p>
+            <div key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 hover:border-blue-300 hover:shadow-md transition">
+              <div
+                onClick={() => setSelected(r)}
+                className="cursor-pointer text-left"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                      {r.urgency && (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-500 flex-shrink-0">
+                          <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      {r.product}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-0.5">{r.quantity} {r.unit} · {r.job_site_name}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(r.created_at).toLocaleDateString('fr-CA')}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
+                    {statusConfig[r.status]?.label}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
-                  {statusConfig[r.status]?.label}
-                </span>
               </div>
-            </button>
+              {r.status === 'approved' && (
+                <button
+                  onClick={() => router.push(`/new-request?product=${encodeURIComponent(r.product)}&quantity=${r.quantity}&unit=${encodeURIComponent(r.unit)}&job_site_id=${r.job_site_id || ''}`)}
+                  className="mt-2 w-full text-center text-xs text-blue-600 border border-blue-200 rounded-xl py-1.5 hover:bg-blue-50 transition"
+                >
+                  Recommander
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>

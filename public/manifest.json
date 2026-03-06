@@ -1,0 +1,17 @@
+{
+  "name": "LogicSupplies",
+  "short_name": "LogicSupplies",
+  "description": "Gestion de matériel électrique",
+  "start_url": "/approvals",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "/logo-shield.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

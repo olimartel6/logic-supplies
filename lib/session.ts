@@ -9,8 +9,16 @@ export interface SessionData {
   role?: string;
 }
 
+const secret = process.env.SESSION_SECRET;
+if (!secret && process.env.NODE_ENV === 'production') {
+  throw new Error('SESSION_SECRET env var is required in production');
+}
+if (!secret) {
+  console.warn('[SECURITY] SESSION_SECRET not set — using insecure dev default');
+}
+
 const sessionOptions = {
-  password: process.env.SESSION_SECRET || 'sparky-secret-key-change-in-production-32chars',
+  password: secret || 'sparky-secret-key-change-in-production-32chars',
   cookieName: 'logicsupplies-session',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',

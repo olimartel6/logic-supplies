@@ -1,6 +1,19 @@
 import { chromium } from 'playwright';
 import { getDb } from './db';
 
+const SUPPLIER_LABELS: Record<string, string> = {
+  canac: 'Canac', homedepot: 'Home Depot', lumen: 'Lumen',
+  guillevin: 'Guillevin', jsv: 'JSV', westburne: 'Westburne',
+  nedco: 'Nedco', futech: 'Futech', deschenes: 'Deschênes',
+  bmr: 'BMR', rona: 'Rona',
+};
+const SUPPLIER_WEBSITES: Record<string, string> = {
+  canac: 'canac.ca', homedepot: 'homedepot.ca', lumen: 'lumen.ca',
+  guillevin: 'guillevin.com', jsv: 'jsv.ca', westburne: 'westburne.ca',
+  nedco: 'nedco.ca', futech: 'futech.ca', deschenes: 'deschenes.ca',
+  bmr: 'bmr.ca', rona: 'rona.ca',
+};
+
 export interface PORequest {
   id: number;
   product: string;
@@ -9,6 +22,7 @@ export interface PORequest {
   job_site_name: string;
   job_site_address: string | null;
   electrician_name: string;
+  supplier: string | null;
 }
 
 function buildHtml(req: PORequest, sku: string | null, unitPrice: number | null): string {
@@ -79,8 +93,8 @@ function buildHtml(req: PORequest, sku: string | null, unitPrice: number | null)
       </div>
       <div class="meta-block">
         <label>Fournisseur</label>
-        <div class="val">Lumen</div>
-        <div class="sub">lumen.ca</div>
+        <div class="val">${esc(req.supplier ? (SUPPLIER_LABELS[req.supplier] ?? req.supplier) : 'N/A')}</div>
+        <div class="sub">${esc(req.supplier ? (SUPPLIER_WEBSITES[req.supplier] ?? '') : '')}</div>
       </div>
     </div>
 
@@ -139,19 +153,22 @@ export async function generatePurchaseOrderPdf(requestId: number): Promise<Buffe
     SELECT r.id, r.product, r.quantity, r.unit,
            u.name as electrician_name,
            j.name as job_site_name,
-           j.address as job_site_address
+           j.address as job_site_address,
+           so.supplier
     FROM requests r
     LEFT JOIN users u ON r.electrician_id = u.id
     LEFT JOIN job_sites j ON r.job_site_id = j.id
+    LEFT JOIN supplier_orders so ON so.request_id = r.id
     WHERE r.id = ?
   `).get(requestId) as PORequest | undefined;
 
   if (!req) throw new Error(`Demande #${requestId} introuvable`);
 
   // Try to find matching product in catalog for SKU + price
+  const supplier = req.supplier ?? 'lumen';
   const product = db.prepare(
-    "SELECT sku, price FROM products WHERE supplier = 'lumen' AND LOWER(name) LIKE LOWER(?) LIMIT 1"
-  ).get(`%${req.product}%`) as { sku: string | null; price: number | null } | undefined;
+    "SELECT sku, price FROM products WHERE supplier = ? AND LOWER(name) LIKE LOWER(?) LIMIT 1"
+  ).get(supplier, `%${req.product}%`) as { sku: string | null; price: number | null } | undefined;
 
   const html = buildHtml(req, product?.sku ?? null, product?.price ?? null);
 

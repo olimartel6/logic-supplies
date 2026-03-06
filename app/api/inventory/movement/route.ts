@@ -43,6 +43,22 @@ export async function POST(req: NextRequest) {
 
   try {
     doMovement();
+
+    // Low-stock threshold check
+    const itemInfo = db.prepare('SELECT name, unit, min_stock FROM inventory_items WHERE id = ? AND company_id = ?').get(item_id, ctx.companyId) as any;
+    if (itemInfo?.min_stock !== null && itemInfo?.min_stock > 0) {
+      const totalStock = (db.prepare('SELECT COALESCE(SUM(quantity), 0) as t FROM inventory_stock WHERE item_id = ?').get(item_id) as any).t;
+      if (totalStock < itemInfo.min_stock) {
+        const { sendLowStockAlertEmail } = await import('@/lib/email');
+        const officeEmails = db.prepare("SELECT email FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(ctx.companyId) as any[];
+        for (const u of officeEmails) {
+          sendLowStockAlertEmail(u.email, {
+            itemName: itemInfo.name, currentStock: totalStock, minStock: itemInfo.min_stock, unit: itemInfo.unit || '',
+          }).catch(console.error);
+        }
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     if (err.message === 'Stock insuffisant') return NextResponse.json({ error: err.message }, { status: 422 });
