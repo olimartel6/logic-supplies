@@ -33,6 +33,7 @@ export default function InventoryPage() {
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [locationForm, setLocationForm] = useState({ name: '', type: 'warehouse' });
   const [savingLocation, setSavingLocation] = useState(false);
+  const [showLocations, setShowLocations] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
   const [itemForm, setItemForm] = useState({ name: '', unit: 'unité', barcode: '' });
   const [savingItem, setSavingItem] = useState(false);
@@ -309,8 +310,6 @@ export default function InventoryPage() {
           ) : null;
         })()}
 
-        <div className="md:flex md:gap-6 md:items-start">
-        <div className="flex-1">
         <div className="space-y-3 mb-6 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-3">
           {filteredItems.map(item => {
             const itemStock = stock.filter(s => s.item_id === item.id);
@@ -346,57 +345,66 @@ export default function InventoryPage() {
             );
           })}
         </div>
-        </div>
 
         {isManager && (
-          <div className="md:w-64 md:flex-shrink-0">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900 text-sm">Emplacements</h2>
-              <button onClick={() => setShowAddLocation(!showAddLocation)} className="text-blue-600 text-sm font-medium">
-                + Ajouter
-              </button>
-            </div>
-            {showAddLocation && (
-              <form onSubmit={handleAddLocation} className="space-y-3 mb-3">
-                <input
-                  type="text"
-                  placeholder="Nom de l'emplacement *"
-                  required
-                  value={locationForm.name}
-                  onChange={e => setLocationForm({ ...locationForm, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <select
-                  value={locationForm.type}
-                  onChange={e => setLocationForm({ ...locationForm, type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="warehouse">Entrepôt</option>
-                  <option value="truck">Camion</option>
-                  <option value="jobsite">Chantier</option>
-                </select>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowAddLocation(false)} className="flex-1 border border-gray-300 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50">Annuler</button>
-                  <button type="submit" disabled={savingLocation} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
-                    {savingLocation ? 'Création...' : 'Créer'}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowLocations(v => !v)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition flex items-center gap-1"
+            >
+              <svg className={`w-3 h-3 transition-transform ${showLocations ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              Gérer les emplacements ({locations.length})
+            </button>
+            {showLocations && (
+              <div className="mt-2 bg-gray-50 rounded-xl border border-gray-100 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500 font-medium">Emplacements</span>
+                  <button onClick={() => setShowAddLocation(!showAddLocation)} className="text-blue-600 text-xs font-medium">
+                    + Ajouter
                   </button>
                 </div>
-              </form>
-            )}
-            <div className="space-y-2">
-              {locations.map(l => (
-                <div key={l.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-800">{l.name}</span>
-                  <span className="text-xs text-gray-400">{locationTypeLabel[l.type] || l.type}</span>
+                {showAddLocation && (
+                  <form onSubmit={handleAddLocation} className="space-y-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Nom *"
+                      required
+                      value={locationForm.name}
+                      onChange={e => setLocationForm({ ...locationForm, name: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select
+                      value={locationForm.type}
+                      onChange={e => setLocationForm({ ...locationForm, type: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="warehouse">Entrepôt</option>
+                      <option value="truck">Camion</option>
+                      <option value="jobsite">Chantier</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShowAddLocation(false)} className="flex-1 border border-gray-200 py-1.5 rounded-lg text-xs hover:bg-white">Annuler</button>
+                      <button type="submit" disabled={savingLocation} className="flex-1 bg-blue-600 text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+                        {savingLocation ? '...' : 'Créer'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+                <div className="space-y-1">
+                  {locations.map(l => (
+                    <div key={l.id} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">{l.name}</span>
+                      <span className="text-gray-400">{locationTypeLabel[l.type] || l.type}</span>
+                    </div>
+                  ))}
+                  {locations.length === 0 && <p className="text-xs text-gray-400">Aucun emplacement</p>}
                 </div>
-              ))}
-              {locations.length === 0 && <p className="text-xs text-gray-400">Aucun emplacement configuré</p>}
-            </div>
-          </div>
+              </div>
+            )}
           </div>
         )}
-        </div>
       </div>
     </div>
   );
