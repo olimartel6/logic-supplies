@@ -86,9 +86,9 @@ export default function InventoryPage() {
   const isManager = user.role === 'admin' || user.role === 'office';
 
   return (
-    <div className="pb-20">
+    <div className="pb-20 md:pb-6 md:ml-56">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="max-w-lg mx-auto px-4 py-6 md:max-w-none md:mx-0">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Inventaire</h1>
           <div className="flex items-center gap-2">
@@ -195,7 +195,9 @@ export default function InventoryPage() {
           ) : null;
         })()}
 
-        <div className="space-y-3 mb-6">
+        <div className="md:flex md:gap-6 md:items-start">
+        <div className="flex-1">
+        <div className="space-y-3 mb-6 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-3">
           {filteredItems.map(item => {
             const itemStock = stock.filter(s => s.item_id === item.id);
             const displayStock = selectedLocation === 'all'
@@ -230,8 +232,10 @@ export default function InventoryPage() {
             );
           })}
         </div>
+        </div>
 
         {isManager && (
+          <div className="md:w-64 md:flex-shrink-0">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 text-sm">Emplacements</h2>
@@ -276,7 +280,9 @@ export default function InventoryPage() {
               {locations.length === 0 && <p className="text-xs text-gray-400">Aucun emplacement configuré</p>}
             </div>
           </div>
+          </div>
         )}
+        </div>
       </div>
     </div>
   );

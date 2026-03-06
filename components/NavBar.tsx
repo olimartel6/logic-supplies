@@ -100,18 +100,178 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       pathname === path ? 'text-yellow-400' : 'text-slate-400 hover:text-white'
     }`;
 
+  const sidebarLinkClass = (path: string) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors w-full ${
+      pathname === path ? 'text-yellow-400 bg-slate-700' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+    }`;
+
+  const navItems = (
+    <>
+      {isElectrician && (
+        <>
+          <button onClick={() => router.push('/new-request')} className={linkClass('/new-request')}>
+            <IconPlus />
+            <span>{t('nav_new')}</span>
+          </button>
+          <button onClick={() => router.push('/my-requests')} className={linkClass('/my-requests')}>
+            <IconClipboard />
+            <span>{t('nav_my_requests')}</span>
+          </button>
+          {inventoryEnabled && (
+            <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
+              <IconBox />
+              <span>{t('nav_inventory')}</span>
+            </button>
+          )}
+          <button onClick={() => router.push('/profile')} className={linkClass('/profile')}>
+            <IconGear />
+            <span>{t('nav_profile')}</span>
+          </button>
+        </>
+      )}
+      {isOfficeOrAdmin && (
+        <>
+          <button onClick={() => router.push('/approvals')} className={linkClass('/approvals')}>
+            <IconCheckBadge />
+            <span>{t('nav_approvals')}</span>
+          </button>
+          <button onClick={() => router.push('/budget')} className={`${linkClass('/budget')} relative`}>
+            <span className="relative">
+              <IconChartBar />
+              {unseenAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {unseenAlerts > 9 ? '9+' : unseenAlerts}
+                </span>
+              )}
+            </span>
+            <span>{t('nav_budget')}</span>
+          </button>
+          {marketingEnabled && (
+          <button onClick={() => router.push('/projects')} className={linkClass('/projects')}>
+            <IconMegaphone />
+            <span>Marketing</span>
+          </button>
+          )}
+          {inventoryEnabled && (
+            <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
+              <IconBox />
+              <span>{t('nav_inventory')}</span>
+            </button>
+          )}
+        </>
+      )}
+      {role === 'admin' && (
+        <button onClick={() => router.push('/admin')} className={linkClass('/admin')}>
+          <IconUsers />
+          <span>{t('nav_admin')}</span>
+        </button>
+      )}
+      {isOfficeOrAdmin && (
+        <button onClick={() => router.push('/settings')} className={linkClass('/settings')}>
+          <IconGear />
+          <span>{t('nav_settings')}</span>
+        </button>
+      )}
+    </>
+  );
+
+  const sidebarItems = (
+    <>
+      {isElectrician && (
+        <>
+          <button onClick={() => router.push('/new-request')} className={sidebarLinkClass('/new-request')}>
+            <IconPlus /><span>{t('nav_new')}</span>
+          </button>
+          <button onClick={() => router.push('/my-requests')} className={sidebarLinkClass('/my-requests')}>
+            <IconClipboard /><span>{t('nav_my_requests')}</span>
+          </button>
+          {inventoryEnabled && (
+            <button onClick={() => router.push('/inventory')} className={sidebarLinkClass('/inventory')}>
+              <IconBox /><span>{t('nav_inventory')}</span>
+            </button>
+          )}
+          <button onClick={() => router.push('/profile')} className={sidebarLinkClass('/profile')}>
+            <IconGear /><span>{t('nav_profile')}</span>
+          </button>
+        </>
+      )}
+      {isOfficeOrAdmin && (
+        <>
+          <button onClick={() => router.push('/approvals')} className={sidebarLinkClass('/approvals')}>
+            <IconCheckBadge /><span>{t('nav_approvals')}</span>
+          </button>
+          <button onClick={() => router.push('/budget')} className={`${sidebarLinkClass('/budget')} relative`}>
+            <span className="relative">
+              <IconChartBar />
+              {unseenAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {unseenAlerts > 9 ? '9+' : unseenAlerts}
+                </span>
+              )}
+            </span>
+            <span>{t('nav_budget')}</span>
+          </button>
+          {marketingEnabled && (
+            <button onClick={() => router.push('/projects')} className={sidebarLinkClass('/projects')}>
+              <IconMegaphone /><span>Marketing</span>
+            </button>
+          )}
+          {inventoryEnabled && (
+            <button onClick={() => router.push('/inventory')} className={sidebarLinkClass('/inventory')}>
+              <IconBox /><span>{t('nav_inventory')}</span>
+            </button>
+          )}
+        </>
+      )}
+      {role === 'admin' && (
+        <button onClick={() => router.push('/admin')} className={sidebarLinkClass('/admin')}>
+          <IconUsers /><span>{t('nav_admin')}</span>
+        </button>
+      )}
+      {isOfficeOrAdmin && (
+        <button onClick={() => router.push('/settings')} className={sidebarLinkClass('/settings')}>
+          <IconGear /><span>{t('nav_settings')}</span>
+        </button>
+      )}
+    </>
+  );
+
   return (
     <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-56 bg-slate-800 border-r border-slate-700 flex-col z-30">
+        <div className="px-4 py-4 border-b border-slate-700 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-shield.svg" className="h-7 w-auto flex-shrink-0" alt="LogicSupplies" />
+            <div className="flex flex-col leading-none gap-0.5">
+              <span className="font-extrabold text-white text-sm tracking-wide">Logic</span>
+              <span className="font-extrabold text-blue-400 text-sm tracking-wide">Supplies</span>
+            </div>
+          </div>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-3 px-2">
+          <div className="flex flex-col gap-1">
+            {sidebarItems}
+          </div>
+        </nav>
+        <div className="border-t border-slate-700 px-4 py-3 flex-shrink-0">
+          <p className="text-xs text-slate-400 truncate mb-1">{name}</p>
+          <button onClick={logout} className="text-xs text-slate-400 hover:text-red-400 transition">
+            {t('nav_logout')}
+          </button>
+        </div>
+      </aside>
+
       {/* Top bar */}
-      <div className={`bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md ${hideTopOnMobile ? 'hidden sm:flex' : ''}`}>
-        <div className="flex items-center gap-2.5">
+      <div className={`bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md md:ml-56 ${hideTopOnMobile ? 'hidden sm:flex' : ''}`}>
+        <div className="flex items-center gap-2.5 md:hidden">
           <img src="/logo-shield.svg" className="h-8 w-auto flex-shrink-0" alt="LogicSupplies" />
           <div className="flex flex-col leading-none gap-0.5">
             <span className="font-extrabold text-white text-sm tracking-wide">Logic</span>
             <span className="font-extrabold text-blue-400 text-sm tracking-wide">Supplies</span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 md:ml-auto">
           <span className="text-sm text-slate-300">{name}</span>
           <button onClick={logout} className="text-sm text-slate-400 hover:text-red-400 transition">
             {t('nav_logout')}
@@ -119,79 +279,10 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
         </div>
       </div>
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 py-3 z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
+      {/* Bottom nav (mobile only) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 py-3 z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
         <div className="flex justify-around max-w-lg mx-auto">
-          {isElectrician && (
-            <>
-              <button onClick={() => router.push('/new-request')} className={linkClass('/new-request')}>
-                <IconPlus />
-                <span>{t('nav_new')}</span>
-              </button>
-              <button onClick={() => router.push('/my-requests')} className={linkClass('/my-requests')}>
-                <IconClipboard />
-                <span>{t('nav_my_requests')}</span>
-              </button>
-              {inventoryEnabled && (
-                <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
-                  <IconBox />
-                  <span>{t('nav_inventory')}</span>
-                </button>
-              )}
-              <button onClick={() => router.push('/profile')} className={linkClass('/profile')}>
-                <IconGear />
-                <span>{t('nav_profile')}</span>
-              </button>
-            </>
-          )}
-          {isOfficeOrAdmin && (
-            <>
-              <button onClick={() => router.push('/approvals')} className={linkClass('/approvals')}>
-                <IconCheckBadge />
-                <span>{t('nav_approvals')}</span>
-              </button>
-              <button onClick={() => router.push('/approvals?all=1')} className={linkClass('/approvals?all=1')}>
-                <IconList />
-                <span>{t('nav_all')}</span>
-              </button>
-              <button onClick={() => router.push('/budget')} className={`${linkClass('/budget')} relative`}>
-                <span className="relative">
-                  <IconChartBar />
-                  {unseenAlerts > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                      {unseenAlerts > 9 ? '9+' : unseenAlerts}
-                    </span>
-                  )}
-                </span>
-                <span>{t('nav_budget')}</span>
-              </button>
-              {marketingEnabled && (
-              <button onClick={() => router.push('/projects')} className={linkClass('/projects')}>
-                <IconMegaphone />
-                <span>Marketing</span>
-              </button>
-              )}
-              {inventoryEnabled && (
-                <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
-                  <IconBox />
-                  <span>{t('nav_inventory')}</span>
-                </button>
-              )}
-            </>
-          )}
-          {role === 'admin' && (
-            <button onClick={() => router.push('/admin')} className={linkClass('/admin')}>
-              <IconUsers />
-              <span>{t('nav_admin')}</span>
-            </button>
-          )}
-
-          {isOfficeOrAdmin && (
-            <button onClick={() => router.push('/settings')} className={linkClass('/settings')}>
-              <IconGear />
-              <span>{t('nav_settings')}</span>
-            </button>
-          )}
+          {navItems}
         </div>
       </nav>
     </>

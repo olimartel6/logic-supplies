@@ -50,11 +50,12 @@ export default function BillingPage() {
   const status = statusConfig[user.subscriptionStatus ?? 'active'] ?? statusConfig.active;
 
   return (
-    <div className="pb-20">
+    <div className="pb-20 md:pb-6 md:ml-56">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="max-w-lg mx-auto px-4 py-6 md:max-w-none md:mx-0">
         <h1 className="text-xl font-bold text-gray-900 mb-6">💳 Facturation</h1>
 
+        <div className="md:max-w-sm">
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
           <h2 className="font-semibold text-gray-900 mb-4">Abonnement Sparky</h2>
           <div className="flex items-center justify-between mb-4">
@@ -83,6 +84,7 @@ export default function BillingPage() {
         <p className="text-xs text-gray-400 text-center">
           Pour toute question, contactez support@sparky.app
         </p>
+        </div>
       </div>
     </div>
   );

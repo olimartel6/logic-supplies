@@ -142,9 +142,9 @@ export default function BudgetPage() {
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>;
 
   return (
-    <div className="pb-20">
+    <div className="pb-20 md:pb-6 md:ml-56">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="max-w-lg mx-auto px-4 py-6 md:max-w-none md:mx-0">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Budget des projets</h1>
 
         {/* Excel Export */}
@@ -204,7 +204,7 @@ export default function BudgetPage() {
 
 
         {/* Projets */}
-        <div className="space-y-4 mb-8">
+        <div className="space-y-4 mb-8 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
           {sites.length === 0 && (
             <div className="text-center py-12 text-gray-400">
               <div className="flex justify-center mb-2">
