@@ -236,7 +236,6 @@ function ApprovalsContent() {
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
   const statusPills: { key: string; label: string }[] = [
-    { key: '', label: 'Toutes' },
     { key: 'pending', label: 'En attente' },
     { key: 'approved', label: 'Approuvées' },
     { key: 'rejected', label: 'Rejetées' },
