@@ -32,49 +32,138 @@ async function createGuillevinPage(browser: any) {
   return context.newPage();
 }
 
-// Guillevin migrated to Shopify's new Customer Accounts (shopify.com/<id>/account).
-// New flow is 2-step: enter email → click Continue → enter password → submit.
-// The page is a React SPA so we need extra time after domcontentloaded to render.
+// Guillevin login redirects to Shopify Customer Accounts (shopify.com/<id>/account).
+// Shopify new accounts is a one-page-app — email first, then password.
+// The form fields may be inside shadow DOM or rendered late by React/Shopify JS.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
   await page.goto('https://www.guillevin.com/account/login', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
+    waitUntil: 'networkidle',
+    timeout: 45000,
   });
-  // Extra wait for React SPA to render after shopify.com redirect
-  await page.waitForTimeout(4000);
+  // Wait for Shopify redirect + SPA render
+  await page.waitForTimeout(6000);
 
-  // Step 1: email field (Shopify new accounts uses name="email")
-  const emailField = page.locator([
+  // Debug: log current URL and try to find any input
+  const currentUrl = page.url();
+  console.log('[Guillevin] Page URL after navigation:', currentUrl);
+
+  // Step 1: find email field — try multiple strategies
+  // Strategy A: standard selectors (works if no shadow DOM)
+  let emailField = page.locator([
     'input[name="email"]',
     'input[type="email"]',
     'input[id="email"]',
-    'input#username',        // legacy Auth0 fallback
+    'input[autocomplete="email"]',
+    'input[autocomplete="username"]',
+    'input#username',
     'input[name="username"]',
+    'input[name="login"]',
   ].join(', ')).first();
-  await emailField.waitFor({ timeout: 20000 });
+
+  let found = await emailField.isVisible({ timeout: 5000 }).catch(() => false);
+
+  // Strategy B: Shopify uses an iframe for login — check for it
+  if (!found) {
+    console.log('[Guillevin] No direct input found, checking for iframe...');
+    const iframe = page.frameLocator('iframe').first();
+    const iframeEmail = iframe.locator('input[type="email"], input[name="email"], input[autocomplete="email"]').first();
+    found = await iframeEmail.isVisible({ timeout: 5000 }).catch(() => false);
+    if (found) {
+      emailField = iframeEmail;
+      console.log('[Guillevin] Found email field inside iframe');
+    }
+  }
+
+  // Strategy C: use page.evaluate to find inputs anywhere (including shadow DOM)
+  if (!found) {
+    console.log('[Guillevin] Trying shadow DOM / JS evaluation...');
+    found = await page.evaluate(() => {
+      // Search all shadow roots for an email input
+      function findInShadow(root: Document | ShadowRoot): HTMLInputElement | null {
+        const inputs = root.querySelectorAll('input[type="email"], input[name="email"], input[autocomplete="email"], input[type="text"]');
+        for (const inp of inputs) if (inp instanceof HTMLInputElement) return inp;
+        for (const el of root.querySelectorAll('*')) {
+          if (el.shadowRoot) {
+            const found = findInShadow(el.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+      const inp = findInShadow(document);
+      if (inp) { inp.focus(); return true; }
+      return false;
+    }).catch(() => false);
+
+    if (found) {
+      // The field is focused, use keyboard to type
+      await page.keyboard.type(username, { delay: 60 });
+      await page.waitForTimeout(500);
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(3000);
+
+      // Now find password field the same way
+      const pwdFound = await page.evaluate(() => {
+        function findInShadow(root: Document | ShadowRoot): HTMLInputElement | null {
+          const inputs = root.querySelectorAll('input[type="password"]');
+          for (const inp of inputs) if (inp instanceof HTMLInputElement) return inp;
+          for (const el of root.querySelectorAll('*')) {
+            if (el.shadowRoot) {
+              const found = findInShadow(el.shadowRoot);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+        const inp = findInShadow(document);
+        if (inp) { inp.focus(); return true; }
+        return false;
+      }).catch(() => false);
+
+      if (pwdFound) {
+        await page.keyboard.type(password, { delay: 60 });
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Enter');
+      }
+
+      await page.waitForTimeout(5000);
+      const url = page.url();
+      return url.includes('guillevin.com') && !url.includes('login');
+    }
+  }
+
+  if (!found) {
+    // Log page content for debugging
+    const html = await page.content().catch(() => '');
+    console.log('[Guillevin] Page HTML snippet:', html.substring(0, 2000));
+    throw new Error('Impossible de trouver le champ email sur la page de connexion Guillevin');
+  }
+
+  // Standard flow (Strategy A or B found the field)
   await emailField.click();
   await emailField.type(username, { delay: 60 });
   await page.waitForTimeout(300);
 
-  // New Shopify accounts: click "Continue" to reveal the password field
+  // Click "Continue" / "Continuer" if present (2-step Shopify flow)
   const continueBtn = page.locator([
     'button[type="submit"]:has-text("Continue")',
     'button[type="submit"]:has-text("Continuer")',
     'button:has-text("Continue")',
     'button:has-text("Continuer")',
+    'button[type="submit"]',
   ].join(', ')).first();
   if (await continueBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await continueBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
   }
 
-  // Step 2: password field (appears after Continue, or on same page for legacy login)
+  // Step 2: password field
   const passwordField = page.locator([
     'input[type="password"]',
     'input[name="password"]',
     'input#password',
   ].join(', ')).first();
-  await passwordField.waitFor({ timeout: 15000 });
+  await passwordField.waitFor({ timeout: 20000 });
   await passwordField.click();
   await passwordField.type(password, { delay: 60 });
   await page.waitForTimeout(300);
@@ -82,9 +171,9 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   await passwordField.press('Enter');
   await page.waitForFunction(
     () => window.location.hostname.includes('guillevin.com'),
-    { timeout: 25000 }
+    { timeout: 30000 }
   ).catch(() => {});
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
 
   const url = page.url();
   return url.includes('guillevin.com') && !url.includes('login');
