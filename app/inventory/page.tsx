@@ -218,8 +218,8 @@ export default function InventoryPage() {
             <h2 className="text-sm font-bold text-gray-900 mb-3">Suivi des commandes</h2>
             <div className="flex gap-2 mb-3">
               {([
-                { key: 'ordered', label: '📦 Commandées', color: 'blue' },
-                { key: 'shipped', label: '🚚 Expédiées', color: 'violet' },
+                { key: 'ordered', label: 'Commandées', color: 'blue', icon: 'package' },
+                { key: 'shipped', label: 'Expédiées', color: 'violet', icon: 'truck' },
               ] as const).map(f => (
                 <button
                   key={f.key}
@@ -230,6 +230,16 @@ export default function InventoryPage() {
                       : 'bg-white border border-gray-300 text-gray-600'
                   }`}
                 >
+                  {f.icon === 'package' && (
+                    <svg className="w-3.5 h-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  )}
+                  {f.icon === 'truck' && (
+                    <svg className="w-3.5 h-3.5 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    </svg>
+                  )}
                   {f.label}
                 </button>
               ))}
@@ -248,17 +258,23 @@ export default function InventoryPage() {
                       {o.tracking_status === 'ordered' && (
                         <button
                           onClick={() => handleTrackingUpdate(o.id, 'shipped')}
-                          className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-lg font-medium hover:bg-violet-200 transition"
+                          className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-lg font-medium hover:bg-violet-200 transition flex items-center gap-1"
                         >
-                          🚚 Expédié
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                          </svg>
+                          Expédié
                         </button>
                       )}
                       {o.tracking_status === 'shipped' && (
                         <button
                           onClick={() => handleTrackingUpdate(o.id, 'received')}
-                          className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-medium hover:bg-emerald-200 transition"
+                          className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-medium hover:bg-emerald-200 transition flex items-center gap-1"
                         >
-                          ✅ Reçu
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Reçu
                         </button>
                       )}
                       <button
@@ -292,7 +308,12 @@ export default function InventoryPage() {
 
         {receivedOrders.length > 0 && (
           <div className="mb-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-            <h2 className="text-sm font-bold text-gray-900 mb-3">✅ Reçues</h2>
+            <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Reçues
+            </h2>
             <div className="space-y-2">
               {receivedOrders.map(o => (
                 <div key={o.id} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
@@ -313,9 +334,12 @@ export default function InventoryPage() {
                     {!o.picked_up_by_name && (
                       <button
                         onClick={() => handlePickup(o.id)}
-                        className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg font-medium hover:bg-orange-200 transition"
+                        className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg font-medium hover:bg-orange-200 transition flex items-center gap-1"
                       >
-                        📥 Récupérer
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Récupérer
                       </button>
                     )}
                     {isManager && (
