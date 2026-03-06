@@ -294,7 +294,7 @@ export default function InventoryPage() {
           </div>
         )}
 
-        {filteredItems.length === 0 && (
+        {filteredItems.length === 0 && receivedOrders.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <div className="flex justify-center mb-2">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
