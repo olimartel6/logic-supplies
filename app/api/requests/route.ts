@@ -39,6 +39,11 @@ export async function GET(req: NextRequest) {
     conditions.push('r.status = ?');
     params.push(status);
   }
+  const tracking = url.searchParams.get('tracking') || '';
+  if (tracking) {
+    conditions.push('r.tracking_status = ?');
+    params.push(tracking);
+  }
   if (dateFrom) {
     conditions.push('r.created_at >= ?');
     params.push(dateFrom);
@@ -64,10 +69,13 @@ export async function GET(req: NextRequest) {
 
     requests = db.prepare(`
       SELECT r.*, j.name as job_site_name, u.name as electrician_name,
+             pu.name as picked_up_by_name, pj.name as picked_up_job_site_name,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
       LEFT JOIN users u ON r.electrician_id = u.id
+      LEFT JOIN users pu ON r.picked_up_by = pu.id
+      LEFT JOIN job_sites pj ON r.picked_up_job_site_id = pj.id
       ${whereClause}
       ORDER BY r.created_at DESC
       LIMIT ? OFFSET ?
@@ -84,11 +92,14 @@ export async function GET(req: NextRequest) {
     requests = db.prepare(`
       SELECT r.*, j.name as job_site_name, u.name as electrician_name, u.email as electrician_email,
              so.status as lumen_order_status, so.supplier_order_id as lumen_order_id, so.supplier as order_supplier, so.error_message as order_error,
+             pu.name as picked_up_by_name, pj.name as picked_up_job_site_name,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
       LEFT JOIN users u ON r.electrician_id = u.id
       LEFT JOIN supplier_orders so ON so.request_id = r.id
+      LEFT JOIN users pu ON r.picked_up_by = pu.id
+      LEFT JOIN job_sites pj ON r.picked_up_job_site_id = pj.id
       ${whereClause}
       ORDER BY r.urgency DESC, r.created_at DESC
       LIMIT ? OFFSET ?

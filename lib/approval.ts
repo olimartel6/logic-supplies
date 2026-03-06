@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail, sendOrderFailureEmail } from './email';
+import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail, sendOrderFailureEmail, sendOrderTrackingEmail } from './email';
 import { selectAndOrder } from './supplier-router';
 import { randomUUID } from 'crypto';
 import { decrypt } from './encrypt';
@@ -185,6 +185,20 @@ export async function triggerApproval(
       INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at, error_message)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(companyId, requestId, supplier, result?.orderId || null, orderStatus, cancelToken, cancelExpiresAt, orderError);
+
+    // Set tracking_status when order is confirmed
+    if (orderStatus === 'confirmed') {
+      db.prepare("UPDATE requests SET tracking_status = 'ordered' WHERE id = ? AND company_id = ?")
+        .run(requestId, companyId);
+      // Send tracking email to electrician
+      if (request.electrician_email) {
+        sendOrderTrackingEmail(request.electrician_email, {
+          product: request.product, quantity: request.quantity, unit: request.unit,
+          supplier, orderId: result?.orderId || '', trackingStatus: 'ordered',
+          jobSite: request.job_site_name || '',
+        }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+      }
+    }
 
     const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
     const allRecipients = [

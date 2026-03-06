@@ -532,6 +532,22 @@ function initDb(db: Database.Database) {
     db.exec(`ALTER TABLE company_settings ADD COLUMN marketing_enabled INTEGER DEFAULT 0`);
   }
 
+  // Order tracking columns on requests
+  const reqCols = db.pragma('table_info(requests)') as { name: string }[];
+  if (!reqCols.find(c => c.name === 'tracking_status')) {
+    db.exec("ALTER TABLE requests ADD COLUMN tracking_status TEXT DEFAULT NULL");
+  }
+  if (!reqCols.find(c => c.name === 'picked_up_by')) {
+    db.exec("ALTER TABLE requests ADD COLUMN picked_up_by INTEGER REFERENCES users(id)");
+  }
+  if (!reqCols.find(c => c.name === 'picked_up_at')) {
+    db.exec("ALTER TABLE requests ADD COLUMN picked_up_at DATETIME");
+  }
+  if (!reqCols.find(c => c.name === 'picked_up_job_site_id')) {
+    db.exec("ALTER TABLE requests ADD COLUMN picked_up_job_site_id INTEGER REFERENCES job_sites(id)");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_requests_tracking ON requests(company_id, tracking_status)");
+
   // Low-stock alert threshold
   const invItemCols = db.pragma('table_info(inventory_items)') as { name: string }[];
   if (!invItemCols.find(c => c.name === 'min_stock')) {

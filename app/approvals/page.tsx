@@ -23,6 +23,11 @@ interface Request {
   supplier: string | null;
   order_supplier: string | null;
   unit_price: number | null;
+  tracking_status: string | null;
+  picked_up_by: number | null;
+  picked_up_by_name: string | null;
+  picked_up_at: string | null;
+  picked_up_job_site_name: string | null;
 }
 interface User { name: string; role: string; inventoryEnabled?: boolean; marketingEnabled?: boolean; }
 
@@ -70,6 +75,12 @@ function ApprovalsContent() {
     rejected: { label: t('status_rejected'), color: 'bg-red-100 text-red-800' },
   };
 
+  const trackingConfig: Record<string, { label: string; color: string }> = {
+    ordered:  { label: 'Commandé',  color: 'bg-blue-100 text-blue-800' },
+    shipped:  { label: 'Expédié',   color: 'bg-purple-100 text-purple-800' },
+    received: { label: 'Reçu',      color: 'bg-emerald-100 text-emerald-800' },
+  };
+
   function closeOrderModal() {
     if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
     setOrderModal(null);
@@ -90,7 +101,11 @@ function ApprovalsContent() {
     params.set('page', String(pageNum));
     params.set('limit', '20');
     if (search) params.set('search', search);
-    if (statusFilter) params.set('status', statusFilter);
+    const isTrackingFilter = statusFilter.startsWith('tracking:');
+    const statusParam = isTrackingFilter ? '' : statusFilter;
+    const trackingParam = isTrackingFilter ? statusFilter.replace('tracking:', '') : '';
+    if (statusParam) params.set('status', statusParam);
+    if (trackingParam) params.set('tracking', trackingParam);
     if (dateFrom) params.set('dateFrom', dateFrom);
     if (dateTo) params.set('dateTo', dateTo);
 
@@ -175,6 +190,18 @@ function ApprovalsContent() {
     }
   }
 
+  async function handleTrackingUpdate(requestId: number, trackingStatus: string) {
+    setLoading(true);
+    await fetch(`/api/requests/${requestId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking_status: trackingStatus }),
+    });
+    await loadRequests(1, false);
+    setSelected(null);
+    setLoading(false);
+  }
+
   // Bulk selection helpers
   function toggleSelect(id: number) {
     setSelectedIds(prev => {
@@ -240,6 +267,9 @@ function ApprovalsContent() {
     { key: 'pending', label: 'En attente' },
     { key: 'approved', label: 'Approuvées' },
     { key: 'rejected', label: 'Rejetées' },
+    { key: 'tracking:ordered', label: 'Commandées' },
+    { key: 'tracking:shipped', label: 'Expédiées' },
+    { key: 'tracking:received', label: 'Reçues' },
   ];
 
   return (
@@ -367,6 +397,11 @@ function ApprovalsContent() {
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
                     {statusConfig[r.status]?.label}
                   </span>
+                  {r.status === 'approved' && r.tracking_status && trackingConfig[r.tracking_status] && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-1 ${trackingConfig[r.tracking_status].color}`}>
+                      {trackingConfig[r.tracking_status].label}
+                    </span>
+                  )}
                   <button
                     onClick={e => { e.stopPropagation(); handleDelete(r.id); }}
                     disabled={deletingId === r.id}
@@ -437,6 +472,44 @@ function ApprovalsContent() {
                       {loading ? t('approving') : t('approve')}
                     </span>
                   </button>
+                </div>
+              )}
+
+              {/* ── Tracking actions ── */}
+              {selected.status === 'approved' && (
+                <div className="px-6 pb-3 flex-shrink-0">
+                  {selected.tracking_status === 'ordered' && (
+                    <button
+                      onClick={() => handleTrackingUpdate(selected.id, 'shipped')}
+                      disabled={loading}
+                      className="w-full mt-3 bg-purple-600 text-white py-3 rounded-2xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition"
+                    >
+                      🚚 Marquer comme expédié
+                    </button>
+                  )}
+                  {selected.tracking_status === 'shipped' && (
+                    <button
+                      onClick={() => handleTrackingUpdate(selected.id, 'received')}
+                      disabled={loading}
+                      className="w-full mt-3 bg-emerald-600 text-white py-3 rounded-2xl font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
+                    >
+                      ✅ Marquer comme reçu
+                    </button>
+                  )}
+                  {selected.tracking_status === 'received' && (
+                    <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                      <p className="text-sm font-medium text-emerald-800">✅ Reçu et ajouté à l&apos;inventaire</p>
+                      {selected.picked_up_by_name ? (
+                        <p className="text-xs text-emerald-600 mt-1">
+                          Récupéré par {selected.picked_up_by_name}
+                          {selected.picked_up_job_site_name && ` pour ${selected.picked_up_job_site_name}`}
+                          {selected.picked_up_at && ` le ${new Date(selected.picked_up_at).toLocaleDateString('fr-CA')}`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-emerald-600 mt-1">Disponible au bureau — en attente de récupération</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -731,6 +804,44 @@ function ApprovalsContent() {
                     {loading ? t('approving') : t('approve')}
                   </span>
                 </button>
+              </div>
+            )}
+
+            {/* ── Tracking actions (mobile) ── */}
+            {selected.status === 'approved' && (
+              <div className="px-6 pb-3 flex-shrink-0">
+                {selected.tracking_status === 'ordered' && (
+                  <button
+                    onClick={() => handleTrackingUpdate(selected.id, 'shipped')}
+                    disabled={loading}
+                    className="w-full mt-3 bg-purple-600 text-white py-3 rounded-2xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition"
+                  >
+                    🚚 Marquer comme expédié
+                  </button>
+                )}
+                {selected.tracking_status === 'shipped' && (
+                  <button
+                    onClick={() => handleTrackingUpdate(selected.id, 'received')}
+                    disabled={loading}
+                    className="w-full mt-3 bg-emerald-600 text-white py-3 rounded-2xl font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
+                  >
+                    ✅ Marquer comme reçu
+                  </button>
+                )}
+                {selected.tracking_status === 'received' && (
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <p className="text-sm font-medium text-emerald-800">✅ Reçu et ajouté à l&apos;inventaire</p>
+                    {selected.picked_up_by_name ? (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        Récupéré par {selected.picked_up_by_name}
+                        {selected.picked_up_job_site_name && ` pour ${selected.picked_up_job_site_name}`}
+                        {selected.picked_up_at && ` le ${new Date(selected.picked_up_at).toLocaleDateString('fr-CA')}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-600 mt-1">Disponible au bureau — en attente de récupération</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

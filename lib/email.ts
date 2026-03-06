@@ -430,3 +430,73 @@ export async function sendLowStockAlertEmail(to: string, data: {
     `,
   });
 }
+
+export async function sendOrderTrackingEmail(to: string, data: {
+  product: string;
+  quantity: number;
+  unit: string;
+  supplier: string;
+  orderId: string;
+  trackingStatus: 'ordered' | 'shipped' | 'received';
+  jobSite: string;
+}, lang: Lang = 'fr') {
+  if (!process.env.RESEND_API_KEY) return;
+  const label = supplierLabel(data.supplier);
+
+  const statusLabels: Record<string, Record<Lang, string>> = {
+    ordered:  { fr: 'Commandé',  en: 'Ordered',  es: 'Pedido' },
+    shipped:  { fr: 'Expédié',   en: 'Shipped',  es: 'Enviado' },
+    received: { fr: 'Reçu',      en: 'Received', es: 'Recibido' },
+  };
+  const statusColors: Record<string, string> = {
+    ordered:  'background:#dbeafe;color:#1d4ed8',
+    shipped:  'background:#f3e8ff;color:#7c3aed',
+    received: 'background:#d1fae5;color:#065f46',
+  };
+  const nextStep: Record<string, Record<Lang, string>> = {
+    ordered:  { fr: 'Vous serez averti lorsque la commande sera expédiée.', en: 'You will be notified when the order is shipped.', es: 'Se le notificará cuando el pedido sea enviado.' },
+    shipped:  { fr: 'Vous serez averti lorsque la commande sera reçue.', en: 'You will be notified when the order is received.', es: 'Se le notificará cuando el pedido sea recibido.' },
+    received: { fr: 'Le matériel est disponible au bureau. Vous pouvez le récupérer.', en: 'The material is available at the office. You can pick it up.', es: 'El material está disponible en la oficina. Puede recogerlo.' },
+  };
+
+  const statusText = statusLabels[data.trackingStatus][lang];
+  const subjects: Record<Lang, string> = {
+    fr: `Mise à jour de votre commande — ${data.product}`,
+    en: `Order update — ${data.product}`,
+    es: `Actualización del pedido — ${data.product}`,
+  };
+  const headings: Record<Lang, string> = {
+    fr: 'Mise à jour de commande',
+    en: 'Order update',
+    es: 'Actualización del pedido',
+  };
+  const productLabel: Record<Lang, string> = { fr: 'Produit', en: 'Product', es: 'Producto' };
+  const qtyLabel: Record<Lang, string> = { fr: 'Quantité', en: 'Quantity', es: 'Cantidad' };
+  const siteLabel: Record<Lang, string> = { fr: 'Chantier', en: 'Job site', es: 'Obra' };
+  const supplierLbl: Record<Lang, string> = { fr: 'Fournisseur', en: 'Supplier', es: 'Proveedor' };
+  const orderLabel: Record<Lang, string> = { fr: 'Commande #', en: 'Order #', es: 'Pedido #' };
+  const statusLbl: Record<Lang, string> = { fr: 'Statut', en: 'Status', es: 'Estado' };
+  const linkLabel: Record<Lang, string> = { fr: 'Voir mes demandes', en: 'View my requests', es: 'Ver mis solicitudes' };
+
+  const { error } = await getResend().emails.send({
+    from: getFrom(),
+    to,
+    subject: subjects[lang],
+    html: `
+      <h2>${headings[lang]}</h2>
+      <p><b>${productLabel[lang]}:</b> ${data.product}</p>
+      <p><b>${qtyLabel[lang]}:</b> ${data.quantity} ${data.unit}</p>
+      <p><b>${siteLabel[lang]}:</b> ${data.jobSite || '—'}</p>
+      <p><b>${supplierLbl[lang]}:</b> ${label}</p>
+      ${data.orderId ? `<p><b>${orderLabel[lang]}:</b> ${data.orderId}</p>` : ''}
+      <p><b>${statusLbl[lang]}:</b> <span style="display:inline-block;${statusColors[data.trackingStatus]};padding:4px 12px;border-radius:12px;font-weight:600;font-size:13px;">${statusText}</span></p>
+      <br/>
+      <p style="color:#666;font-size:14px;">${nextStep[data.trackingStatus][lang]}</p>
+      <br/>
+      <a href="${APP_URL}/my-requests" style="display:inline-block;background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+        ${linkLabel[lang]}
+      </a>
+    `,
+  });
+  if (error) throw new Error(error.message);
+}

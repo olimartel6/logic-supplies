@@ -17,6 +17,11 @@ interface Request {
   status: string;
   office_comment: string;
   created_at: string;
+  tracking_status: string | null;
+  picked_up_by: number | null;
+  picked_up_by_name: string | null;
+  picked_up_at: string | null;
+  picked_up_job_site_name: string | null;
 }
 
 interface User {
@@ -40,6 +45,21 @@ export default function MyRequestsPage() {
     rejected: { label: t('status_rejected'), color: 'bg-red-100 text-red-800' },
   };
 
+  function loadRequests() {
+    fetch('/api/requests').then(r => r.json()).then(data => setRequests(data.requests || data));
+  }
+
+  async function handlePickup(requestId: number, jobSiteId: number | null) {
+    const res = await fetch(`/api/requests/${requestId}/pickup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_site_id: jobSiteId }),
+    });
+    if (res.ok) {
+      loadRequests();
+    }
+  }
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
       if (!r.ok) { router.push('/'); return; }
@@ -50,7 +70,7 @@ export default function MyRequestsPage() {
       setUser(u);
       setLang((u.language as Lang) || 'fr');
     });
-    fetch('/api/requests').then(r => r.json()).then(data => setRequests(data.requests || data));
+    loadRequests();
   }, [router]);
 
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
@@ -103,9 +123,22 @@ export default function MyRequestsPage() {
                     <p className="text-sm text-gray-500 mt-0.5">{r.quantity} {r.unit} · {r.job_site_name}</p>
                     <p className="text-xs text-gray-400 mt-1">{new Date(r.created_at).toLocaleDateString('fr-CA')}</p>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
-                    {statusConfig[r.status]?.label}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusConfig[r.status]?.color}`}>
+                      {statusConfig[r.status]?.label}
+                    </span>
+                    {r.status === 'approved' && r.tracking_status && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        r.tracking_status === 'ordered' ? 'bg-blue-100 text-blue-800' :
+                        r.tracking_status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                        'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {r.tracking_status === 'ordered' ? '📦 Commandé' :
+                         r.tracking_status === 'shipped' ? '🚚 Expédié' :
+                         '✅ Reçu'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               {r.status === 'approved' && (
@@ -115,6 +148,20 @@ export default function MyRequestsPage() {
                 >
                   Recommander
                 </button>
+              )}
+              {r.status === 'approved' && r.tracking_status === 'received' && !r.picked_up_by && (
+                <button
+                  onClick={() => handlePickup(r.id, r.job_site_id)}
+                  className="mt-2 w-full text-center text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 rounded-xl py-2.5 font-semibold hover:bg-emerald-100 transition"
+                >
+                  📦 Récupérer la commande
+                </button>
+              )}
+              {r.picked_up_by && r.picked_up_at && (
+                <p className="mt-2 text-xs text-gray-500">
+                  ✅ Récupéré le {new Date(r.picked_up_at).toLocaleDateString('fr-CA')}
+                  {r.picked_up_job_site_name && ` pour ${r.picked_up_job_site_name}`}
+                </p>
               )}
             </div>
           ))}
@@ -140,6 +187,37 @@ export default function MyRequestsPage() {
                   <p className="text-xs text-red-600 font-medium">{t('office_comment')}</p>
                   <p className="mt-1 text-red-800">{selected.office_comment}</p>
                 </div>
+              )}
+              {selected.status === 'approved' && selected.tracking_status && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Suivi</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    selected.tracking_status === 'ordered' ? 'bg-blue-100 text-blue-800' :
+                    selected.tracking_status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                    'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {selected.tracking_status === 'ordered' ? '📦 Commandé' :
+                     selected.tracking_status === 'shipped' ? '🚚 Expédié' :
+                     '✅ Reçu'}
+                  </span>
+                </div>
+              )}
+              {selected.picked_up_by && selected.picked_up_at && (
+                <div className="bg-emerald-50 rounded-xl p-3">
+                  <p className="text-xs text-emerald-700 font-medium">
+                    ✅ Récupéré le {new Date(selected.picked_up_at).toLocaleDateString('fr-CA')}
+                    {selected.picked_up_by_name && ` par ${selected.picked_up_by_name}`}
+                    {selected.picked_up_job_site_name && ` pour ${selected.picked_up_job_site_name}`}
+                  </p>
+                </div>
+              )}
+              {selected.status === 'approved' && selected.tracking_status === 'received' && !selected.picked_up_by && (
+                <button
+                  onClick={() => { handlePickup(selected.id, selected.job_site_id); setSelected(null); }}
+                  className="w-full text-center text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 rounded-xl py-2.5 font-semibold hover:bg-emerald-100 transition"
+                >
+                  📦 Récupérer la commande
+                </button>
               )}
             </div>
           </div>
