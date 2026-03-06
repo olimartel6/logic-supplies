@@ -133,10 +133,34 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   }
 
   if (!found) {
-    // Log page content for debugging
+    // Capture debug info and return it in the error
+    const debugUrl = page.url();
     const html = await page.content().catch(() => '');
-    console.log('[Guillevin] Page HTML snippet:', html.substring(0, 2000));
-    throw new Error('Impossible de trouver le champ email sur la page de connexion Guillevin');
+    const title = await page.title().catch(() => '');
+    // Count all inputs and list their attributes
+    const inputInfo = await page.evaluate(() => {
+      const inputs = document.querySelectorAll('input');
+      return Array.from(inputs).map(i => ({
+        type: i.type, name: i.name, id: i.id, placeholder: i.placeholder, autocomplete: i.autocomplete
+      }));
+    }).catch(() => []);
+    // Check for shadow DOM hosts
+    const shadowHosts = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('*')).filter(el => el.shadowRoot).map(el => el.tagName.toLowerCase()).slice(0, 10);
+    }).catch(() => []);
+    // Check iframes
+    const iframeCount = await page.evaluate(() => document.querySelectorAll('iframe').length).catch(() => 0);
+
+    const debugMsg = [
+      `URL: ${debugUrl}`,
+      `Title: ${title}`,
+      `Inputs found: ${JSON.stringify(inputInfo)}`,
+      `Shadow DOM hosts: ${JSON.stringify(shadowHosts)}`,
+      `Iframes: ${iframeCount}`,
+      `HTML (first 1500): ${html.substring(0, 1500)}`,
+    ].join('\n');
+    console.log('[Guillevin] DEBUG:\n' + debugMsg);
+    throw new Error('Login Guillevin — champ email introuvable.\nDebug:\n' + debugMsg);
   }
 
   // Standard flow (Strategy A or B found the field)
