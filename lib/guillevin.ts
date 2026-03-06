@@ -37,11 +37,11 @@ async function createGuillevinPage(browser: any) {
 // The form fields may be inside shadow DOM or rendered late by React/Shopify JS.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
   await page.goto('https://www.guillevin.com/account/login', {
-    waitUntil: 'networkidle',
-    timeout: 45000,
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
   });
   // Wait for Shopify redirect + SPA render
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(8000);
 
   // Debug: log current URL and try to find any input
   const currentUrl = page.url();
