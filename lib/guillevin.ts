@@ -32,184 +32,48 @@ async function createGuillevinPage(browser: any) {
   return context.newPage();
 }
 
-// Guillevin login redirects to Shopify Customer Accounts (shopify.com/<id>/account).
-// Shopify new accounts is a one-page-app — email first, then password.
-// The form fields may be inside shadow DOM or rendered late by React/Shopify JS.
+// Guillevin login redirects to Auth0 (gic.ca.auth0.com).
+// Single-page form with email + password fields both visible.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
   await page.goto('https://www.guillevin.com/account/login', {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
 
-  // Cloudflare Turnstile warmup — wait for challenge to resolve
-  console.log('[Guillevin] Waiting for Cloudflare challenge to resolve...');
+  // Cloudflare warmup — wait for challenge to resolve (if any)
   for (let i = 0; i < 60; i++) {
     const title = await page.title().catch(() => '');
-    const url = page.url();
-    if (i % 5 === 0) console.log(`[Guillevin] Warmup t=${i * 2}s title="${title}" url=${url}`);
-    // Challenge resolved when title changes from "Un instant…" / "Just a moment"
     const isChallenge = title.length < 5 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
     if (!isChallenge) {
-      console.log(`[Guillevin] Challenge resolved at t=${i * 2}s, title="${title}"`);
+      console.log(`[Guillevin] Page ready at t=${i * 2}s — title="${title}"`);
       break;
     }
-    if (i === 59) {
-      throw new Error('Cloudflare challenge non résolu après 2 minutes');
-    }
+    if (i === 59) throw new Error('Cloudflare challenge non résolu après 2 minutes');
     await page.waitForTimeout(2000);
   }
-  // Extra wait for SPA render after challenge
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(3000);
 
-  const currentUrl = page.url();
-  console.log('[Guillevin] Page URL after warmup:', currentUrl);
+  console.log('[Guillevin] URL:', page.url());
 
-  // Step 1: find email field — try multiple strategies
-  // Strategy A: standard selectors (works if no shadow DOM)
-  let emailField = page.locator([
-    'input[name="email"]',
-    'input[type="email"]',
-    'input[id="email"]',
-    'input[autocomplete="email"]',
-    'input[autocomplete="username"]',
-    'input#username',
-    'input[name="username"]',
-    'input[name="login"]',
-  ].join(', ')).first();
-
-  let found = await emailField.isVisible({ timeout: 5000 }).catch(() => false);
-
-  // Strategy B: Shopify uses an iframe for login — check for it
-  if (!found) {
-    console.log('[Guillevin] No direct input found, checking for iframe...');
-    const iframe = page.frameLocator('iframe').first();
-    const iframeEmail = iframe.locator('input[type="email"], input[name="email"], input[autocomplete="email"]').first();
-    found = await iframeEmail.isVisible({ timeout: 5000 }).catch(() => false);
-    if (found) {
-      emailField = iframeEmail;
-      console.log('[Guillevin] Found email field inside iframe');
-    }
-  }
-
-  // Strategy C: use page.evaluate to find inputs anywhere (including shadow DOM)
-  if (!found) {
-    console.log('[Guillevin] Trying shadow DOM / JS evaluation...');
-    found = await page.evaluate(() => {
-      // Search all shadow roots for an email input
-      function findInShadow(root: Document | ShadowRoot): HTMLInputElement | null {
-        const inputs = root.querySelectorAll('input[type="email"], input[name="email"], input[autocomplete="email"], input[type="text"]');
-        for (const inp of inputs) if (inp instanceof HTMLInputElement) return inp;
-        for (const el of root.querySelectorAll('*')) {
-          if (el.shadowRoot) {
-            const found = findInShadow(el.shadowRoot);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      const inp = findInShadow(document);
-      if (inp) { inp.focus(); return true; }
-      return false;
-    }).catch(() => false);
-
-    if (found) {
-      // The field is focused, use keyboard to type
-      await page.keyboard.type(username, { delay: 60 });
-      await page.waitForTimeout(500);
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(3000);
-
-      // Now find password field the same way
-      const pwdFound = await page.evaluate(() => {
-        function findInShadow(root: Document | ShadowRoot): HTMLInputElement | null {
-          const inputs = root.querySelectorAll('input[type="password"]');
-          for (const inp of inputs) if (inp instanceof HTMLInputElement) return inp;
-          for (const el of root.querySelectorAll('*')) {
-            if (el.shadowRoot) {
-              const found = findInShadow(el.shadowRoot);
-              if (found) return found;
-            }
-          }
-          return null;
-        }
-        const inp = findInShadow(document);
-        if (inp) { inp.focus(); return true; }
-        return false;
-      }).catch(() => false);
-
-      if (pwdFound) {
-        await page.keyboard.type(password, { delay: 60 });
-        await page.waitForTimeout(300);
-        await page.keyboard.press('Enter');
-      }
-
-      await page.waitForTimeout(5000);
-      const url = page.url();
-      return url.includes('guillevin.com') && !url.includes('login');
-    }
-  }
-
-  if (!found) {
-    // Capture debug info and return it in the error
-    const debugUrl = page.url();
-    const html = await page.content().catch(() => '');
-    const title = await page.title().catch(() => '');
-    // Count all inputs and list their attributes
-    const inputInfo = await page.evaluate(() => {
-      const inputs = document.querySelectorAll('input');
-      return Array.from(inputs).map(i => ({
-        type: i.type, name: i.name, id: i.id, placeholder: i.placeholder, autocomplete: i.autocomplete
-      }));
-    }).catch(() => []);
-    // Check for shadow DOM hosts
-    const shadowHosts = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('*')).filter(el => el.shadowRoot).map(el => el.tagName.toLowerCase()).slice(0, 10);
-    }).catch(() => []);
-    // Check iframes
-    const iframeCount = await page.evaluate(() => document.querySelectorAll('iframe').length).catch(() => 0);
-
-    const debugMsg = [
-      `URL: ${debugUrl}`,
-      `Title: ${title}`,
-      `Inputs found: ${JSON.stringify(inputInfo)}`,
-      `Shadow DOM hosts: ${JSON.stringify(shadowHosts)}`,
-      `Iframes: ${iframeCount}`,
-      `HTML (first 1500): ${html.substring(0, 1500)}`,
-    ].join('\n');
-    console.log('[Guillevin] DEBUG:\n' + debugMsg);
-    throw new Error('Login Guillevin — champ email introuvable.\nDebug:\n' + debugMsg);
-  }
-
-  // Standard flow (Strategy A or B found the field)
+  // Auth0 login form: input#username (email) + input#password
+  const emailField = page.locator('input#username').first();
+  await emailField.waitFor({ state: 'visible', timeout: 15000 });
   await emailField.click();
-  await emailField.type(username, { delay: 60 });
-  await page.waitForTimeout(300);
+  await emailField.fill(username);
+  console.log('[Guillevin] Email filled');
 
-  // Click "Continue" / "Continuer" if present (2-step Shopify flow)
-  const continueBtn = page.locator([
-    'button[type="submit"]:has-text("Continue")',
-    'button[type="submit"]:has-text("Continuer")',
-    'button:has-text("Continue")',
-    'button:has-text("Continuer")',
-    'button[type="submit"]',
-  ].join(', ')).first();
-  if (await continueBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await continueBtn.click();
-    await page.waitForTimeout(3000);
-  }
-
-  // Step 2: password field
-  const passwordField = page.locator([
-    'input[type="password"]',
-    'input[name="password"]',
-    'input#password',
-  ].join(', ')).first();
-  await passwordField.waitFor({ timeout: 20000 });
+  const passwordField = page.locator('input#password').first();
+  await passwordField.waitFor({ state: 'visible', timeout: 5000 });
   await passwordField.click();
-  await passwordField.type(password, { delay: 60 });
-  await page.waitForTimeout(300);
+  await passwordField.fill(password);
+  console.log('[Guillevin] Password filled');
 
-  await passwordField.press('Enter');
+  // Click "Continuer" submit button
+  const submitBtn = page.locator('button:has-text("Continuer"), button:has-text("Continue"), button[type="submit"]').first();
+  await submitBtn.click();
+  console.log('[Guillevin] Submit clicked, waiting for redirect...');
+
+  // Wait for redirect back to guillevin.com
   await page.waitForFunction(
     () => window.location.hostname.includes('guillevin.com'),
     { timeout: 30000 }
