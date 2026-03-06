@@ -324,11 +324,14 @@ export async function placeHomeDepotOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
+  const log: string[] = [];
   // Use residential proxies to bypass Akamai Bot Manager
   const browser = await createBrowserbaseBrowser({ proxies: true });
   try {
+    log.push('Initializing browser and context');
     const context = await createHDContext(browser);
     const page = await context.newPage();
+    log.push('Logging in to Home Depot');
     const loggedIn = await loginToHomeDepot(page, username, password);
     if (!loggedIn) {
       const url = page.url();
@@ -337,14 +340,18 @@ export async function placeHomeDepotOrder(
       const bodySnippet = (await page.textContent('body').catch(() => '')).slice(0, 300).replace(/\s+/g, ' ');
       const errorDetail = `Login échoué url=${url} email_visible=${emailVisible} pass_visible=${passVisible} body="${bodySnippet}"`;
       console.error(`[HomeDepot] ${errorDetail}`);
-      return { success: false, error: errorDetail };
+      log.push(`Login failed: ${errorDetail}`);
+      return { success: false, error: errorDetail, log };
     }
+    log.push('Login successful');
 
     // Navigate to home page so the search bar is accessible
+    log.push('Navigating to Home Depot homepage');
     await page.goto('https://www.homedepot.ca', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
 
     // Search for the product
+    log.push(`Searching for product: ${product}`);
     const searchBar = page.locator('input[id="headerSearch"], input[name="Ntt"], input[placeholder*="Recherche"], input[placeholder*="Search"]').first();
     await searchBar.waitFor({ timeout: 8000 });
     await searchBar.click();
@@ -359,8 +366,10 @@ export async function placeHomeDepotOrder(
     ).first();
     if (!await firstProduct.isVisible({ timeout: 3000 }).catch(() => false)) {
       console.error('[HomeDepot] Produit introuvable:', product);
-      return { success: false, error: `Produit "${product}" introuvable sur Home Depot` };
+      log.push(`Product not found: ${product}`);
+      return { success: false, error: `Produit "${product}" introuvable sur Home Depot`, log };
     }
+    log.push('Clicking first product result');
     await firstProduct.click();
     await page.waitForTimeout(4000);
     console.error('[HomeDepot] Page produit:', page.url());
@@ -373,17 +382,21 @@ export async function placeHomeDepotOrder(
       await qtyInput.click({ clickCount: 3 });
       await qtyInput.type(quantity.toString(), { delay: 50 });
       await page.waitForTimeout(300);
+      log.push(`Quantity set to ${quantity}`);
       console.error('[HomeDepot] Quantité définie:', quantity);
     }
 
     // Add to cart
+    log.push('Looking for Add to Cart button');
     const addCartBtn = page.locator(
       'button:has-text("Ajouter au panier"), button:has-text("Add to Cart"), button[data-automation-id="add-to-cart"]'
     ).first();
     if (!await addCartBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       console.error('[HomeDepot] Bouton "Ajouter au panier" introuvable');
-      return { success: false, error: 'Bouton "Ajouter au panier" introuvable sur Home Depot' };
+      log.push('Add to Cart button not found');
+      return { success: false, error: 'Bouton "Ajouter au panier" introuvable sur Home Depot', log };
     }
+    log.push('Clicking Add to Cart');
     await addCartBtn.click();
     await page.waitForTimeout(4000);
 
@@ -392,6 +405,7 @@ export async function placeHomeDepotOrder(
       '[class*="cart-confirm"], [class*="add-to-cart-confirm"], [aria-label*="panier"], [data-automation-id="cart-count"]'
     ).first();
     const confirmed = await cartConfirm.isVisible({ timeout: 3000 }).catch(() => false);
+    log.push(`Cart confirmation visible: ${confirmed}`);
     console.error('[HomeDepot] Ajouté au panier, confirmation visible:', confirmed);
 
     // Save updated cookies after successful cart add
@@ -400,83 +414,130 @@ export async function placeHomeDepotOrder(
     if (deliveryAddress && payment) {
       try {
         // Step 1: Navigate to cart
+        log.push('Step 1: Navigating to cart');
         console.error('[HomeDepot] Step 1: Navigating to cart');
         await page.goto('https://www.homedepot.ca/en/home/cart.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(4000);
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-cart.png' }).catch(() => {});
 
         // Step 2: Click checkout
+        log.push('Step 2: Clicking checkout button');
         console.error('[HomeDepot] Step 2: Clicking checkout');
         const checkoutBtn = page.locator('button:has-text("Checkout"), button:has-text("Passer à la caisse"), a:has-text("Checkout"), a:has-text("Passer à la caisse")').first();
         if (await checkoutBtn.isVisible({ timeout: 8000 })) {
           await checkoutBtn.click();
           await page.waitForTimeout(6000);
+          log.push('Checkout button clicked');
+        } else {
+          log.push('Checkout button not found — skipping');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-checkout.png' }).catch(() => {});
+        log.push(`Checkout URL: ${page.url()}`);
         console.error('[HomeDepot] Checkout URL:', page.url());
 
         // Step 3: Fill delivery address
+        log.push('Step 3: Filling delivery address');
         console.error('[HomeDepot] Step 3: Filling delivery address');
+        await page.waitForTimeout(2000);
         const addressField = page.locator('input[id*="address"], input[name*="address"], input[placeholder*="Address"], input[placeholder*="adresse"]').first();
         if (await addressField.isVisible({ timeout: 8000 })) {
           await addressField.fill(deliveryAddress);
           await page.keyboard.press('Enter');
           await page.waitForTimeout(3000);
+          log.push(`Address filled: ${deliveryAddress}`);
           console.error('[HomeDepot] Address filled');
         } else {
+          log.push('No address field found — may already be saved');
           console.error('[HomeDepot] No address field — may already be saved');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-address.png' }).catch(() => {});
 
         // Step 4: Continue to payment
+        log.push('Step 4: Continue to payment');
         console.error('[HomeDepot] Step 4: Continue to payment');
         const continueBtn = page.locator('button:has-text("Continue"), button:has-text("Continuer")').first();
         if (await continueBtn.isVisible({ timeout: 5000 })) {
           await continueBtn.click();
           await page.waitForTimeout(4000);
+          log.push('Continue button clicked');
+        } else {
+          log.push('Continue button not found — skipping');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-payment.png' }).catch(() => {});
+        log.push(`Payment page URL: ${page.url()}`);
         console.error('[HomeDepot] Payment page URL:', page.url());
 
         // Step 5: Fill card details (try iframe first, then direct)
+        log.push('Step 5: Filling card details');
         console.error('[HomeDepot] Step 5: Filling card details');
+        await page.waitForTimeout(2000);
         const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[name*="card"], iframe[id*="card"]').first();
         const cardInput = cardFrame.locator('input').first();
         if (await cardInput.isVisible({ timeout: 8000 }).catch(() => false)) {
           console.error('[HomeDepot] Card in iframe — filling');
           await cardInput.fill(payment.cardNumber);
+          log.push('Card number filled (iframe)');
         } else {
           console.error('[HomeDepot] Card direct input — filling');
           const directCard = page.locator('input[id*="cardNumber"], input[name*="cardNumber"], input[id*="card-number"], input[autocomplete="cc-number"]').first();
           if (await directCard.isVisible({ timeout: 5000 })) {
             await directCard.fill(payment.cardNumber);
+            log.push('Card number filled (direct)');
+          } else {
+            log.push('Card number field not found');
           }
+        }
+
+        await page.waitForTimeout(2000);
+
+        // Fill cardholder name
+        const nameField = page.locator('input[name*="name"], input[id*="name"], input[autocomplete="cc-name"]').first();
+        if (await nameField.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await nameField.fill(payment.cardHolder);
+          log.push('Cardholder name filled');
+          console.error('[HomeDepot] Cardholder name filled');
+        } else {
+          log.push('Cardholder name field not found — skipping');
+          console.error('[HomeDepot] Cardholder name field not found');
         }
 
         const expiryField = page.locator('input[id*="expiry"], input[name*="expiry"], input[autocomplete="cc-exp"]').first();
         if (await expiryField.isVisible({ timeout: 3000 })) {
           await expiryField.fill(payment.cardExpiry);
+          log.push('Expiry filled');
           console.error('[HomeDepot] Expiry filled');
+        } else {
+          log.push('Expiry field not found');
         }
 
         const cvvField = page.locator('input[id*="cvv"], input[name*="cvv"], input[autocomplete="cc-csc"]').first();
         if (await cvvField.isVisible({ timeout: 3000 })) {
           await cvvField.fill(payment.cardCvv);
+          log.push('CVV filled');
           console.error('[HomeDepot] CVV filled');
+        } else {
+          log.push('CVV field not found');
         }
+        await page.waitForTimeout(2000);
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-card-filled.png' }).catch(() => {});
 
         // Step 6: Place order
+        log.push('Step 6: Placing order');
         console.error('[HomeDepot] Step 6: Placing order');
         const placeOrderBtn = page.locator('button:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order")').first();
         if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
           await placeOrderBtn.click();
           await page.waitForTimeout(10000);
+          log.push('Place order button clicked');
+        } else {
+          log.push('Place order button not found');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-confirmation.png' }).catch(() => {});
+        log.push(`Final URL: ${page.url()}`);
         console.error('[HomeDepot] Final URL:', page.url());
 
         // Step 7: Capture order number
+        log.push('Step 7: Capturing order number');
         const bodyText = await page.textContent('body');
         const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
           || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i);
@@ -485,19 +546,27 @@ export async function placeHomeDepotOrder(
         if (!orderId) {
           const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
           console.error('[HomeDepot] Page body snippet:', bodySnippet);
+          log.push(`Order ID not found. Page snippet: ${bodySnippet.slice(0, 200)}`);
+        } else {
+          log.push(`Order ID captured: ${orderId}`);
         }
-        return { success: true, orderId };
+        return { success: true, orderId, log };
       } catch (err: any) {
-        console.error('[HomeDepot] Checkout error:', err.message);
+        const errorMsg = err.message || String(err);
+        console.error('[HomeDepot] Checkout error:', errorMsg);
+        log.push(`Checkout error: ${errorMsg}`);
         await page.screenshot({ path: process.cwd() + '/public/debug-hd-error.png' }).catch(() => {});
-        return { success: false, inCart: true, error: `Checkout: ${err.message}` };
+        return { success: false, inCart: true, error: `Checkout: ${errorMsg}`, log };
       }
     }
 
-    return { success: false, inCart: true };
+    log.push('No delivery address or payment provided — stopping at cart');
+    return { success: false, inCart: true, log };
   } catch (err: any) {
-    console.error('[HomeDepot] Erreur:', err.message);
-    return { success: false, error: err.message };
+    const errorMsg = err.message || String(err);
+    console.error('[HomeDepot] Erreur:', errorMsg);
+    log.push(`Fatal error: ${errorMsg}`);
+    return { success: false, error: errorMsg, log };
   } finally {
     await browser.close();
   }

@@ -16,6 +16,7 @@ export interface LumenOrderResult {
   inCart?: boolean;
   orderId?: string;
   error?: string;
+  log?: string[];
 }
 
 export interface ConnectionResult {
@@ -171,13 +172,15 @@ export async function placeLumenOrder(
   deliveryAddress?: string,
   payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
+  const log: string[] = [];
   const browser = await createBrowserbaseBrowser();
   try {
     const page = await createStealthPage(browser);
 
     // Login
+    log.push('Logging in to Lumen');
     const loggedIn = await loginToLumen(page, username, password);
-    if (!loggedIn) return { success: false, error: 'Login Lumen échoué' };
+    if (!loggedIn) return { success: false, error: 'Login Lumen échoué', log };
 
     // Build search query: SKU from DB, or model number word, or first 3 words
     const { getDb } = await import('./db');
@@ -204,6 +207,7 @@ export async function placeLumenOrder(
 
     // Navigate to homepage — search results page crashes in headless mode,
     // but the typeahead dropdown works and has its own add-to-cart buttons
+    log.push('Navigating to Lumen homepage');
     await page.goto('https://www.lumen.ca/en', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 
@@ -216,6 +220,7 @@ export async function placeLumenOrder(
     });
 
     // Type into the header search bar to trigger the HTMX typeahead dropdown
+    log.push(`Searching for: ${searchQuery}`);
     const searchBar = page.locator('input[placeholder*="Search"], input[placeholder*="search"]').first();
     await searchBar.click();
     await searchBar.type(searchQuery, { delay: 150 });
@@ -225,28 +230,33 @@ export async function placeLumenOrder(
 
     // Check if the typeahead returned any product add-to-cart forms
     const formCount = await page.locator('form[action*="additemtocart"]').count();
+    log.push(`Found ${formCount} add-to-cart forms`);
     if (formCount === 0) {
-      return { success: false, error: `Produit "${product}" introuvable sur Lumen` };
+      return { success: false, error: `Produit "${product}" introuvable sur Lumen`, log };
     }
 
     // Click the first add-to-cart button in the typeahead dropdown
+    log.push('Clicking add-to-cart button');
     await page.locator('.add-cart').first().click({ force: true });
     await page.waitForTimeout(3000);
 
     await page.screenshot({ path: process.cwd() + '/public/debug-order-cart.png' }).catch(() => {});
 
     // HTTP 302 redirect to homepage = success; any other status = failure
+    log.push(`Add-to-cart response status: ${addToCartStatus}`);
     if (addToCartStatus !== 0 && addToCartStatus !== 302) {
-      return { success: false, error: `Erreur ajout au panier (HTTP ${addToCartStatus})` };
+      return { success: false, error: `Erreur ajout au panier (HTTP ${addToCartStatus})`, log };
     }
 
     // ── Checkout automatique si adresse et paiement fournis ──
     if (deliveryAddress && payment) {
       try {
         // Step 1: Navigate to cart
+        log.push('Step 1: Navigating to cart');
         console.error('[Lumen] Step 1: Navigating to cart');
         await page.goto('https://www.lumen.ca/en/cart', { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(3000);
+        log.push(`Cart URL: ${page.url()}`);
         console.error('[Lumen] Cart URL:', page.url());
         // Log what buttons/links are visible on the cart page
         const cartButtons = await page.locator('a, button').evaluateAll((els: Element[]) =>
@@ -255,6 +265,7 @@ export async function placeLumenOrder(
         console.error('[Lumen] Cart page buttons:', JSON.stringify(cartButtons.filter((b: any) => b.text?.trim())));
 
         // Step 2: Click checkout button or navigate directly to checkout
+        log.push('Step 2: Going to checkout');
         console.error('[Lumen] Step 2: Going to checkout');
         const checkoutBtn = page.locator([
           'a:has-text("Checkout")', 'button:has-text("Checkout")',
@@ -266,105 +277,151 @@ export async function placeLumenOrder(
           '.checkout-btn', '.btn-checkout', '[class*="checkout"]',
         ].join(', ')).first();
         if (await checkoutBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+          log.push('Checkout button found, clicking');
           await checkoutBtn.click();
           await page.waitForTimeout(5000);
         } else {
           // Fallback: navigate directly to checkout page
+          log.push('No checkout button found, navigating directly to /en/checkout');
           console.error('[Lumen] No checkout button found, navigating directly to /en/checkout');
           await page.goto('https://www.lumen.ca/en/checkout', { waitUntil: 'domcontentloaded', timeout: 30000 });
           await page.waitForTimeout(3000);
         }
+        log.push(`Checkout URL: ${page.url()}`);
         console.error('[Lumen] Checkout URL:', page.url());
+        await page.waitForTimeout(2000);
 
         // Step 3: Fill delivery address
+        log.push('Step 3: Filling delivery address');
         console.error('[Lumen] Step 3: Filling delivery address');
         const addressField = page.locator('input[name="address1"], input[name*="address"], input[placeholder*="Address"], input[placeholder*="adresse"], input[id*="address"]').first();
-        if (await addressField.isVisible({ timeout: 8000 })) {
+        if (await addressField.isVisible({ timeout: 8000 }).catch(() => false)) {
           await addressField.fill(deliveryAddress);
+          log.push('Address filled');
           console.error('[Lumen] Address filled');
         } else {
+          log.push('No address field found — may already be saved');
           console.error('[Lumen] No address field found — may already be saved');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-lumen-address.png' }).catch(() => {});
 
         // Step 4: Continue to payment
+        log.push('Step 4: Continue to payment');
         console.error('[Lumen] Step 4: Continue to payment');
         const continueBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Continuer"), button:has-text("Next")').first();
-        if (await continueBtn.isVisible({ timeout: 5000 })) {
+        if (await continueBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
           await continueBtn.click();
           await page.waitForTimeout(3000);
+          log.push('Continue button clicked');
+        } else {
+          log.push('No continue button found — may already be on payment step');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-lumen-payment.png' }).catch(() => {});
+        log.push(`Payment page URL: ${page.url()}`);
         console.error('[Lumen] Payment page URL:', page.url());
+        await page.waitForTimeout(2000);
 
         // Step 5: Enter card details (try iframe first, then direct input)
+        log.push('Step 5: Filling card details');
         console.error('[Lumen] Step 5: Filling card details');
         const cardFrame = page.frameLocator('iframe[title*="Card"], iframe[title*="card"], iframe[name*="card"], iframe[id*="card"]').first();
         const iframeCardInput = cardFrame.locator('input[name*="cardnumber"], input[placeholder*="Card number"], input[autocomplete="cc-number"], input').first();
         if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+          log.push('Card in iframe — filling');
           console.error('[Lumen] Card in iframe — filling');
           await iframeCardInput.fill(payment.cardNumber);
+          // Fill cardholder name in iframe if present
+          const iframeNameField = cardFrame.locator('input[name*="name"], input[id*="name"], input[autocomplete="cc-name"]').first();
+          if (await iframeNameField.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await iframeNameField.fill(payment.cardHolder);
+            log.push('Card holder name filled (iframe)');
+          }
           const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
           if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) {
             await iframeExpiry.fill(payment.cardExpiry);
+            log.push('Expiry filled (iframe)');
           }
           const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"]').first();
           if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) {
             await iframeCvv.fill(payment.cardCvv);
+            log.push('CVV filled (iframe)');
           }
         } else {
+          log.push('Card direct input — filling');
           console.error('[Lumen] Card direct input — filling');
           const cardNumberField = page.locator('input[name*="card"], input[id*="card"], input[placeholder*="card number"], input[autocomplete="cc-number"]').first();
-          if (await cardNumberField.isVisible({ timeout: 5000 })) {
+          if (await cardNumberField.isVisible({ timeout: 5000 }).catch(() => false)) {
             await cardNumberField.fill(payment.cardNumber);
+            log.push('Card number filled');
+          }
+          // Fill cardholder name (direct input)
+          const cardNameField = page.locator('input[name*="name"], input[id*="name"], input[autocomplete="cc-name"]').first();
+          if (await cardNameField.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await cardNameField.fill(payment.cardHolder);
+            log.push('Card holder name filled');
           }
           const expiryField = page.locator('input[name*="expir"], input[placeholder*="MM"], input[placeholder*="expiry"], input[autocomplete="cc-exp"]').first();
-          if (await expiryField.isVisible({ timeout: 3000 })) {
+          if (await expiryField.isVisible({ timeout: 3000 }).catch(() => false)) {
             await expiryField.fill(payment.cardExpiry);
+            log.push('Expiry filled');
           }
           const cvvField = page.locator('input[name*="cvv"], input[name*="cvc"], input[placeholder*="CVV"], input[autocomplete="cc-csc"]').first();
-          if (await cvvField.isVisible({ timeout: 3000 })) {
+          if (await cvvField.isVisible({ timeout: 3000 }).catch(() => false)) {
             await cvvField.fill(payment.cardCvv);
+            log.push('CVV filled');
           }
         }
+        await page.waitForTimeout(2000);
         await page.screenshot({ path: process.cwd() + '/public/debug-lumen-card-filled.png' }).catch(() => {});
 
         // Step 6: Submit the order
+        log.push('Step 6: Placing order');
         console.error('[Lumen] Step 6: Placing order');
         const submitBtn = page.locator('button[type="submit"]:has-text("Place Order"), button:has-text("Passer la commande"), button:has-text("Submit Order"), button:has-text("Complete"), button:has-text("Pay")').first();
-        if (await submitBtn.isVisible({ timeout: 5000 })) {
+        if (await submitBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
           await submitBtn.click();
+          log.push('Order submit button clicked');
           await page.waitForTimeout(8000);
+        } else {
+          log.push('No submit button found');
         }
         await page.screenshot({ path: process.cwd() + '/public/debug-lumen-confirmation.png' }).catch(() => {});
+        log.push(`Final URL: ${page.url()}`);
         console.error('[Lumen] Final URL:', page.url());
 
         // Step 7: Capture order number
+        log.push('Step 7: Capturing order number');
         const confirmationText = await page.textContent('body');
         const orderMatch = confirmationText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
           || confirmationText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
           || confirmationText?.match(/confirmation\s*#?\s*([A-Z0-9-]{5,20})/i);
         const orderId = orderMatch?.[1];
+        log.push(`Order ID: ${orderId || 'not found'}`);
         console.error('[Lumen] Order ID:', orderId || 'not found');
 
         if (orderId) {
-          return { success: true, orderId };
+          return { success: true, orderId, log };
         }
         // Check for payment error in body text
         const bodySnippet = confirmationText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+        log.push(`Page body snippet: ${bodySnippet.slice(0, 200)}`);
         console.error('[Lumen] Page body snippet:', bodySnippet);
-        return { success: true, orderId: undefined };
+        return { success: true, orderId: undefined, log };
       } catch (checkoutErr: any) {
-        console.error('[Lumen] Checkout error:', checkoutErr.message);
+        const errMsg = checkoutErr?.message || String(checkoutErr);
+        log.push(`Checkout error: ${errMsg}`);
+        console.error('[Lumen] Checkout error:', errMsg);
         await page.screenshot({ path: process.cwd() + '/public/debug-lumen-error.png' }).catch(() => {});
-        return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+        return { success: false, inCart: true, error: `Checkout: ${errMsg}`, log };
       }
     }
 
     // Product is now in the Lumen cart — admin must complete checkout manually
-    return { success: false, inCart: true };
+    log.push('Product added to cart — no payment info provided, manual checkout required');
+    return { success: false, inCart: true, log };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    log.push(`Fatal error: ${err.message}`);
+    return { success: false, error: err.message, log };
   } finally {
     await browser.close();
   }

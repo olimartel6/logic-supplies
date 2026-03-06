@@ -142,12 +142,21 @@ export async function placeBmrOrder(
   username: string, password: string, product: string, quantity: number,
   deliveryAddress?: string, payment?: PaymentInfo,
 ): Promise<LumenOrderResult> {
+  const log: string[] = [];
   const browser = await createBrowserbaseBrowser();
   try {
+    log.push('Creating browser page');
     const page = await createBmrPage(browser);
-    const loggedIn = await loginToBmr(page, username, password);
-    if (!loggedIn) return { success: false, error: 'Login BMR échoué' };
 
+    log.push('Logging in to BMR');
+    const loggedIn = await loginToBmr(page, username, password);
+    if (!loggedIn) {
+      log.push('Login failed');
+      return { success: false, error: 'Login BMR échoué', log };
+    }
+    log.push('Login successful');
+
+    log.push(`Searching for product: ${product}`);
     await page.goto(
       `https://www.bmr.ca/fr/search/?q=${encodeURIComponent(product)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
@@ -159,11 +168,13 @@ export async function placeBmrOrder(
       'a.product-item-link, .product-name a, h3 a[href*="/fr/"]'
     ).first();
     if (await firstProduct.isVisible({ timeout: 5000 }).catch(() => false)) {
+      log.push('Found product, clicking');
       await firstProduct.click();
       await page.waitForTimeout(2000);
 
       const qtyInput = page.locator('input#qty, input[name="qty"], input[title*="qty"]').first();
       if (await qtyInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+        log.push(`Setting quantity to ${quantity}`);
         await qtyInput.click({ clickCount: 3 });
         await qtyInput.type(quantity.toString(), { delay: 50 });
         await page.waitForTimeout(300);
@@ -173,121 +184,175 @@ export async function placeBmrOrder(
         'button#product-addtocart-button, button:has-text("Ajouter au panier"), button[class*="tocart"]'
       ).first();
       if (await addToCartBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        log.push('Clicking add to cart');
         await addToCartBtn.click();
         await page.waitForTimeout(2000);
+        log.push('Added to cart');
         console.error(`[BMR] Added to cart: ${product}`);
 
         // ── Checkout automatique si adresse et paiement fournis ──
         if (deliveryAddress && payment) {
           try {
             // Step 1: Navigate to cart (Magento)
+            log.push('Step 1: Navigating to cart');
             console.error('[BMR] Step 1: Navigating to cart');
             await page.goto('https://www.bmr.ca/fr/checkout/cart/', { waitUntil: 'domcontentloaded', timeout: 30000 });
             await page.waitForTimeout(3000);
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-cart.png' }).catch(() => {});
+            log.push(`Cart URL: ${page.url()}`);
             console.error('[BMR] Cart URL:', page.url());
 
             // Step 2: Click checkout (Magento: "Passer à la caisse")
+            log.push('Step 2: Clicking checkout button');
             console.error('[BMR] Step 2: Clicking checkout');
             const checkoutBtn = page.locator('button:has-text("Passer à la caisse"), button:has-text("Proceed to Checkout"), button[data-role="proceed-to-checkout"], a[href*="checkout"]').first();
             await checkoutBtn.click({ timeout: 10000 });
             await page.waitForTimeout(5000);
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-checkout.png' }).catch(() => {});
+            log.push(`Checkout URL: ${page.url()}`);
             console.error('[BMR] Checkout URL:', page.url());
 
             // Step 3: Fill shipping address (Magento checkout)
+            log.push('Step 3: Filling shipping address');
             console.error('[BMR] Step 3: Filling shipping address');
             const streetField = page.locator('input[name="street[0]"], input[name*="street"], input[id*="street"]').first();
             if (await streetField.isVisible({ timeout: 8000 })) {
               await streetField.fill(deliveryAddress);
+              log.push('Address filled');
               console.error('[BMR] Address filled');
             } else {
+              log.push('No street field visible — may already be saved');
               console.error('[BMR] No street field — may already be saved or different layout');
             }
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-address.png' }).catch(() => {});
 
             // Step 4: Select shipping method and continue
+            log.push('Step 4: Selecting shipping method and continuing to payment');
             console.error('[BMR] Step 4: Continue to payment');
             const shippingMethodRadio = page.locator('input[type="radio"][name="ko_unique_1"], input[type="radio"][name*="shipping"]').first();
             if (await shippingMethodRadio.isVisible({ timeout: 3000 }).catch(() => false)) {
               await shippingMethodRadio.click();
               await page.waitForTimeout(1000);
+              log.push('Shipping method selected');
             }
             const nextBtn = page.locator('button:has-text("Suivant"), button:has-text("Next"), button[data-role="opc-continue"]').first();
             if (await nextBtn.isVisible({ timeout: 5000 })) {
               await nextBtn.click();
               await page.waitForTimeout(5000);
+              log.push('Clicked next/continue button');
             }
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-payment.png' }).catch(() => {});
+            log.push(`Payment step URL: ${page.url()}`);
             console.error('[BMR] Payment step URL:', page.url());
 
             // Step 5: Fill card details (Magento — may use iframe or direct fields)
+            log.push('Step 5: Filling card details');
             console.error('[BMR] Step 5: Filling card details');
+            await page.waitForTimeout(2000);
             // Try Magento's Braintree/Moneris iframe
             const cardFrame = page.frameLocator('iframe[id*="braintree"], iframe[title*="Card"], iframe[id*="card"]').first();
             const iframeCardInput = cardFrame.locator('input[name*="number"], input[autocomplete="cc-number"], input').first();
             if (await iframeCardInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+              log.push('Card in iframe — filling');
               console.error('[BMR] Card in iframe — filling');
               await iframeCardInput.fill(payment.cardNumber);
+              // Fill cardholder name in iframe
+              const iframeName = cardFrame.locator('input[name*="name"], input[id*="name"], input[autocomplete="cc-name"]').first();
+              if (await iframeName.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await iframeName.fill(payment.cardHolder);
+                log.push('Cardholder name filled (iframe)');
+              }
               const iframeExpiry = cardFrame.locator('input[name*="exp"], input[placeholder*="MM"]').first();
               if (await iframeExpiry.isVisible({ timeout: 2000 }).catch(() => false)) await iframeExpiry.fill(payment.cardExpiry);
               const iframeCvv = cardFrame.locator('input[name*="cvv"], input[name*="cvc"]').first();
               if (await iframeCvv.isVisible({ timeout: 2000 }).catch(() => false)) await iframeCvv.fill(payment.cardCvv);
+              log.push('Card details filled (iframe)');
             } else {
+              log.push('Card direct input — filling');
               console.error('[BMR] Card direct input — filling');
               const ccNumber = page.locator('input[id*="cc_number"], input[name*="cc_number"], input[id*="credit-card-number"], input[autocomplete="cc-number"]').first();
-              if (await ccNumber.isVisible({ timeout: 5000 })) await ccNumber.fill(payment.cardNumber);
+              if (await ccNumber.isVisible({ timeout: 5000 })) {
+                await ccNumber.fill(payment.cardNumber);
+                log.push('Card number filled');
+              }
+              // Fill cardholder name (direct)
+              const ccName = page.locator('input[name*="name"], input[id*="name"], input[autocomplete="cc-name"]').first();
+              if (await ccName.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await ccName.fill(payment.cardHolder);
+                log.push('Cardholder name filled');
+              }
               const ccExpMonth = page.locator('select[id*="cc_exp_month"], select[name*="cc_exp_month"]').first();
               if (await ccExpMonth.isVisible({ timeout: 3000 })) {
                 const [month] = payment.cardExpiry.split('/');
                 await ccExpMonth.selectOption(month.trim());
+                log.push('Expiry month selected');
               }
               const ccExpYear = page.locator('select[id*="cc_exp_year"], select[name*="cc_exp_year"]').first();
               if (await ccExpYear.isVisible({ timeout: 3000 })) {
                 const [, year] = payment.cardExpiry.split('/');
                 await ccExpYear.selectOption(`20${year.trim()}`);
+                log.push('Expiry year selected');
               }
               const ccCvv = page.locator('input[id*="cc_cid"], input[name*="cc_cid"], input[autocomplete="cc-csc"]').first();
-              if (await ccCvv.isVisible({ timeout: 3000 })) await ccCvv.fill(payment.cardCvv);
+              if (await ccCvv.isVisible({ timeout: 3000 })) {
+                await ccCvv.fill(payment.cardCvv);
+                log.push('CVV filled');
+              }
+              log.push('Card details filled (direct)');
             }
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-card-filled.png' }).catch(() => {});
 
             // Step 6: Place order
+            log.push('Step 6: Placing order');
             console.error('[BMR] Step 6: Placing order');
+            await page.waitForTimeout(2000);
             const placeOrderBtn = page.locator('button:has-text("Passer la commande"), button:has-text("Place Order"), button[title="Passer la commande"]').first();
             if (await placeOrderBtn.isVisible({ timeout: 5000 })) {
               await placeOrderBtn.click();
               await page.waitForTimeout(10000);
+              log.push('Place order button clicked, waiting for confirmation');
+            } else {
+              log.push('Place order button not visible');
             }
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-confirmation.png' }).catch(() => {});
+            log.push(`Final URL: ${page.url()}`);
             console.error('[BMR] Final URL:', page.url());
 
             // Step 7: Capture order number
+            log.push('Step 7: Capturing order number');
             const bodyText = await page.textContent('body');
             const orderMatch = bodyText?.match(/order\s*#?\s*([A-Z0-9-]{5,20})/i)
               || bodyText?.match(/commande\s*#?\s*([A-Z0-9-]{5,20})/i)
               || bodyText?.match(/numéro\s*:\s*([A-Z0-9-]{5,20})/i);
             const orderId = orderMatch?.[1];
             console.error('[BMR] Order ID:', orderId || 'not found');
-            if (!orderId) {
+            if (orderId) {
+              log.push(`Order confirmed: ${orderId}`);
+            } else {
               const bodySnippet = bodyText?.slice(0, 500).replace(/\s+/g, ' ') || '';
+              log.push(`Order ID not found. Page snippet: ${bodySnippet}`);
               console.error('[BMR] Page body snippet:', bodySnippet);
             }
-            return { success: true, orderId };
+            return { success: true, orderId, log };
           } catch (checkoutErr: any) {
-            console.error('[BMR] Checkout error:', checkoutErr.message);
+            const errMsg = checkoutErr?.message || String(checkoutErr);
+            log.push(`Checkout error: ${errMsg}`);
+            console.error('[BMR] Checkout error:', errMsg);
             await page.screenshot({ path: process.cwd() + '/public/debug-bmr-error.png' }).catch(() => {});
-            return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}` };
+            return { success: false, inCart: true, error: `Checkout: ${errMsg}`, log };
           }
         }
 
-        return { success: false, inCart: true };
+        return { success: false, inCart: true, log };
       }
     }
 
-    return { success: false, error: `Produit "${product}" introuvable sur BMR` };
+    log.push(`Product "${product}" not found on BMR`);
+    return { success: false, error: `Produit "${product}" introuvable sur BMR`, log };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    const errMsg = err?.message || String(err);
+    log.push(`Fatal error: ${errMsg}`);
+    return { success: false, error: errMsg, log };
   } finally {
     await browser.close();
   }
