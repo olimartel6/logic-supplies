@@ -9,24 +9,25 @@ export interface SessionData {
   role?: string;
 }
 
-const secret = process.env.SESSION_SECRET;
-if (!secret && process.env.NODE_ENV === 'production') {
-  throw new Error('SESSION_SECRET env var is required in production');
+function getSessionOptions() {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET env var is required in production');
+  }
+  if (!secret) {
+    console.warn('[SECURITY] SESSION_SECRET not set — using insecure dev default');
+  }
+  return {
+    password: secret || 'sparky-secret-key-change-in-production-32chars',
+    cookieName: 'logicsupplies-session',
+    cookieOptions: {
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    },
+  };
 }
-if (!secret) {
-  console.warn('[SECURITY] SESSION_SECRET not set — using insecure dev default');
-}
-
-const sessionOptions = {
-  password: secret || 'sparky-secret-key-change-in-production-32chars',
-  cookieName: 'logicsupplies-session',
-  cookieOptions: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  },
-};
 
 export async function getSession(): Promise<IronSession<SessionData>> {
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
+  const session = await getIronSession<SessionData>(await cookies(), getSessionOptions());
   return session;
 }
