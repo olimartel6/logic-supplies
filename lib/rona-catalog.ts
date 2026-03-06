@@ -76,7 +76,27 @@ export async function importRonaCatalog(
     const pageUrl = page.url();
     const pageTitle = await page.title().catch(() => '?');
     const inputCount = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
-    console.error(`[Rona catalog] login page: url=${pageUrl} title="${pageTitle}" visible-inputs=${inputCount}`);
+    const iframeCount = await page.locator('iframe').count().catch(() => -1);
+    const bodySnippet = await page.evaluate(() => document.body?.innerHTML?.slice(0, 1000) || '').catch(() => '');
+    console.error(`[Rona catalog] login page: url=${pageUrl} title="${pageTitle}" visible-inputs=${inputCount} iframes=${iframeCount}`);
+    console.error(`[Rona catalog] body snippet: ${bodySnippet.slice(0, 500)}`);
+
+    // Rona SPA may need extra time to render — wait for any input to appear
+    await page.waitForSelector('input:not([type="hidden"])', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // Re-check after wait
+    const inputCount2 = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
+    console.error(`[Rona catalog] after extra wait: visible-inputs=${inputCount2} url=${page.url()}`);
+
+    // If still no inputs, try reloading the page
+    if (inputCount2 === 0) {
+      console.error('[Rona catalog] No inputs found, reloading page');
+      await page.reload({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(5000);
+      const inputCount3 = await page.locator('input:not([type="hidden"])').count().catch(() => -1);
+      console.error(`[Rona catalog] after reload: visible-inputs=${inputCount3} url=${page.url()}`);
+    }
 
     const emailField = page.locator([
       'input[name="email"]',
@@ -89,7 +109,7 @@ export async function importRonaCatalog(
       'input[placeholder*="email"]',
       'input[type="text"]',
     ].join(', ')).first();
-    await emailField.waitFor({ timeout: 20000 });
+    await emailField.waitFor({ timeout: 30000 });
     await emailField.fill(account.username);
     await page.waitForTimeout(300);
 
