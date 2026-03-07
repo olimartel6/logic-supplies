@@ -199,6 +199,7 @@ function NewRequestContent() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    (document.activeElement as HTMLElement)?.blur();
     doSearch(query, jobSiteId || undefined);
   }
 
