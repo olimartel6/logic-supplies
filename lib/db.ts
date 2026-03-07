@@ -90,13 +90,24 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
       ).run(c.name, c.url, c.enabled, companyId);
     }
 
-    // Catégories Guillevin
+    // Catégories Guillevin (Shopify collections)
     const guillevinCategories = [
-      { name: 'Fils et câbles',           url: '/collections/wire-cable',             enabled: 1 },
-      { name: 'Disjoncteurs et panneaux', url: '/collections/breakers-load-centres',  enabled: 1 },
-      { name: 'Boîtes et conduits',       url: '/collections/conduit-fittings-boxes', enabled: 0 },
-      { name: 'Luminaires',               url: '/collections/lighting',               enabled: 0 },
-      { name: 'Outils',                   url: '/collections/tools',                  enabled: 0 },
+      { name: 'Fils et câbles',           url: '/collections/wire-cable',                                    enabled: 1 },
+      { name: 'Disjoncteurs et panneaux', url: '/collections/breakers-load-centres',                         enabled: 1 },
+      { name: 'Boîtes électriques',       url: '/collections/electrical-boxes',                              enabled: 1 },
+      { name: 'Boîtiers et armoires',     url: '/collections/electrical-enclosures-cabinets',                enabled: 0 },
+      { name: 'Prises électriques',       url: '/collections/electrical-receptacles',                        enabled: 1 },
+      { name: 'Interrupteurs',            url: '/collections/switches',                                      enabled: 1 },
+      { name: 'Plaques et couvercles',    url: '/collections/plates-covers',                                 enabled: 1 },
+      { name: 'Conduits et tuyaux',       url: '/collections/conduits-pipes',                                enabled: 1 },
+      { name: 'Luminaires',               url: '/collections/lighting',                                      enabled: 0 },
+      { name: 'Outils',                   url: '/collections/tools',                                         enabled: 0 },
+      { name: 'Rubans et adhésifs',       url: '/collections/tapes-adhesives',                               enabled: 0 },
+      { name: 'Marrettes et connecteurs', url: '/collections/wire-connectors-twist-on-wire-caps-marrette',   enabled: 1 },
+      { name: 'Fusibles',                 url: '/collections/fuses-accessories',                             enabled: 0 },
+      { name: 'Mise à la terre',          url: '/collections/grounding-clamps-connectors',                   enabled: 0 },
+      { name: 'Cosses et bornes',         url: '/collections/lugs-terminal-connectors',                      enabled: 0 },
+      { name: 'Attaches et supports',     url: '/collections/cable-ties-accessories',                        enabled: 0 },
     ];
     for (const c of guillevinCategories) {
       db.prepare(
@@ -236,9 +247,20 @@ export function seedSuperadminCategories(db: Database.Database) {
       // Guillevin
       { supplier: 'guillevin', name: 'Fils et câbles',           url: '/collections/wire-cable' },
       { supplier: 'guillevin', name: 'Disjoncteurs et panneaux', url: '/collections/breakers-load-centres' },
-      { supplier: 'guillevin', name: 'Boîtes et conduits',       url: '/collections/conduit-fittings-boxes' },
+      { supplier: 'guillevin', name: 'Boîtes électriques',       url: '/collections/electrical-boxes' },
+      { supplier: 'guillevin', name: 'Boîtiers et armoires',     url: '/collections/electrical-enclosures-cabinets' },
+      { supplier: 'guillevin', name: 'Prises électriques',       url: '/collections/electrical-receptacles' },
+      { supplier: 'guillevin', name: 'Interrupteurs',            url: '/collections/switches' },
+      { supplier: 'guillevin', name: 'Plaques et couvercles',    url: '/collections/plates-covers' },
+      { supplier: 'guillevin', name: 'Conduits et tuyaux',       url: '/collections/conduits-pipes' },
       { supplier: 'guillevin', name: 'Luminaires',               url: '/collections/lighting' },
       { supplier: 'guillevin', name: 'Outils',                   url: '/collections/tools' },
+      { supplier: 'guillevin', name: 'Rubans et adhésifs',       url: '/collections/tapes-adhesives' },
+      { supplier: 'guillevin', name: 'Marrettes et connecteurs', url: '/collections/wire-connectors-twist-on-wire-caps-marrette' },
+      { supplier: 'guillevin', name: 'Fusibles',                 url: '/collections/fuses-accessories' },
+      { supplier: 'guillevin', name: 'Mise à la terre',          url: '/collections/grounding-clamps-connectors' },
+      { supplier: 'guillevin', name: 'Cosses et bornes',         url: '/collections/lugs-terminal-connectors' },
+      { supplier: 'guillevin', name: 'Attaches et supports',     url: '/collections/cable-ties-accessories' },
       // JSV
       { supplier: 'jsv', name: 'Câbles électriques',     url: '/collections/cables-electriques' },
       { supplier: 'jsv', name: 'Outils électriques',     url: '/collections/outils-electriques' },
@@ -732,6 +754,40 @@ function initDb(db: Database.Database) {
   db.prepare(
     "UPDATE supplier_categories SET enabled = 1 WHERE supplier = 'lumen' AND category_url = '/en/products/18-lighting'"
   ).run();
+
+  // --- Fix Guillevin categories: replace empty collection and add missing ones ---
+  db.prepare(
+    "UPDATE supplier_categories SET category_name = 'Boîtes électriques', category_url = '/collections/electrical-boxes', enabled = 1 WHERE supplier = 'guillevin' AND category_url = '/collections/conduit-fittings-boxes'"
+  ).run();
+
+  const extraGuillevinCats = [
+    { name: 'Boîtiers et armoires',     url: '/collections/electrical-enclosures-cabinets',               enabled: 0 },
+    { name: 'Prises électriques',       url: '/collections/electrical-receptacles',                       enabled: 1 },
+    { name: 'Interrupteurs',            url: '/collections/switches',                                     enabled: 1 },
+    { name: 'Plaques et couvercles',    url: '/collections/plates-covers',                                enabled: 1 },
+    { name: 'Conduits et tuyaux',       url: '/collections/conduits-pipes',                               enabled: 1 },
+    { name: 'Rubans et adhésifs',       url: '/collections/tapes-adhesives',                              enabled: 0 },
+    { name: 'Marrettes et connecteurs', url: '/collections/wire-connectors-twist-on-wire-caps-marrette',  enabled: 1 },
+    { name: 'Fusibles',                 url: '/collections/fuses-accessories',                            enabled: 0 },
+    { name: 'Mise à la terre',          url: '/collections/grounding-clamps-connectors',                  enabled: 0 },
+    { name: 'Cosses et bornes',         url: '/collections/lugs-terminal-connectors',                     enabled: 0 },
+    { name: 'Attaches et supports',     url: '/collections/cable-ties-accessories',                       enabled: 0 },
+  ];
+  for (const c of extraGuillevinCats) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'guillevin' AND category_url = ? LIMIT 1"
+    ).get(c.url);
+    if (!exists) {
+      const companyIds = db.prepare(
+        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'guillevin'"
+      ).all() as { company_id: number }[];
+      for (const row of companyIds) {
+        db.prepare(
+          "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('guillevin', ?, ?, ?, ?)"
+        ).run(c.name, c.url, c.enabled, row.company_id);
+      }
+    }
+  }
 
   // --- Marketing features ---
   try { db.exec('ALTER TABLE company_settings ADD COLUMN google_review_url TEXT'); } catch {}
