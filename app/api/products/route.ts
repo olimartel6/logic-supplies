@@ -63,6 +63,9 @@ const SYNONYM_GROUPS: string[][] = [
   ['coffret', 'enclosure', 'cabinet', 'armoire', 'enclosures', 'cabinets'],
   // Wire & cable
   ['fil', 'fils', 'wire', 'wires', 'cable', 'cables', 'cablage'],
+  ['bx', 'ac90', 'ac-90', 'armoured', 'armored', 'arme', 'blinde', 'mcable'],
+  ['nmd', 'nmd90', 'nmd-90', 'romex', 'loomex', 'nm'],
+  ['teck', 'teck90', 'teck-90'],
   ['rallonge', 'rallonges', 'extension', 'cord', 'cords'],
   // Breakers & panels
   ['disjoncteur', 'disjoncteurs', 'breaker', 'breakers'],
@@ -156,10 +159,12 @@ for (const group of SYNONYM_GROUPS) {
 function expandToken(token: string): string[] {
   const synonyms = synonymLookup.get(token);
   if (synonyms) return Array.from(synonyms);
-  // Try partial match for compound tokens
-  for (const [key, group] of synonymLookup) {
-    if (token.includes(key) || key.includes(token)) {
-      return [token, ...Array.from(group)];
+  // Try partial match for compound tokens (only for tokens >= 4 chars to avoid false positives)
+  if (token.length >= 4) {
+    for (const [key, group] of synonymLookup) {
+      if (key.length >= 4 && (token.includes(key) || key.includes(token))) {
+        return [token, ...Array.from(group)];
+      }
     }
   }
   return [token];
