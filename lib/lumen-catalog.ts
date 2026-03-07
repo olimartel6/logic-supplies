@@ -10,6 +10,105 @@ export interface ImportProgress {
   error?: string;
 }
 
+/**
+ * Lumen category pages are deeply nested navigation trees.
+ * Top-level URLs (/en/products/28-wire-cords-cables) only show subcategory links.
+ * Products only appear on the deepest leaf pages (with /p- in their URL).
+ *
+ * This function recursively discovers all leaf subcategory URLs from a given
+ * category page, then scrapes products from each leaf page.
+ */
+async function discoverLeafCategories(page: any, categoryUrl: string): Promise<string[]> {
+  await page.goto(`https://www.lumen.ca${categoryUrl}`, {
+    waitUntil: 'networkidle', timeout: 30000,
+  });
+  await page.waitForTimeout(2000);
+
+  // Check if this page has actual products (links with /p-)
+  const hasProducts = await page.evaluate(() => {
+    return document.querySelectorAll('a[href*="/p-"]').length > 0;
+  });
+
+  if (hasProducts) {
+    // This is a leaf page with products
+    return [categoryUrl];
+  }
+
+  // No products — find subcategory links on this page
+  const subcategoryUrls: string[] = await page.evaluate((parentUrl: string) => {
+    const links = Array.from(document.querySelectorAll(`a[href*="${parentUrl}/"]`));
+    const urls = new Set<string>();
+    for (const link of links) {
+      const href = (link as HTMLAnchorElement).pathname;
+      // Only direct children (one level deeper)
+      if (href.startsWith(parentUrl + '/') && href !== parentUrl) {
+        urls.add(href);
+      }
+    }
+    return Array.from(urls);
+  }, categoryUrl);
+
+  if (subcategoryUrls.length === 0) {
+    return []; // Dead end — no products, no subcategories
+  }
+
+  // Recursively discover leaf categories from subcategories
+  const leafCategories: string[] = [];
+  for (const subUrl of subcategoryUrls) {
+    const leaves = await discoverLeafCategories(page, subUrl);
+    leafCategories.push(...leaves);
+  }
+  return leafCategories;
+}
+
+/** Extract products from a leaf category page */
+async function extractProducts(page: any): Promise<any[]> {
+  return page.evaluate(() => {
+    const items: any[] = [];
+    const seen = new Set<string>();
+
+    // Find product containers — each product card has an image, SKU link, and name link
+    const productLinks = Array.from(document.querySelectorAll('a[href*="/p-"]'));
+
+    for (const link of productLinks) {
+      const container = (link as HTMLElement).closest('li, article, [class*="product"], [class*="item"], div') as HTMLElement | null;
+      if (!container) continue;
+
+      const name = link.textContent?.trim() || '';
+      if (!name || name.length < 3) continue;
+
+      // Deduplicate by name
+      if (seen.has(name)) continue;
+      seen.add(name);
+
+      const imgEl = container.querySelector('img') as HTMLImageElement | null;
+      const image_url = imgEl?.src || imgEl?.getAttribute('data-src') || '';
+
+      // Price
+      const priceEl = Array.from(container.querySelectorAll('*')).find(el =>
+        el.textContent?.includes('$') && el.children.length === 0
+      );
+      const priceText = priceEl?.textContent?.trim() || '';
+      const priceMatch = priceText.match(/\$\s*([\d.,]+)/);
+      const price = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : null;
+      const unit = priceText.toLowerCase().includes('/ m') ? 'm'
+        : priceText.toLowerCase().includes('/ pi') ? 'feet' : 'units';
+
+      // SKU: look for short uppercase text in sibling product links
+      const siblings = Array.from(container.querySelectorAll('a[href*="/p-"]'));
+      const skuLink = siblings.find(s => {
+        const t = s.textContent?.trim() || '';
+        return t.length > 3 && t.length < 30 && t === t.toUpperCase() && t !== name;
+      });
+      const sku = skuLink?.textContent?.trim() || name.slice(0, 30);
+
+      items.push({ name, sku, image_url, price, unit });
+    }
+
+    return items;
+  });
+}
+
 export async function importLumenCatalog(
   onProgress?: (p: ImportProgress) => void,
   companyId?: number | null
@@ -34,7 +133,7 @@ export async function importLumenCatalog(
     const page = await browser.newPage();
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8' });
 
-    // Login — same approach as working testLumenConnection
+    // Login
     await page.goto('https://www.lumen.ca/en/account/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 
@@ -51,7 +150,6 @@ export async function importLumenCatalog(
     await page.locator('button[type="submit"], input[type="submit"]').first().click();
     await page.waitForTimeout(5000);
 
-    // Verify login
     const loginUrl = page.url();
     if (loginUrl.includes('/login') || loginUrl.includes('/connexion')) {
       return { total: 0, error: `Login échoué — toujours sur: ${loginUrl}` };
@@ -70,101 +168,43 @@ export async function importLumenCatalog(
     `);
 
     for (const cat of categories) {
-      let pageNum = 1;
       let categoryTotal = 0;
-
       onProgress?.({ category: cat.category_name, imported: 0, total: 0, done: false });
 
-      while (true) {
-        try {
-          const url = `https://www.lumen.ca${cat.category_url}?page=${pageNum}`;
-          await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-          await page.waitForTimeout(2000);
+      try {
+        // Discover all leaf subcategories that actually contain products
+        console.error(`[Lumen catalog] Discovering subcategories for: ${cat.category_name}`);
+        const leafUrls = await discoverLeafCategories(page, cat.category_url);
+        console.error(`[Lumen catalog] Found ${leafUrls.length} leaf categories`);
 
-          // Extract products — try multiple strategies
-          const products = await page.evaluate(() => {
-            const items: any[] = [];
+        for (const leafUrl of leafUrls) {
+          try {
+            await page.goto(`https://www.lumen.ca${leafUrl}`, {
+              waitUntil: 'networkidle', timeout: 30000,
+            });
+            await page.waitForTimeout(2000);
 
-            // Strategy 1: product links with Sonepar CDN images
-            const productLinks = Array.from(document.querySelectorAll('a[href*="/products/"]'))
-              .filter(a => {
-                const href = (a as HTMLAnchorElement).href;
-                // Only leaf product pages (contain /p- pattern or specific product URL)
-                return href.includes('/p-') || href.match(/\/products\/[^/]+\/[^/]+\/[^/]+\/[^/]+$/);
-              });
+            const products = await extractProducts(page);
+            if (products.length === 0) continue;
 
-            for (const link of productLinks) {
-              const container = link.closest('li, article, [class*="product"], [class*="item"], div') as HTMLElement | null;
-              if (!container) continue;
-
-              const name = link.textContent?.trim() || '';
-              if (!name || name.length < 3) continue;
-
-              const imgEl = container.querySelector('img') as HTMLImageElement | null;
-              const image_url = imgEl?.src || imgEl?.getAttribute('data-src') || '';
-
-              const priceEl = Array.from(container.querySelectorAll('*')).find(el =>
-                el.textContent?.includes('$') && el.children.length === 0
-              );
-              const priceText = priceEl?.textContent?.trim() || '';
-              const priceMatch = priceText.match(/\$\s*([\d.,]+)/);
-              const price = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : null;
-              const unit = priceText.toLowerCase().includes('/ m') ? 'm'
-                : priceText.toLowerCase().includes('/ pi') ? 'feet' : 'units';
-
-              // SKU: look for short uppercase sibling text
-              const siblings = Array.from(container.querySelectorAll('a[href*="/products/"]'));
-              const skuLink = siblings.find(s => {
-                const t = s.textContent?.trim() || '';
-                return t.length < 30 && t === t.toUpperCase() && t !== name;
-              });
-              const sku = skuLink?.textContent?.trim() || name.slice(0, 30);
-
-              items.push({ name, sku, image_url, price, unit });
-            }
-
-            // Strategy 2: fallback — images from Sonepar CDN
-            if (items.length === 0) {
-              const imgs = Array.from(document.querySelectorAll('img[src*="soneparcanada"], img[src*="PIM_Docs"], img[data-src*="soneparcanada"]'));
-              for (const img of imgs) {
-                const container = img.closest('div, li, article') as HTMLElement | null;
-                if (!container) continue;
-                const image_url = (img as HTMLImageElement).src || img.getAttribute('data-src') || '';
-                const links = Array.from(container.querySelectorAll('a')).filter(a => a.textContent && a.textContent.trim().length > 2);
-                if (links.length === 0) continue;
-                const name = links[links.length - 1]?.textContent?.trim() || '';
-                const sku = links[0]?.textContent?.trim() || name;
-                items.push({ name, sku, image_url, price: null, unit: 'units' });
+            const insertMany = db.transaction((prods: any[]) => {
+              for (const p of prods) {
+                try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch {}
               }
-            }
+            });
+            insertMany(products);
 
-            return items;
-          });
+            categoryTotal += products.length;
+            totalImported += products.length;
+            onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
 
-          if (products.length === 0) break;
-
-          const insertMany = db.transaction((prods: any[]) => {
-            for (const p of prods) {
-              try {
-                upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name);
-              } catch { /* skip duplicates */ }
-            }
-          });
-          insertMany(products);
-
-          categoryTotal += products.length;
-          totalImported += products.length;
-
-          onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
-
-          // Lumen pagination: check for next page link
-          const hasNext = await page.locator('a[aria-label="Next"], a:has-text("Next"), .pagination a:last-child').isVisible().catch(() => false);
-          if (!hasNext || products.length < 5) break;
-
-          pageNum++;
-        } catch (err) {
-          break;
+            console.error(`[Lumen catalog] ${leafUrl}: ${products.length} products`);
+          } catch {
+            // Skip failed leaf pages
+          }
         }
+      } catch (err: any) {
+        console.error(`[Lumen catalog] Error crawling ${cat.category_name}: ${err.message}`);
       }
 
       onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: true });
