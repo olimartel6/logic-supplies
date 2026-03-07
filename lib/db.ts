@@ -634,6 +634,41 @@ function initDb(db: Database.Database) {
     "UPDATE supplier_categories SET enabled = 1 WHERE supplier = 'bmr' AND category_name IN ('Disjoncteurs', 'Boîtes électriques')"
   ).run();
 
+  // --- Fix JSV categories: replace placeholder handles with real groupejsv.com collection handles ---
+  const jsvUrlFixes = [
+    { old: '/collections/power-tools', new: '/collections/outils-electriques',  name: 'Outils électriques' },
+    { old: '/collections/electrical',  new: '/collections/cables-electriques',  name: 'Câbles électriques' },
+    { old: '/collections/safety',      new: '/collections/pinces-delectricien', name: 'Pinces d\'électricien' },
+    { old: '/collections/fasteners',   new: '/collections/rubans-adhesifs-isolants', name: 'Rubans isolants' },
+  ];
+  for (const fix of jsvUrlFixes) {
+    db.prepare(
+      "UPDATE supplier_categories SET category_url = ?, category_name = ?, enabled = 1 WHERE supplier = 'jsv' AND category_url = ?"
+    ).run(fix.new, fix.name, fix.old);
+  }
+  // Insert additional JSV categories if missing (check existence first to avoid duplicates)
+  const extraJsvCats = [
+    { name: 'Outils sans-fil',        url: '/collections/outils-sans-fil' },
+    { name: 'Pinces à dénuder',       url: '/collections/pinces-a-denuder' },
+    { name: 'Rallonges électriques',  url: '/collections/devidoirs-et-rallonges-electriques' },
+  ];
+  for (const c of extraJsvCats) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'jsv' AND category_url = ? LIMIT 1"
+    ).get(c.url);
+    if (!exists) {
+      // Insert for every company_id that already has JSV categories
+      const companyIds = db.prepare(
+        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'jsv'"
+      ).all() as { company_id: number }[];
+      for (const row of companyIds) {
+        db.prepare(
+          "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('jsv', ?, ?, 1, ?)"
+        ).run(c.name, c.url, row.company_id);
+      }
+    }
+  }
+
   // --- Marketing features ---
   try { db.exec('ALTER TABLE company_settings ADD COLUMN google_review_url TEXT'); } catch {}
   try { db.exec('ALTER TABLE company_settings ADD COLUMN company_logo_url TEXT'); } catch {}
