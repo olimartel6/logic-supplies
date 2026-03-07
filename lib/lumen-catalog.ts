@@ -61,6 +61,35 @@ async function discoverLeafCategories(page: any, categoryUrl: string): Promise<s
   return leafCategories;
 }
 
+/** Scroll to bottom to trigger lazy-loaded products, click "load more" if present */
+async function loadAllProducts(page: any): Promise<void> {
+  // Scroll down in increments to trigger lazy loading
+  let previousHeight = 0;
+  for (let i = 0; i < 20; i++) {
+    const currentHeight = await page.evaluate(() => document.body.scrollHeight);
+    if (currentHeight === previousHeight && i > 0) break;
+    previousHeight = currentHeight;
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1000);
+  }
+
+  // Click "load more" / "show more" / pagination buttons repeatedly
+  for (let i = 0; i < 30; i++) {
+    const loadMore = page.locator(
+      'button:has-text("Load More"), button:has-text("Show More"), button:has-text("Voir plus"), ' +
+      'a:has-text("Load More"), a:has-text("Show More"), a:has-text("Voir plus"), ' +
+      '[class*="load-more"], [class*="show-more"], [class*="loadMore"], ' +
+      'a[rel="next"], a:has-text("Next"), a:has-text("Suivant")'
+    ).first();
+    if (!(await loadMore.isVisible({ timeout: 1000 }).catch(() => false))) break;
+    await loadMore.click().catch(() => {});
+    await page.waitForTimeout(2000);
+    // Scroll again after loading more
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1000);
+  }
+}
+
 /** Extract products from a leaf category page */
 async function extractProducts(page: any): Promise<any[]> {
   return page.evaluate(() => {
@@ -184,6 +213,9 @@ export async function importLumenCatalog(
             });
             await page.waitForTimeout(2000);
 
+            // Scroll and click "load more" to reveal all products
+            await loadAllProducts(page);
+
             const products = await extractProducts(page);
             if (products.length === 0) continue;
 
@@ -199,8 +231,8 @@ export async function importLumenCatalog(
             onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
 
             console.error(`[Lumen catalog] ${leafUrl}: ${products.length} products`);
-          } catch {
-            // Skip failed leaf pages
+          } catch (leafErr: any) {
+            console.error(`[Lumen catalog] Failed leaf ${leafUrl}: ${leafErr.message}`);
           }
         }
       } catch (err: any) {
