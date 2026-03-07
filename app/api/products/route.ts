@@ -223,20 +223,49 @@ export async function GET(req: NextRequest) {
     supplierParams = visible;
   }
 
+  // Fetch top results per supplier to guarantee diversity across suppliers.
+  // Without this, LIMIT 12 + ORDER BY price would only show the cheapest supplier.
+  const allSuppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'bmr', 'westburne', 'nedco', 'futech', 'deschenes', 'jsv'];
+  const visibleSuppliers = supplierParams.length > 0
+    ? allSuppliers.filter(s => supplierParams.includes(s))
+    : allSuppliers;
+
+  const perSupplierLimit = Math.max(4, Math.ceil(limit / visibleSuppliers.length));
+  const allResults: any[] = [];
+
+  for (const supplier of visibleSuppliers) {
+    const rows = db.prepare(`
+      SELECT name, sku, image_url, price, unit, category, supplier
+      FROM products
+      WHERE ${tokenWhere} AND supplier = ?
+      ORDER BY
+        CASE WHEN normalize_text(name) LIKE ? THEN 0 ELSE 1 END,
+        CASE WHEN price IS NULL THEN 1 ELSE 0 END,
+        price ASC,
+        name ASC
+      LIMIT ${perSupplierLimit}
+    `).all(...tokenParams, supplier, firstTokenStartsWith) as any[];
+    allResults.push(...rows);
+  }
+
+  // Sort merged results according to preference
   let results: any[];
 
   if (preference === 'cheapest') {
-    results = db.prepare(`
-      SELECT name, sku, image_url, price, unit, category, supplier
-      FROM products
-      WHERE ${tokenWhere} ${supplierWhere}
-      ORDER BY
-        CASE WHEN price IS NULL THEN 1 ELSE 0 END,
-        price ASC,
-        CASE WHEN normalize_text(name) LIKE ? THEN 0 ELSE 1 END,
-        name ASC
-      LIMIT ${limit}
-    `).all(...tokenParams, ...supplierParams, firstTokenStartsWith) as any[];
+    results = allResults.sort((a, b) => {
+      // Exact name match first
+      const aNorm = normalizeStr(a.name);
+      const bNorm = normalizeStr(b.name);
+      const aStarts = aNorm.startsWith(tokens[0]) ? 0 : 1;
+      const bStarts = bNorm.startsWith(tokens[0]) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      // Products with price before null-price
+      if (a.price != null && b.price == null) return -1;
+      if (a.price == null && b.price != null) return 1;
+      // By price ascending
+      if (a.price != null && b.price != null && a.price !== b.price) return a.price - b.price;
+      return a.name.localeCompare(b.name);
+    }).slice(0, limit);
   } else {
     // Fastest: sort by nearest supplier to the job site
     let supplierOrder = ['lumen', 'canac', 'homedepot', 'guillevin'];
@@ -255,17 +284,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const [s0, s1] = supplierOrder;
-    results = db.prepare(`
-      SELECT name, sku, image_url, price, unit, category, supplier
-      FROM products
-      WHERE ${tokenWhere} ${supplierWhere}
-      ORDER BY
-        CASE WHEN supplier = ? THEN 0 WHEN supplier = ? THEN 1 ELSE 2 END,
-        CASE WHEN normalize_text(name) LIKE ? THEN 0 ELSE 1 END,
-        name ASC
-      LIMIT ${limit}
-    `).all(...tokenParams, ...supplierParams, s0, s1, firstTokenStartsWith) as any[];
+    results = allResults.sort((a, b) => {
+      const aIdx = supplierOrder.indexOf(a.supplier);
+      const bIdx = supplierOrder.indexOf(b.supplier);
+      const aRank = aIdx >= 0 ? aIdx : 99;
+      const bRank = bIdx >= 0 ? bIdx : 99;
+      if (aRank !== bRank) return aRank - bRank;
+      const aNorm = normalizeStr(a.name);
+      const bNorm = normalizeStr(b.name);
+      const aStarts = aNorm.startsWith(tokens[0]) ? 0 : 1;
+      const bStarts = bNorm.startsWith(tokens[0]) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.name.localeCompare(b.name);
+    }).slice(0, limit);
   }
 
   return NextResponse.json(results);
