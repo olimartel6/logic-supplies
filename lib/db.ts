@@ -92,12 +92,18 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
       ).run(c.name, c.url, c.enabled, companyId);
     }
 
-    // Catégories JSV
+    // Catégories JSV (Shopify — handles réels du site groupejsv.com)
     const jsvCategories = [
-      { name: 'Outils électriques',  url: '/collections/power-tools',          enabled: 1 },
-      { name: 'Matériel électrique', url: '/collections/electrical',            enabled: 1 },
-      { name: 'Sécurité',            url: '/collections/safety',                enabled: 0 },
-      { name: 'Fixation',            url: '/collections/fasteners',             enabled: 0 },
+      { name: 'Câbles électriques',     url: '/collections/cables-electriques',               enabled: 1 },
+      { name: 'Outils électriques',     url: '/collections/outils-electriques',               enabled: 1 },
+      { name: 'Outils sans-fil',        url: '/collections/outils-sans-fil',                  enabled: 1 },
+      { name: 'Pinces d\'électricien',  url: '/collections/pinces-delectricien',              enabled: 1 },
+      { name: 'Pinces à dénuder',       url: '/collections/pinces-a-denuder',                 enabled: 1 },
+      { name: 'Rallonges électriques',  url: '/collections/devidoirs-et-rallonges-electriques', enabled: 1 },
+      { name: 'Rubans isolants',        url: '/collections/rubans-adhesifs-isolants',         enabled: 1 },
+      { name: 'Lampes de poche',        url: '/collections/lampes-de-poche',                  enabled: 0 },
+      { name: 'Tournevis',              url: '/collections/tournevis',                        enabled: 0 },
+      { name: 'Perceuses',              url: '/collections/perceuses',                        enabled: 0 },
     ];
     for (const c of jsvCategories) {
       db.prepare(
@@ -210,10 +216,16 @@ export function seedSuperadminCategories(db: Database.Database) {
       { supplier: 'guillevin', name: 'Luminaires',               url: '/collections/lighting' },
       { supplier: 'guillevin', name: 'Outils',                   url: '/collections/tools' },
       // JSV
-      { supplier: 'jsv', name: 'Outils électriques',  url: '/collections/power-tools' },
-      { supplier: 'jsv', name: 'Matériel électrique', url: '/collections/electrical' },
-      { supplier: 'jsv', name: 'Sécurité',            url: '/collections/safety' },
-      { supplier: 'jsv', name: 'Fixation',            url: '/collections/fasteners' },
+      { supplier: 'jsv', name: 'Câbles électriques',     url: '/collections/cables-electriques' },
+      { supplier: 'jsv', name: 'Outils électriques',     url: '/collections/outils-electriques' },
+      { supplier: 'jsv', name: 'Outils sans-fil',        url: '/collections/outils-sans-fil' },
+      { supplier: 'jsv', name: 'Pinces d\'électricien',  url: '/collections/pinces-delectricien' },
+      { supplier: 'jsv', name: 'Pinces à dénuder',       url: '/collections/pinces-a-denuder' },
+      { supplier: 'jsv', name: 'Rallonges électriques',  url: '/collections/devidoirs-et-rallonges-electriques' },
+      { supplier: 'jsv', name: 'Rubans isolants',        url: '/collections/rubans-adhesifs-isolants' },
+      { supplier: 'jsv', name: 'Lampes de poche',        url: '/collections/lampes-de-poche' },
+      { supplier: 'jsv', name: 'Tournevis',              url: '/collections/tournevis' },
+      { supplier: 'jsv', name: 'Perceuses',              url: '/collections/perceuses' },
       // Westburne
       { supplier: 'westburne', name: 'Fils et câbles',           url: '/cwr/c/WIRE/products?pageSize=100' },
       { supplier: 'westburne', name: 'Disjoncteurs et panneaux', url: '/cwr/c/BREAKERS/products?pageSize=100' },
