@@ -253,17 +253,26 @@ export async function GET(req: NextRequest) {
     allResults.push(...rows);
   }
 
+  // Score relevance: how many token groups match in the product NAME (not category/sku)
+  // A product with "box 4x4" in the name is much more relevant than "box" in category + "4x4" in sku
+  function relevanceScore(product: any): number {
+    const nameNorm = normalizeStr(product.name);
+    let score = 0;
+    for (const synonyms of expandedTokenGroups) {
+      if (synonyms.some(syn => nameNorm.includes(syn))) score++;
+    }
+    return score;
+  }
+
   // Sort merged results according to preference
   let results: any[];
 
   if (preference === 'cheapest') {
     results = allResults.sort((a, b) => {
-      // Exact name match first
-      const aNorm = normalizeStr(a.name);
-      const bNorm = normalizeStr(b.name);
-      const aStarts = aNorm.startsWith(tokens[0]) ? 0 : 1;
-      const bStarts = bNorm.startsWith(tokens[0]) ? 0 : 1;
-      if (aStarts !== bStarts) return aStarts - bStarts;
+      // Relevance first: more token groups matching in name = better
+      const aRel = relevanceScore(a);
+      const bRel = relevanceScore(b);
+      if (aRel !== bRel) return bRel - aRel; // higher score first
       // Products with price before null-price
       if (a.price != null && b.price == null) return -1;
       if (a.price == null && b.price != null) return 1;
@@ -290,16 +299,16 @@ export async function GET(req: NextRequest) {
     }
 
     results = allResults.sort((a, b) => {
+      // Relevance first
+      const aRel = relevanceScore(a);
+      const bRel = relevanceScore(b);
+      if (aRel !== bRel) return bRel - aRel;
+      // Then by supplier proximity
       const aIdx = supplierOrder.indexOf(a.supplier);
       const bIdx = supplierOrder.indexOf(b.supplier);
       const aRank = aIdx >= 0 ? aIdx : 99;
       const bRank = bIdx >= 0 ? bIdx : 99;
       if (aRank !== bRank) return aRank - bRank;
-      const aNorm = normalizeStr(a.name);
-      const bNorm = normalizeStr(b.name);
-      const aStarts = aNorm.startsWith(tokens[0]) ? 0 : 1;
-      const bStarts = bNorm.startsWith(tokens[0]) ? 0 : 1;
-      if (aStarts !== bStarts) return aStarts - bStarts;
       return a.name.localeCompare(b.name);
     }).slice(0, limit);
   }
