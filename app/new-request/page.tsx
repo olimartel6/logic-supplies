@@ -408,11 +408,12 @@ function NewRequestContent() {
           <div className="flex gap-2">
             <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-0">
               <input
-                type="text"
+                type="search"
                 value={query}
                 onChange={handleQueryChange}
                 placeholder={t('search_products')}
                 autoComplete="off"
+                enterKeyHint="search"
                 className="flex-1 rounded-xl pl-4 pr-4 py-2.5 text-base bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
               <button
