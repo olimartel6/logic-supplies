@@ -7,12 +7,13 @@ import { getDb } from './db';
 const HD_SEARCH_BASE = 'https://www.homedepot.ca/api/search/v1/search';
 const HD_PAGE_SIZE = 24;
 
-const CATEGORY_QUERIES: Record<string, string> = {
-  'Fils et câbles':           'fil electrique',
-  'Disjoncteurs et panneaux': 'disjoncteur',
-  'Boîtes électriques':       'boite electrique',
-  'Interrupteurs et prises':  'interrupteur prise',
-  'Éclairage':                'luminaire',
+// Multiple search queries per category to get broader product coverage
+const CATEGORY_QUERIES: Record<string, string[]> = {
+  'Fils et câbles':           ['fil electrique', 'cable electrique', 'BX AC90 armoured', 'NMD90 loomex romex', 'TECK cable', 'fil 14/2', 'fil 12/2'],
+  'Disjoncteurs et panneaux': ['disjoncteur', 'panneau electrique', 'breaker panel'],
+  'Boîtes électriques':       ['boite electrique', 'boite jonction 4x4', 'electrical box'],
+  'Interrupteurs et prises':  ['interrupteur electrique', 'prise electrique', 'receptacle outlet'],
+  'Éclairage':                ['luminaire', 'eclairage LED', 'ampoule'],
 };
 
 export interface ImportProgress {
@@ -74,8 +75,8 @@ export async function importHomeDepotCatalog(
 
     // Trigger one real UI search to fully validate the Akamai session.
     // After this, context.request.get() works for direct API calls.
-    const firstQuery =
-      CATEGORY_QUERIES[categories[0]?.category_name] || Object.values(CATEGORY_QUERIES)[0];
+    const firstCatQueries = CATEGORY_QUERIES[categories[0]?.category_name] || Object.values(CATEGORY_QUERIES)[0];
+    const firstQuery = Array.isArray(firstCatQueries) ? firstCatQueries[0] : firstCatQueries;
 
     let firstPageData: any = null;
     const firstApiPromise = new Promise<any>(resolve => {
@@ -132,33 +133,38 @@ export async function importHomeDepotCatalog(
       insertMany(products);
     }
 
-    // Process each category
+    // Process each category — multiple search queries per category for broader coverage
     for (const cat of categories) {
-      const query = CATEGORY_QUERIES[cat.category_name] || cat.category_name;
+      const queries = CATEGORY_QUERIES[cat.category_name] || [cat.category_name];
+      const queryList = Array.isArray(queries) ? queries : [queries];
       let categoryTotal = 0;
-      let pageNum = 1;
 
       onProgress?.({ category: cat.category_name, imported: 0, total: 0, done: false });
 
-      while (true) {
-        // Use the intercepted data for the very first page of the first category
-        const products =
-          pageNum === 1 && query === firstQuery && firstPageData?.products
-            ? firstPageData.products
-            : await searchHD(query, pageNum);
+      for (const query of queryList) {
+        let pageNum = 1;
 
-        if (!products || products.length === 0) break;
+        while (true) {
+          // Use the intercepted data for the very first page of the first category
+          const products =
+            pageNum === 1 && query === firstQuery && firstPageData?.products
+              ? firstPageData.products
+              : await searchHD(query, pageNum);
 
-        saveProducts(products, cat.category_name);
-        categoryTotal += products.length;
-        totalImported += products.length;
-        onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
+          if (!products || products.length === 0) break;
 
-        if (products.length < HD_PAGE_SIZE) break;
-        pageNum++;
+          saveProducts(products, cat.category_name);
+          categoryTotal += products.length;
+          totalImported += products.length;
+          onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
 
-        // Small delay between pages to avoid rate limiting
-        await new Promise(r => setTimeout(r, 500));
+          if (products.length < HD_PAGE_SIZE) break;
+          pageNum++;
+          if (pageNum > 10) break; // cap pages per query
+
+          // Small delay between pages to avoid rate limiting
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
 
       onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: true });
