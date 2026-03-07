@@ -55,6 +55,116 @@ function normalizeStr(s: string): string {
     .trim();
 }
 
+// Bilingual synonym groups for electrical terms (FR ↔ EN)
+// Each group contains words that should match interchangeably
+const SYNONYM_GROUPS: string[][] = [
+  // Boxes & enclosures
+  ['boite', 'boitier', 'box', 'boites', 'boitiers', 'boxes'],
+  ['coffret', 'enclosure', 'cabinet', 'armoire', 'enclosures', 'cabinets'],
+  // Wire & cable
+  ['fil', 'fils', 'wire', 'wires', 'cable', 'cables', 'cablage'],
+  ['rallonge', 'rallonges', 'extension', 'cord', 'cords'],
+  // Breakers & panels
+  ['disjoncteur', 'disjoncteurs', 'breaker', 'breakers'],
+  ['panneau', 'panneaux', 'panel', 'panels', 'loadcentre', 'loadcenter'],
+  ['fusible', 'fusibles', 'fuse', 'fuses'],
+  // Switches & receptacles
+  ['interrupteur', 'interrupteurs', 'switch', 'switches', 'toggle'],
+  ['prise', 'prises', 'receptacle', 'receptacles', 'outlet', 'outlets', 'duplex'],
+  ['plaque', 'plaques', 'wallplate', 'wallplates', 'coverplate', 'plate', 'plates'],
+  // Conduit & fittings
+  ['conduit', 'conduits', 'tuyau', 'tuyaux', 'pipe', 'pipes', 'raceway'],
+  ['connecteur', 'connecteurs', 'connector', 'connectors', 'fitting', 'fittings'],
+  ['coude', 'coudes', 'elbow', 'elbows'],
+  ['manchon', 'coupling', 'couplings'],
+  // Lighting
+  ['luminaire', 'luminaires', 'lumiere', 'lumieres', 'light', 'lights', 'fixture', 'fixtures', 'lamp', 'lamps'],
+  ['ampoule', 'ampoules', 'bulb', 'bulbs', 'led'],
+  ['eclairage', 'lighting'],
+  // Fasteners
+  ['vis', 'screw', 'screws'],
+  ['ecrou', 'ecrous', 'nut', 'nuts', 'locknut', 'locknuts'],
+  ['boulon', 'boulons', 'bolt', 'bolts'],
+  ['attache', 'attaches', 'tie', 'ties', 'tywrap', 'tywraps', 'zip'],
+  // Tools
+  ['outil', 'outils', 'tool', 'tools'],
+  ['pince', 'pinces', 'plier', 'pliers'],
+  ['tournevis', 'screwdriver', 'screwdrivers'],
+  ['perceuse', 'perceuses', 'drill', 'drills'],
+  ['scie', 'scies', 'saw', 'saws'],
+  ['marteau', 'marteaux', 'hammer', 'hammers'],
+  ['cle', 'cles', 'wrench', 'wrenches'],
+  ['niveau', 'niveaux', 'level', 'levels'],
+  ['ruban', 'rubans', 'tape', 'tapes'],
+  ['metre', 'metres', 'meter', 'meters', 'measuring'],
+  // Safety
+  ['gant', 'gants', 'glove', 'gloves'],
+  ['lunette', 'lunettes', 'goggle', 'goggles', 'glasses', 'safety'],
+  ['casque', 'casques', 'helmet', 'helmets', 'hardhat'],
+  // Common electrical terms
+  ['marrette', 'marrettes', 'wirenut', 'wirenuts', 'wire nut', 'twist-on'],
+  ['mise a la terre', 'ground', 'grounding', 'terre'],
+  ['cosse', 'cosses', 'lug', 'lugs', 'terminal', 'terminals'],
+  ['bornier', 'borniers', 'terminal block', 'terminal blocks'],
+  ['contacteur', 'contacteurs', 'contactor', 'contactors'],
+  ['relais', 'relay', 'relays'],
+  ['transformateur', 'transformateurs', 'transformer', 'transformers'],
+  ['moteur', 'moteurs', 'motor', 'motors'],
+  ['ventilateur', 'ventilateurs', 'fan', 'fans'],
+  ['thermostat', 'thermostats'],
+  ['detecteur', 'detecteurs', 'detector', 'detectors', 'sensor', 'sensors'],
+  ['compteur', 'compteurs', 'meter', 'metres'],
+  ['chauffage', 'heater', 'heaters', 'heating', 'baseboard'],
+  // Materials
+  ['acier', 'steel', 'metal', 'metallic', 'metallique'],
+  ['plastique', 'plastic', 'pvc', 'nylon'],
+  ['cuivre', 'copper'],
+  ['aluminium', 'aluminum'],
+  ['blanc', 'white', 'wh'],
+  ['noir', 'black', 'bk'],
+  ['rouge', 'red'],
+  ['bleu', 'blue'],
+  ['vert', 'green'],
+  ['jaune', 'yellow'],
+  // Sizes & types
+  ['rond', 'ronde', 'round', 'octagonal', 'octogonal'],
+  ['carre', 'carree', 'square'],
+  ['simple', 'single', '1g', '1-gang'],
+  ['double', '2g', '2-gang'],
+  ['triple', '3g', '3-gang'],
+  ['interieur', 'indoor', 'interior'],
+  ['exterieur', 'outdoor', 'exterior', 'weatherproof'],
+  ['etanche', 'waterproof', 'watertight'],
+];
+
+// Build a lookup: normalized word → set of synonym words
+const synonymLookup = new Map<string, Set<string>>();
+for (const group of SYNONYM_GROUPS) {
+  const normalizedGroup = group.map(w => normalizeStr(w));
+  const groupSet = new Set(normalizedGroup);
+  for (const word of normalizedGroup) {
+    const existing = synonymLookup.get(word);
+    if (existing) {
+      for (const w of groupSet) existing.add(w);
+    } else {
+      synonymLookup.set(word, new Set(groupSet));
+    }
+  }
+}
+
+/** Expand a token into its synonyms: "boite" → ["boite", "boitier", "box", ...] */
+function expandToken(token: string): string[] {
+  const synonyms = synonymLookup.get(token);
+  if (synonyms) return Array.from(synonyms);
+  // Try partial match for compound tokens
+  for (const [key, group] of synonymLookup) {
+    if (token.includes(key) || key.includes(token)) {
+      return [token, ...Array.from(group)];
+    }
+  }
+  return [token];
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
@@ -74,15 +184,29 @@ export async function GET(req: NextRequest) {
   const limitParam = parseInt(req.nextUrl.searchParams.get('limit') || '12');
   const limit = Math.min(Math.max(limitParam, 1), 48);
 
-  // Tokenize and normalize the query: "boite 4x4" → ["boite", "4x4"]
-  // Each token must be present in the name/sku (AND logic, accent-insensitive)
+  // Tokenize and normalize the query: "boîte 4x4" → ["boite", "4x4"]
   const tokens = normalizeStr(q).split(/\s+/).filter(t => t.length > 0);
   if (tokens.length === 0) return NextResponse.json([]);
 
-  const tokenWhere = tokens
-    .map(() => `(normalize_text(name) LIKE ? OR normalize_text(sku) LIKE ?)`)
-    .join(' AND ');
-  const tokenParams = tokens.flatMap(t => [`%${t}%`, `%${t}%`]);
+  // Expand each token with bilingual synonyms
+  // "boite" → ["boite", "boitier", "box", "boites", "boitiers", "boxes"]
+  // Each token group uses OR logic; groups use AND logic
+  const expandedTokenGroups = tokens.map(t => expandToken(t));
+
+  // Build WHERE clause: (name/sku LIKE syn1 OR LIKE syn2 ...) AND (name/sku LIKE syn3 OR ...)
+  const tokenWhereParts: string[] = [];
+  const tokenParams: string[] = [];
+
+  for (const synonyms of expandedTokenGroups) {
+    const orParts = synonyms.map(() => `normalize_text(name) LIKE ? OR normalize_text(sku) LIKE ? OR normalize_text(category) LIKE ?`);
+    tokenWhereParts.push(`(${orParts.join(' OR ')})`);
+    for (const syn of synonyms) {
+      tokenParams.push(`%${syn}%`, `%${syn}%`, `%${syn}%`);
+    }
+  }
+  const tokenWhere = tokenWhereParts.join(' AND ');
+
+  // For relevance: prefer exact original token match at start of name
   const firstTokenStartsWith = `${tokens[0]}%`;
 
   // Filter by per-company supplier visibility
@@ -98,7 +222,6 @@ export async function GET(req: NextRequest) {
     supplierWhere = `AND supplier IN (${visible.map(() => '?').join(',')})`;
     supplierParams = visible;
   }
-  // If no visibility rows exist yet (legacy company), show all — no filter applied
 
   let results: any[];
 
