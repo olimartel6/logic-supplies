@@ -148,11 +148,48 @@ export async function importLumenCatalog(
   ).get(companyId ?? null) as any;
   if (!account) return { total: 0, error: 'Aucun compte Lumen configuré' };
 
+  // Ensure all Lumen categories exist for this company_id
+  const ALL_LUMEN_CATEGORIES = [
+    { name: 'Fils et câbles',           url: '/en/products/28-wire-cords-cables',                          enabled: 1 },
+    { name: 'Disjoncteurs et panneaux', url: '/en/products/20-power-distribution',                         enabled: 1 },
+    { name: 'Conduits et chemins',      url: '/en/products/11-conduit-raceway-strut',                      enabled: 1 },
+    { name: 'Boîtes et boîtiers',       url: '/en/products/15-enclosures-boxes',                           enabled: 1 },
+    { name: 'Éclairage',                url: '/en/products/18-lighting',                                   enabled: 1 },
+    { name: 'Prises et interrupteurs',  url: '/en/products/24-wiring-devices-wallplates',                  enabled: 1 },
+    { name: 'Automatisation',           url: '/en/products/12-control-automation',                         enabled: 0 },
+    { name: 'Outils',                   url: '/en/products/25-tools-instruments',                          enabled: 0 },
+    { name: 'Terminaison de fils',      url: '/en/products/27-wire-termination-wire-marking-supplies',     enabled: 0 },
+    { name: 'Quincaillerie',            url: '/en/products/16-fasteners-hardwares',                        enabled: 0 },
+    { name: 'Sécurité',                 url: '/en/products/22-safety-products',                            enabled: 0 },
+    { name: 'Moteurs et sources',       url: '/en/products/21-power-sources-motors',                       enabled: 0 },
+    { name: 'Datacom',                  url: '/en/products/13-datacom',                                    enabled: 0 },
+    { name: 'Bornes de recharge VÉ',    url: '/en/products/32-ev-charging-stations',                       enabled: 0 },
+    { name: 'Chauffage et ventilation', url: '/en/products/17-heat-ventilation',                           enabled: 0 },
+    { name: 'Adhésifs et produits',     url: '/en/products/10-adhesives-chemicals-lubricants',             enabled: 0 },
+    { name: 'Utilité électrique',       url: '/en/products/14-electric-utility-outside-plant-products',    enabled: 0 },
+    { name: 'Liquidation',              url: '/en/products/50-clearance',                                  enabled: 0 },
+  ];
+  const cid = companyId ?? null;
+  for (const c of ALL_LUMEN_CATEGORIES) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'lumen' AND category_url = ? AND company_id = ? LIMIT 1"
+    ).get(c.url, cid);
+    if (!exists) {
+      db.prepare(
+        "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('lumen', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, cid);
+      console.error(`[Lumen catalog] Auto-created category: ${c.name} (enabled=${c.enabled}) for company_id=${cid}`);
+    }
+  }
+
   const categories = db.prepare(
     "SELECT * FROM supplier_categories WHERE supplier = 'lumen' AND enabled = 1 AND company_id = ?"
-  ).all(companyId ?? null) as any[];
-  console.error(`[Lumen catalog] Found ${categories.length} enabled categories for company_id=${companyId ?? null}: ${categories.map((c: any) => c.category_name).join(', ')}`);
+  ).all(cid) as any[];
+  console.error(`[Lumen catalog] ${categories.length} enabled categories: ${categories.map((c: any) => c.category_name).join(', ')}`);
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
+
+  // Report how many categories will be processed
+  onProgress?.({ category: `${categories.length} catégories à traiter`, imported: 0, total: 0, done: false });
 
   const password = decrypt(account.password_encrypted);
   const browser = await createBrowserbaseBrowser();
