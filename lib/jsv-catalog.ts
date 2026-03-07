@@ -55,8 +55,9 @@ export async function importJsvCatalog(
             for (const p of shopifyProducts) {
               const variant = p.variants?.[0];
               const sku = variant?.sku || String(p.id);
-              const price = variant?.price ? parseFloat(variant.price) : null;
-              const image_url = p.images?.[0]?.src || '';
+              const rawPrice = variant?.price ? parseFloat(variant.price) : null;
+              const price = (rawPrice && rawPrice > 0) ? rawPrice : null;
+              const image_url = p.images?.[0]?.src || p.image?.src || '';
               const name = p.title || '';
               if (name.length >= 3) {
                 parsed.push({ sku, name, image_url, price, unit: 'units' });
