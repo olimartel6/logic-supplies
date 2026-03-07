@@ -232,7 +232,8 @@ export async function GET(req: NextRequest) {
     supplierParams = visibleSuppliers;
   }
 
-  const perSupplierLimit = Math.max(4, Math.ceil(limit / visibleSuppliers.length));
+  // Fetch enough per supplier to show variety (e.g. multiple sizes of EMT or BX)
+  const perSupplierLimit = Math.max(limit, Math.ceil(limit * 1.5 / visibleSuppliers.length));
   const allResults: any[] = [];
 
   for (const supplier of visibleSuppliers) {
