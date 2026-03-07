@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db';
 
 const ALL_SUPPLIERS = [
   'lumen','canac','homedepot','guillevin',
-  'jsv','westburne','nedco','futech','deschenes','bmr','rona',
+  'jsv','westburne','nedco','futech','deschenes','bmr',
 ] as const;
 
 export async function GET() {

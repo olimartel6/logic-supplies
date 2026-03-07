@@ -10,11 +10,10 @@ import { NEDCO_BRANCHES, placeNedcoOrder, getNedcoPrice } from './nedco';
 import { FUTECH_BRANCHES, placeFutechOrder, getFutechPrice } from './futech';
 import { DESCHENES_BRANCHES, placeDeschenesOrder, getDeschenesPrice } from './deschenes';
 import { BMR_BRANCHES, placeBmrOrder, getBmrPrice } from './bmr';
-import { RONA_BRANCHES, placeRonaOrder, getRonaPrice } from './rona';
 import { decrypt } from './encrypt';
 import { getDb } from './db';
 
-type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin' | 'jsv' | 'westburne' | 'nedco' | 'futech' | 'deschenes' | 'bmr' | 'rona';
+type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin' | 'jsv' | 'westburne' | 'nedco' | 'futech' | 'deschenes' | 'bmr';
 
 interface SupplierAccount {
   supplier: SupplierKey;
@@ -68,7 +67,7 @@ function supplierLabel(s: SupplierKey): string {
   const labels: Record<SupplierKey, string> = {
     lumen: 'Lumen', canac: 'Canac', homedepot: 'Home Depot', guillevin: 'Guillevin',
     jsv: 'JSV', westburne: 'Westburne', nedco: 'Nedco', futech: 'Futech',
-    deschenes: 'Deschênes', bmr: 'BMR', rona: 'Rona',
+    deschenes: 'Deschênes', bmr: 'BMR',
   };
   return labels[s] ?? s;
 }
@@ -85,7 +84,6 @@ async function placeOrder(account: SupplierAccount, product: string, quantity: n
     case 'futech':    return placeFutechOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'deschenes': return placeDeschenesOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'bmr':       return placeBmrOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
-    case 'rona':      return placeRonaOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
   }
 }
 
@@ -109,7 +107,6 @@ async function selectCheapest(
         else if (acc.supplier === 'futech')    price = await getFutechPrice(acc.username, acc.password, product);
         else if (acc.supplier === 'deschenes') price = await getDeschenesPrice(acc.username, acc.password, product);
         else if (acc.supplier === 'bmr')       price = await getBmrPrice(acc.username, acc.password, product);
-        else if (acc.supplier === 'rona')      price = await getRonaPrice(acc.username, acc.password, product);
       } catch { /* ignore */ }
       return { account: acc, price };
     }),
@@ -159,7 +156,7 @@ async function selectFastest(
     lumen: LUMEN_BRANCHES, canac: CANAC_BRANCHES, homedepot: HOME_DEPOT_BRANCHES,
     guillevin: GUILLEVIN_BRANCHES, jsv: JSV_BRANCHES, westburne: WESTBURNE_BRANCHES,
     nedco: NEDCO_BRANCHES, futech: FUTECH_BRANCHES, deschenes: DESCHENES_BRANCHES,
-    bmr: BMR_BRANCHES, rona: RONA_BRANCHES,
+    bmr: BMR_BRANCHES,
   };
 
   const distances = accounts.map(acc => {

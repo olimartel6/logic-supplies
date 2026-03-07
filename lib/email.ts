@@ -15,7 +15,7 @@ const SUPPLIER_LABELS: Record<string, string> = {
   canac: 'Canac', homedepot: 'Home Depot', lumen: 'Lumen',
   guillevin: 'Guillevin', jsv: 'JSV', westburne: 'Westburne',
   nedco: 'Nedco', futech: 'Futech', deschenes: 'Deschênes',
-  bmr: 'BMR', rona: 'Rona',
+  bmr: 'BMR',
 };
 
 const SUPPLIER_CART_URLS: Record<string, string> = {
@@ -29,7 +29,6 @@ const SUPPLIER_CART_URLS: Record<string, string> = {
   futech: 'https://www.futech.ca/cart',
   deschenes: 'https://www.deschenes.ca/cart',
   bmr: 'https://www.bmr.ca/fr/mon-panier',
-  rona: 'https://www.rona.ca/fr/panier',
 };
 
 function supplierLabel(supplier: string): string {

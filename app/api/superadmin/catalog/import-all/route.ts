@@ -9,10 +9,9 @@ import { importNedcoCatalog, getNedcoCatalogStats } from '@/lib/nedco-catalog';
 import { importFutechCatalog, getFutechCatalogStats } from '@/lib/futech-catalog';
 import { importDeschenessCatalog, getDeschenessCatalogStats } from '@/lib/deschenes-catalog';
 import { importBmrCatalog, getBmrCatalogStats } from '@/lib/bmr-catalog';
-import { importRonaCatalog, getRonaCatalogStats } from '@/lib/rona-catalog';
 
 const SUPERADMIN_COMPANY_ID = 0;
-const SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr', 'rona'] as const;
+const SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr'] as const;
 
 export async function POST() {
   const ctx = await requireSuperAdmin();
@@ -61,9 +60,6 @@ export async function POST() {
           } else if (supplier === 'bmr') {
             result = await importBmrCatalog((p) => send({ supplier, ...p }), SUPERADMIN_COMPANY_ID);
             stats = getBmrCatalogStats();
-          } else if (supplier === 'rona') {
-            result = await importRonaCatalog((p) => send({ supplier, ...p }), SUPERADMIN_COMPANY_ID);
-            stats = getRonaCatalogStats();
           } else {
             result = await importLumenCatalog((p) => send({ supplier, ...p }), SUPERADMIN_COMPANY_ID);
             stats = getCatalogStats();

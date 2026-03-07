@@ -7,7 +7,6 @@ import { testCanacConnection } from '@/lib/canac';
 import { testHomeDepotConnection } from '@/lib/homedepot';
 import { testGuillevinConnection } from '@/lib/guillevin';
 import { testBmrConnection } from '@/lib/bmr';
-import { testRonaConnection } from '@/lib/rona';
 
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
@@ -35,8 +34,6 @@ export async function POST(req: NextRequest) {
     result = await testGuillevinConnection(account.username, password);
   } else if (supplier === 'bmr') {
     result = await testBmrConnection(account.username, password);
-  } else if (supplier === 'rona') {
-    result = await testRonaConnection(account.username, password);
   } else {
     result = await testLumenConnection(account.username, password);
   }

@@ -10,7 +10,6 @@ import { importNedcoCatalog, getNedcoCatalogStats } from '@/lib/nedco-catalog';
 import { importFutechCatalog, getFutechCatalogStats } from '@/lib/futech-catalog';
 import { importDeschenessCatalog, getDeschenessCatalogStats } from '@/lib/deschenes-catalog';
 import { importBmrCatalog, getBmrCatalogStats } from '@/lib/bmr-catalog';
-import { importRonaCatalog, getRonaCatalogStats } from '@/lib/rona-catalog';
 
 const SUPERADMIN_COMPANY_ID = 0;
 
@@ -28,7 +27,6 @@ export async function GET(req: NextRequest) {
   if (supplier === 'futech')    return NextResponse.json(getFutechCatalogStats());
   if (supplier === 'deschenes') return NextResponse.json(getDeschenessCatalogStats());
   if (supplier === 'bmr')       return NextResponse.json(getBmrCatalogStats());
-  if (supplier === 'rona')      return NextResponse.json(getRonaCatalogStats());
   return NextResponse.json(getCatalogStats());
 }
 
@@ -81,9 +79,6 @@ export async function POST(req: NextRequest) {
         } else if (supplier === 'bmr') {
           result = await importBmrCatalog((p) => send(p), SUPERADMIN_COMPANY_ID);
           stats = getBmrCatalogStats();
-        } else if (supplier === 'rona') {
-          result = await importRonaCatalog((p) => send(p), SUPERADMIN_COMPANY_ID);
-          stats = getRonaCatalogStats();
         } else {
           result = await importLumenCatalog((p) => send(p), SUPERADMIN_COMPANY_ID);
           stats = getCatalogStats();

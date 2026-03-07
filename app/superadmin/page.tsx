@@ -82,11 +82,10 @@ export default function SuperAdminPage() {
       fetch('/api/superadmin/catalog/import?supplier=futech'),
       fetch('/api/superadmin/catalog/import?supplier=deschenes'),
       fetch('/api/superadmin/catalog/import?supplier=bmr'),
-      fetch('/api/superadmin/catalog/import?supplier=rona'),
     ]);
     const accounts: CatalogAccount[] = await accountsRes.json();
     setCatalogAccounts(accounts);
-    const suppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr', 'rona'];
+    const suppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'jsv', 'westburne', 'nedco', 'futech', 'deschenes', 'bmr'];
     const stats: Record<string, CatalogStats> = {};
     for (let i = 0; i < suppliers.length; i++) {
       stats[suppliers[i]] = await statsRes[i].json();
@@ -452,7 +451,6 @@ export default function SuperAdminPage() {
               { key: 'futech',     label: 'Futech',      cls: 'bg-indigo-900/40 text-indigo-300 border-indigo-800' },
               { key: 'deschenes',  label: 'Deschênes',   cls: 'bg-teal-900/40 text-teal-300 border-teal-800' },
               { key: 'bmr',        label: 'BMR',         cls: 'bg-lime-900/40 text-lime-300 border-lime-800' },
-              { key: 'rona',       label: 'Rona',        cls: 'bg-cyan-900/40 text-cyan-300 border-cyan-800' },
             ].map(s => {
               const acc = catalogAccounts.find(a => a.supplier === s.key);
               const stats = catalogStats[s.key];

@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     homedepot: 'https://www.homedepot.ca/myaccount',
     lumen: 'https://www.lumen.ca/en/account/login',
     guillevin: 'https://www.guillevin.com/account/login',
-    rona: 'https://www.rona.ca/fr/connexion',
     bmr: 'https://www.bmr.ca/fr/customer/account/login/',
     canac: 'https://www.canac.ca/fr/account/login',
     deschenes: 'https://www.deschenes.qc.ca/s/login?language=fr',

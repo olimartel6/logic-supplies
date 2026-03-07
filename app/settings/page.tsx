@@ -115,7 +115,7 @@ function SupplierSection({
   toggling = false,
   onToggleVisible,
 }: {
-  supplierKey: 'canac' | 'homedepot' | 'guillevin' | 'bmr' | 'rona';
+  supplierKey: 'canac' | 'homedepot' | 'guillevin' | 'bmr';
   label: string;
   showManualSession?: boolean;
   theme: SectionTheme;
@@ -806,19 +806,6 @@ export default function SettingsPage() {
             visible={supplierVisibility.find(v => v.supplier === 'bmr')?.visible ?? false}
             toggling={togglingSupplier === 'bmr'}
             onToggleVisible={v => handleToggleVisibility('bmr', v)}
-          />
-          </div>
-
-          {/* ─── RONA ─── */}
-          <div>
-          <p className="text-xs font-bold text-cyan-500 uppercase tracking-widest mb-2 px-1">Rona</p>
-          <SupplierSection
-            supplierKey="rona"
-            label="Rona"
-            theme={themes.cyan}
-            visible={supplierVisibility.find(v => v.supplier === 'rona')?.visible ?? false}
-            toggling={togglingSupplier === 'rona'}
-            onToggleVisible={v => handleToggleVisibility('rona', v)}
           />
           </div>
 

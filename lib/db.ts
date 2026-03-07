@@ -169,21 +169,8 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
       ).run(c.name, c.url, c.enabled, companyId);
     }
 
-    // Catégories Rona
-    const ronaCategories = [
-      { name: 'Électricité',             url: '/fr/electricite',                            enabled: 1 },
-      { name: 'Fils et câbles',          url: '/fr/electricite/fils-et-cables',             enabled: 1 },
-      { name: 'Disjoncteurs',            url: '/fr/electricite/disjoncteurs-et-panneaux',   enabled: 0 },
-      { name: 'Éclairage',               url: '/fr/eclairage',                              enabled: 0 },
-    ];
-    for (const c of ronaCategories) {
-      db.prepare(
-        "INSERT OR IGNORE INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('rona', ?, ?, ?, ?)"
-      ).run(c.name, c.url, c.enabled, companyId);
-    }
-
     // Visibilité fournisseurs — tous cachés par défaut
-    for (const s of ['lumen','canac','homedepot','guillevin','jsv','westburne','nedco','futech','deschenes','bmr','rona']) {
+    for (const s of ['lumen','canac','homedepot','guillevin','jsv','westburne','nedco','futech','deschenes','bmr']) {
       db.prepare(
         'INSERT OR IGNORE INTO supplier_visibility (company_id, supplier, visible) VALUES (?, ?, 0)'
       ).run(companyId, s);
@@ -251,11 +238,6 @@ export function seedSuperadminCategories(db: Database.Database) {
       { supplier: 'bmr', name: 'Disjoncteurs',        url: '/fr/electricite/disjoncteurs-et-fusibles.html' },
       { supplier: 'bmr', name: 'Boîtes électriques',  url: '/fr/electricite/boites-electriques.html' },
       { supplier: 'bmr', name: 'Éclairage',           url: '/fr/luminaires-et-eclairage.html' },
-      // Rona
-      { supplier: 'rona', name: 'Électricité',    url: '/fr/electricite' },
-      { supplier: 'rona', name: 'Fils et câbles', url: '/fr/electricite/fils-et-cables' },
-      { supplier: 'rona', name: 'Disjoncteurs',   url: '/fr/electricite/disjoncteurs-et-panneaux' },
-      { supplier: 'rona', name: 'Éclairage',      url: '/fr/eclairage' },
     ];
     for (const c of allCategories) {
       db.prepare(

@@ -5,13 +5,13 @@ const SUPPLIER_LABELS: Record<string, string> = {
   canac: 'Canac', homedepot: 'Home Depot', lumen: 'Lumen',
   guillevin: 'Guillevin', jsv: 'JSV', westburne: 'Westburne',
   nedco: 'Nedco', futech: 'Futech', deschenes: 'Deschênes',
-  bmr: 'BMR', rona: 'Rona',
+  bmr: 'BMR',
 };
 const SUPPLIER_WEBSITES: Record<string, string> = {
   canac: 'canac.ca', homedepot: 'homedepot.ca', lumen: 'lumen.ca',
   guillevin: 'guillevin.com', jsv: 'jsv.ca', westburne: 'westburne.ca',
   nedco: 'nedco.ca', futech: 'futech.ca', deschenes: 'deschenes.ca',
-  bmr: 'bmr.ca', rona: 'rona.ca',
+  bmr: 'bmr.ca',
 };
 
 export interface PORequest {
