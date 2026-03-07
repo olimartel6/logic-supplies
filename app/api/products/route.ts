@@ -215,25 +215,22 @@ export async function GET(req: NextRequest) {
   const firstTokenStartsWith = `${tokens[0]}%`;
 
   // Filter by per-company supplier visibility
+  // Suppliers not explicitly listed default to VISIBLE (opt-out, not opt-in)
+  const allSuppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'bmr', 'westburne', 'nedco', 'futech', 'deschenes', 'jsv'];
   const visRows = db.prepare(
     'SELECT supplier, visible FROM supplier_visibility WHERE company_id = ?'
   ).all(ctx.companyId) as { supplier: string; visible: number }[];
 
+  const hiddenSuppliers = new Set(visRows.filter(r => r.visible === 0).map(r => r.supplier));
+  const visibleSuppliers = allSuppliers.filter(s => !hiddenSuppliers.has(s));
+  if (visibleSuppliers.length === 0) return NextResponse.json([]);
+
   let supplierWhere = '';
   let supplierParams: string[] = [];
-  if (visRows.length > 0) {
-    const visible = visRows.filter(r => r.visible === 1).map(r => r.supplier);
-    if (visible.length === 0) return NextResponse.json([]);
-    supplierWhere = `AND supplier IN (${visible.map(() => '?').join(',')})`;
-    supplierParams = visible;
+  if (hiddenSuppliers.size > 0) {
+    supplierWhere = `AND supplier IN (${visibleSuppliers.map(() => '?').join(',')})`;
+    supplierParams = visibleSuppliers;
   }
-
-  // Fetch top results per supplier to guarantee diversity across suppliers.
-  // Without this, LIMIT 12 + ORDER BY price would only show the cheapest supplier.
-  const allSuppliers = ['lumen', 'canac', 'homedepot', 'guillevin', 'bmr', 'westburne', 'nedco', 'futech', 'deschenes', 'jsv'];
-  const visibleSuppliers = supplierParams.length > 0
-    ? allSuppliers.filter(s => supplierParams.includes(s))
-    : allSuppliers;
 
   const perSupplierLimit = Math.max(4, Math.ceil(limit / visibleSuppliers.length));
   const allResults: any[] = [];
