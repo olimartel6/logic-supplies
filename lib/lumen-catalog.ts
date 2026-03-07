@@ -61,32 +61,31 @@ async function discoverLeafCategories(page: any, categoryUrl: string): Promise<s
   return leafCategories;
 }
 
-/** Scroll to bottom to trigger lazy-loaded products, click "load more" if present */
+/** Scroll to bottom to trigger lazy-loaded products */
 async function loadAllProducts(page: any): Promise<void> {
-  // Scroll down in increments to trigger lazy loading
-  let previousHeight = 0;
-  for (let i = 0; i < 20; i++) {
-    const currentHeight = await page.evaluate(() => document.body.scrollHeight);
-    if (currentHeight === previousHeight && i > 0) break;
-    previousHeight = currentHeight;
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1000);
-  }
+  try {
+    // Scroll down in increments to trigger lazy loading
+    let previousHeight = 0;
+    for (let i = 0; i < 10; i++) {
+      const currentHeight = await page.evaluate(() => document.body.scrollHeight);
+      if (currentHeight === previousHeight && i > 0) break;
+      previousHeight = currentHeight;
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(800);
+    }
 
-  // Click "load more" / "show more" / pagination buttons repeatedly
-  for (let i = 0; i < 30; i++) {
-    const loadMore = page.locator(
-      'button:has-text("Load More"), button:has-text("Show More"), button:has-text("Voir plus"), ' +
-      'a:has-text("Load More"), a:has-text("Show More"), a:has-text("Voir plus"), ' +
-      '[class*="load-more"], [class*="show-more"], [class*="loadMore"], ' +
-      'a[rel="next"], a:has-text("Next"), a:has-text("Suivant")'
-    ).first();
-    if (!(await loadMore.isVisible({ timeout: 1000 }).catch(() => false))) break;
-    await loadMore.click().catch(() => {});
-    await page.waitForTimeout(2000);
-    // Scroll again after loading more
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1000);
+    // Click "load more" buttons (only buttons, NOT links that could navigate away)
+    for (let i = 0; i < 10; i++) {
+      const loadMore = page.locator(
+        'button:has-text("Load More"), button:has-text("Show More"), button:has-text("Voir plus"), ' +
+        'button[class*="load-more"], button[class*="show-more"]'
+      ).first();
+      if (!(await loadMore.isVisible({ timeout: 500 }).catch(() => false))) break;
+      await loadMore.click().catch(() => {});
+      await page.waitForTimeout(1500);
+    }
+  } catch {
+    // Non-fatal — continue with whatever products are visible
   }
 }
 
