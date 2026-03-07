@@ -35,14 +35,26 @@ export function seedCompanyDefaults(db: Database.Database, companyId: number) {
       VALUES (?, 'cheapest', 2000)
     `).run(companyId);
 
-    // Catégories Lumen
+    // Catégories Lumen (toutes les catégories du site)
     const lumenCategories = [
-      { name: 'Fils et câbles',           url: '/en/products/28-wire-cords-cables',       enabled: 1 },
-      { name: 'Disjoncteurs et panneaux', url: '/en/products/20-power-distribution',       enabled: 1 },
-      { name: 'Boîtes et conduits',       url: '/en/products/11-conduit-raceway-strut',    enabled: 1 },
-      { name: 'Éclairage',                url: '/en/products/18-lighting',                 enabled: 0 },
-      { name: 'Automatisation',           url: '/en/products/12-control-automation',       enabled: 0 },
-      { name: 'Outils',                   url: '/en/products/25-tools-instruments',        enabled: 0 },
+      { name: 'Fils et câbles',           url: '/en/products/28-wire-cords-cables',                          enabled: 1 },
+      { name: 'Disjoncteurs et panneaux', url: '/en/products/20-power-distribution',                         enabled: 1 },
+      { name: 'Conduits et chemins',      url: '/en/products/11-conduit-raceway-strut',                      enabled: 1 },
+      { name: 'Boîtes et boîtiers',       url: '/en/products/15-enclosures-boxes',                           enabled: 1 },
+      { name: 'Éclairage',                url: '/en/products/18-lighting',                                   enabled: 1 },
+      { name: 'Automatisation',           url: '/en/products/12-control-automation',                         enabled: 0 },
+      { name: 'Outils',                   url: '/en/products/25-tools-instruments',                          enabled: 0 },
+      { name: 'Prises et interrupteurs',  url: '/en/products/24-wiring-devices-wallplates',                  enabled: 1 },
+      { name: 'Terminaison de fils',      url: '/en/products/27-wire-termination-wire-marking-supplies',     enabled: 0 },
+      { name: 'Quincaillerie',            url: '/en/products/16-fasteners-hardwares',                        enabled: 0 },
+      { name: 'Sécurité',                 url: '/en/products/22-safety-products',                            enabled: 0 },
+      { name: 'Moteurs et sources',       url: '/en/products/21-power-sources-motors',                       enabled: 0 },
+      { name: 'Datacom',                  url: '/en/products/13-datacom',                                    enabled: 0 },
+      { name: 'Bornes de recharge VÉ',    url: '/en/products/32-ev-charging-stations',                       enabled: 0 },
+      { name: 'Chauffage et ventilation', url: '/en/products/17-heat-ventilation',                           enabled: 0 },
+      { name: 'Adhésifs et produits',     url: '/en/products/10-adhesives-chemicals-lubricants',             enabled: 0 },
+      { name: 'Utilité électrique',       url: '/en/products/14-electric-utility-outside-plant-products',    enabled: 0 },
+      { name: 'Liquidation',              url: '/en/products/50-clearance',                                  enabled: 0 },
     ];
     for (const c of lumenCategories) {
       db.prepare(
@@ -193,10 +205,22 @@ export function seedSuperadminCategories(db: Database.Database) {
       // Lumen
       { supplier: 'lumen', name: 'Fils et câbles',           url: '/en/products/28-wire-cords-cables' },
       { supplier: 'lumen', name: 'Disjoncteurs et panneaux', url: '/en/products/20-power-distribution' },
-      { supplier: 'lumen', name: 'Boîtes et conduits',       url: '/en/products/11-conduit-raceway-strut' },
+      { supplier: 'lumen', name: 'Conduits et chemins',      url: '/en/products/11-conduit-raceway-strut' },
+      { supplier: 'lumen', name: 'Boîtes et boîtiers',       url: '/en/products/15-enclosures-boxes' },
       { supplier: 'lumen', name: 'Éclairage',                url: '/en/products/18-lighting' },
       { supplier: 'lumen', name: 'Automatisation',           url: '/en/products/12-control-automation' },
       { supplier: 'lumen', name: 'Outils',                   url: '/en/products/25-tools-instruments' },
+      { supplier: 'lumen', name: 'Prises et interrupteurs',  url: '/en/products/24-wiring-devices-wallplates' },
+      { supplier: 'lumen', name: 'Terminaison de fils',      url: '/en/products/27-wire-termination-wire-marking-supplies' },
+      { supplier: 'lumen', name: 'Quincaillerie',            url: '/en/products/16-fasteners-hardwares' },
+      { supplier: 'lumen', name: 'Sécurité',                 url: '/en/products/22-safety-products' },
+      { supplier: 'lumen', name: 'Moteurs et sources',       url: '/en/products/21-power-sources-motors' },
+      { supplier: 'lumen', name: 'Datacom',                  url: '/en/products/13-datacom' },
+      { supplier: 'lumen', name: 'Bornes de recharge VÉ',    url: '/en/products/32-ev-charging-stations' },
+      { supplier: 'lumen', name: 'Chauffage et ventilation', url: '/en/products/17-heat-ventilation' },
+      { supplier: 'lumen', name: 'Adhésifs et produits',     url: '/en/products/10-adhesives-chemicals-lubricants' },
+      { supplier: 'lumen', name: 'Utilité électrique',       url: '/en/products/14-electric-utility-outside-plant-products' },
+      { supplier: 'lumen', name: 'Liquidation',              url: '/en/products/50-clearance' },
       // Canac
       { supplier: 'canac', name: 'Fils et câbles',           url: '/canac/fr/2/c/EL25' },
       { supplier: 'canac', name: 'Disjoncteurs et panneaux', url: '/canac/fr/2/c/EL45' },
@@ -668,6 +692,46 @@ function initDb(db: Database.Database) {
       }
     }
   }
+
+  // --- Fix Lumen categories: rename "Boîtes et conduits" and add all missing categories ---
+  db.prepare(
+    "UPDATE supplier_categories SET category_name = 'Conduits et chemins' WHERE supplier = 'lumen' AND category_url = '/en/products/11-conduit-raceway-strut'"
+  ).run();
+
+  const extraLumenCats = [
+    { name: 'Boîtes et boîtiers',       url: '/en/products/15-enclosures-boxes',                        enabled: 1 },
+    { name: 'Prises et interrupteurs',   url: '/en/products/24-wiring-devices-wallplates',               enabled: 1 },
+    { name: 'Terminaison de fils',       url: '/en/products/27-wire-termination-wire-marking-supplies',  enabled: 0 },
+    { name: 'Quincaillerie',             url: '/en/products/16-fasteners-hardwares',                     enabled: 0 },
+    { name: 'Sécurité',                  url: '/en/products/22-safety-products',                         enabled: 0 },
+    { name: 'Moteurs et sources',        url: '/en/products/21-power-sources-motors',                    enabled: 0 },
+    { name: 'Datacom',                   url: '/en/products/13-datacom',                                 enabled: 0 },
+    { name: 'Bornes de recharge VÉ',     url: '/en/products/32-ev-charging-stations',                    enabled: 0 },
+    { name: 'Chauffage et ventilation',  url: '/en/products/17-heat-ventilation',                        enabled: 0 },
+    { name: 'Adhésifs et produits',      url: '/en/products/10-adhesives-chemicals-lubricants',          enabled: 0 },
+    { name: 'Utilité électrique',        url: '/en/products/14-electric-utility-outside-plant-products', enabled: 0 },
+    { name: 'Liquidation',               url: '/en/products/50-clearance',                               enabled: 0 },
+  ];
+  for (const c of extraLumenCats) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'lumen' AND category_url = ? LIMIT 1"
+    ).get(c.url);
+    if (!exists) {
+      const companyIds = db.prepare(
+        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'lumen'"
+      ).all() as { company_id: number }[];
+      for (const row of companyIds) {
+        db.prepare(
+          "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('lumen', ?, ?, ?, ?)"
+        ).run(c.name, c.url, c.enabled, row.company_id);
+      }
+    }
+  }
+
+  // Also enable Éclairage for existing DBs (was disabled before)
+  db.prepare(
+    "UPDATE supplier_categories SET enabled = 1 WHERE supplier = 'lumen' AND category_url = '/en/products/18-lighting'"
+  ).run();
 
   // --- Marketing features ---
   try { db.exec('ALTER TABLE company_settings ADD COLUMN google_review_url TEXT'); } catch {}
