@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useT } from '@/lib/LanguageContext';
@@ -97,7 +98,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
 
   const linkClass = (path: string) =>
     `flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium transition-colors ${
-      pathname === path ? 'text-yellow-400' : 'text-slate-400 hover:text-white'
+      pathname === path ? 'text-yellow-400' : 'text-slate-400 hover:text-white active:text-yellow-300'
     }`;
 
   const sidebarLinkClass = (path: string) =>
@@ -109,33 +110,33 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
     <>
       {isElectrician && (
         <>
-          <button onClick={() => router.push('/new-request')} className={linkClass('/new-request')}>
+          <Link href="/new-request" prefetch className={linkClass('/new-request')}>
             <IconPlus />
             <span>{t('nav_new')}</span>
-          </button>
-          <button onClick={() => router.push('/my-requests')} className={linkClass('/my-requests')}>
+          </Link>
+          <Link href="/my-requests" prefetch className={linkClass('/my-requests')}>
             <IconClipboard />
             <span>{t('nav_my_requests')}</span>
-          </button>
+          </Link>
           {inventoryEnabled && (
-            <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
+            <Link href="/inventory" prefetch className={linkClass('/inventory')}>
               <IconBox />
               <span>{t('nav_inventory')}</span>
-            </button>
+            </Link>
           )}
-          <button onClick={() => router.push('/profile')} className={linkClass('/profile')}>
+          <Link href="/profile" prefetch className={linkClass('/profile')}>
             <IconGear />
             <span>{t('nav_profile')}</span>
-          </button>
+          </Link>
         </>
       )}
       {isOfficeOrAdmin && (
         <>
-          <button onClick={() => router.push('/approvals')} className={linkClass('/approvals')}>
+          <Link href="/approvals" prefetch className={linkClass('/approvals')}>
             <IconCheckBadge />
             <span>{t('nav_approvals')}</span>
-          </button>
-          <button onClick={() => router.push('/budget')} className={`${linkClass('/budget')} relative`}>
+          </Link>
+          <Link href="/budget" prefetch className={`${linkClass('/budget')} relative`}>
             <span className="relative">
               <IconChartBar />
               {unseenAlerts > 0 && (
@@ -145,32 +146,32 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               )}
             </span>
             <span>{t('nav_budget')}</span>
-          </button>
+          </Link>
           {marketingEnabled && (
-          <button onClick={() => router.push('/projects')} className={linkClass('/projects')}>
+          <Link href="/projects" prefetch className={linkClass('/projects')}>
             <IconMegaphone />
             <span>Marketing</span>
-          </button>
+          </Link>
           )}
           {inventoryEnabled && (
-            <button onClick={() => router.push('/inventory')} className={linkClass('/inventory')}>
+            <Link href="/inventory" prefetch className={linkClass('/inventory')}>
               <IconBox />
               <span>{t('nav_inventory')}</span>
-            </button>
+            </Link>
           )}
         </>
       )}
       {role === 'admin' && (
-        <button onClick={() => router.push('/admin')} className={linkClass('/admin')}>
+        <Link href="/admin" prefetch className={linkClass('/admin')}>
           <IconUsers />
           <span>{t('nav_admin')}</span>
-        </button>
+        </Link>
       )}
       {isOfficeOrAdmin && (
-        <button onClick={() => router.push('/settings')} className={linkClass('/settings')}>
+        <Link href="/settings" prefetch className={linkClass('/settings')}>
           <IconGear />
           <span>{t('nav_settings')}</span>
-        </button>
+        </Link>
       )}
     </>
   );
@@ -179,28 +180,28 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
     <>
       {isElectrician && (
         <>
-          <button onClick={() => router.push('/new-request')} className={sidebarLinkClass('/new-request')}>
+          <Link href="/new-request" prefetch className={sidebarLinkClass('/new-request')}>
             <IconPlus /><span>{t('nav_new')}</span>
-          </button>
-          <button onClick={() => router.push('/my-requests')} className={sidebarLinkClass('/my-requests')}>
+          </Link>
+          <Link href="/my-requests" prefetch className={sidebarLinkClass('/my-requests')}>
             <IconClipboard /><span>{t('nav_my_requests')}</span>
-          </button>
+          </Link>
           {inventoryEnabled && (
-            <button onClick={() => router.push('/inventory')} className={sidebarLinkClass('/inventory')}>
+            <Link href="/inventory" prefetch className={sidebarLinkClass('/inventory')}>
               <IconBox /><span>{t('nav_inventory')}</span>
-            </button>
+            </Link>
           )}
-          <button onClick={() => router.push('/profile')} className={sidebarLinkClass('/profile')}>
+          <Link href="/profile" prefetch className={sidebarLinkClass('/profile')}>
             <IconGear /><span>{t('nav_profile')}</span>
-          </button>
+          </Link>
         </>
       )}
       {isOfficeOrAdmin && (
         <>
-          <button onClick={() => router.push('/approvals')} className={sidebarLinkClass('/approvals')}>
+          <Link href="/approvals" prefetch className={sidebarLinkClass('/approvals')}>
             <IconCheckBadge /><span>{t('nav_approvals')}</span>
-          </button>
-          <button onClick={() => router.push('/budget')} className={`${sidebarLinkClass('/budget')} relative`}>
+          </Link>
+          <Link href="/budget" prefetch className={`${sidebarLinkClass('/budget')} relative`}>
             <span className="relative">
               <IconChartBar />
               {unseenAlerts > 0 && (
@@ -210,28 +211,28 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               )}
             </span>
             <span>{t('nav_budget')}</span>
-          </button>
+          </Link>
           {marketingEnabled && (
-            <button onClick={() => router.push('/projects')} className={sidebarLinkClass('/projects')}>
+            <Link href="/projects" prefetch className={sidebarLinkClass('/projects')}>
               <IconMegaphone /><span>Marketing</span>
-            </button>
+            </Link>
           )}
           {inventoryEnabled && (
-            <button onClick={() => router.push('/inventory')} className={sidebarLinkClass('/inventory')}>
+            <Link href="/inventory" prefetch className={sidebarLinkClass('/inventory')}>
               <IconBox /><span>{t('nav_inventory')}</span>
-            </button>
+            </Link>
           )}
         </>
       )}
       {role === 'admin' && (
-        <button onClick={() => router.push('/admin')} className={sidebarLinkClass('/admin')}>
+        <Link href="/admin" prefetch className={sidebarLinkClass('/admin')}>
           <IconUsers /><span>{t('nav_admin')}</span>
-        </button>
+        </Link>
       )}
       {isOfficeOrAdmin && (
-        <button onClick={() => router.push('/settings')} className={sidebarLinkClass('/settings')}>
+        <Link href="/settings" prefetch className={sidebarLinkClass('/settings')}>
           <IconGear /><span>{t('nav_settings')}</span>
-        </button>
+        </Link>
       )}
     </>
   );
@@ -280,7 +281,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       </div>
 
       {/* Bottom nav (mobile only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 py-3 z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu">
         <div className="flex justify-around max-w-lg mx-auto">
           {navItems}
         </div>

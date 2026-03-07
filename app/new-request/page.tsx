@@ -529,7 +529,7 @@ function NewRequestContent() {
             <div className="flex items-center gap-4 p-4">
               <div className="w-20 h-20 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100">
                 {pendingProduct.image_url ? (
-                  <img src={pendingProduct.image_url} alt="" className="w-full h-full object-contain p-1" />
+                  <img src={pendingProduct.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain p-1" />
                 ) : (
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -642,7 +642,7 @@ function NewRequestContent() {
                   <div key={i} className="px-4 py-3 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100">
                       {item.product.image_url ? (
-                        <img src={item.product.image_url} alt="" className="w-full h-full object-contain p-0.5" />
+                        <img src={item.product.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain p-0.5" />
                       ) : (
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-5 h-5 text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -769,7 +769,7 @@ function NewRequestContent() {
                       >
                         <div className="w-full bg-gray-50 flex items-center justify-center p-3" style={{ aspectRatio: '1' }}>
                           {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" />
+                            <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
                           ) : (
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -884,9 +884,9 @@ function NewRequestContent() {
                           onClick={() => pickProduct(p)}
                           className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-yellow-300 active:scale-[0.98] transition-all flex flex-col w-full"
                         >
-                          <div className="w-full bg-gray-50 flex items-center justify-center p-3" style={{ aspectRatio: '1' }}>
+                          <div className="w-full bg-gray-50 flex items-center justify-center p-2" style={{ aspectRatio: '4/3' }}>
                             {p.image_url ? (
-                              <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" />
+                              <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
                             ) : (
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-10 h-10 text-gray-300">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

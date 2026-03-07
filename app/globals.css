@@ -17,6 +17,30 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Eliminate 300ms tap delay on all interactive elements */
+a, button, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* GPU-accelerated fixed elements for smooth scrolling */
+nav[class*="fixed"], div[class*="sticky"] {
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Prevent pull-to-refresh interference on mobile app */
+html {
+  overscroll-behavior-y: contain;
+}
+
+/* Smoother scrolling on iOS */
+* {
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes scanline {
