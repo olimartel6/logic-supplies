@@ -21,7 +21,7 @@ export async function importBmrCatalog(
   ).all(companyId ?? null) as any[];
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
-  const password = decrypt(account.password_encrypted);
+  // BMR catalog is public — no login needed, skip decrypt
 
   const upsert = db.prepare(`
     INSERT INTO products (supplier, sku, name, image_url, price, unit, category, last_synced)
