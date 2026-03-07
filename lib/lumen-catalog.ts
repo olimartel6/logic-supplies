@@ -151,6 +151,7 @@ export async function importLumenCatalog(
   const categories = db.prepare(
     "SELECT * FROM supplier_categories WHERE supplier = 'lumen' AND enabled = 1 AND company_id = ?"
   ).all(companyId ?? null) as any[];
+  console.error(`[Lumen catalog] Found ${categories.length} enabled categories for company_id=${companyId ?? null}: ${categories.map((c: any) => c.category_name).join(', ')}`);
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
 
   const password = decrypt(account.password_encrypted);

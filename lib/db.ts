@@ -698,16 +698,15 @@ function initDb(db: Database.Database) {
     { name: 'Pinces à dénuder',       url: '/collections/pinces-a-denuder' },
     { name: 'Rallonges électriques',  url: '/collections/devidoirs-et-rallonges-electriques' },
   ];
+  const jsvCompanyIds = db.prepare(
+    "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'jsv'"
+  ).all() as { company_id: number }[];
   for (const c of extraJsvCats) {
-    const exists = db.prepare(
-      "SELECT 1 FROM supplier_categories WHERE supplier = 'jsv' AND category_url = ? LIMIT 1"
-    ).get(c.url);
-    if (!exists) {
-      // Insert for every company_id that already has JSV categories
-      const companyIds = db.prepare(
-        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'jsv'"
-      ).all() as { company_id: number }[];
-      for (const row of companyIds) {
+    for (const row of jsvCompanyIds) {
+      const exists = db.prepare(
+        "SELECT 1 FROM supplier_categories WHERE supplier = 'jsv' AND category_url = ? AND company_id = ? LIMIT 1"
+      ).get(c.url, row.company_id);
+      if (!exists) {
         db.prepare(
           "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('jsv', ?, ?, 1, ?)"
         ).run(c.name, c.url, row.company_id);
@@ -734,15 +733,16 @@ function initDb(db: Database.Database) {
     { name: 'Utilité électrique',        url: '/en/products/14-electric-utility-outside-plant-products', enabled: 0 },
     { name: 'Liquidation',               url: '/en/products/50-clearance',                               enabled: 0 },
   ];
+  // Insert per company_id (not global check) to ensure all companies get the new categories
+  const lumenCompanyIds = db.prepare(
+    "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'lumen'"
+  ).all() as { company_id: number }[];
   for (const c of extraLumenCats) {
-    const exists = db.prepare(
-      "SELECT 1 FROM supplier_categories WHERE supplier = 'lumen' AND category_url = ? LIMIT 1"
-    ).get(c.url);
-    if (!exists) {
-      const companyIds = db.prepare(
-        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'lumen'"
-      ).all() as { company_id: number }[];
-      for (const row of companyIds) {
+    for (const row of lumenCompanyIds) {
+      const exists = db.prepare(
+        "SELECT 1 FROM supplier_categories WHERE supplier = 'lumen' AND category_url = ? AND company_id = ? LIMIT 1"
+      ).get(c.url, row.company_id);
+      if (!exists) {
         db.prepare(
           "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('lumen', ?, ?, ?, ?)"
         ).run(c.name, c.url, c.enabled, row.company_id);
@@ -773,15 +773,15 @@ function initDb(db: Database.Database) {
     { name: 'Cosses et bornes',         url: '/collections/lugs-terminal-connectors',                     enabled: 0 },
     { name: 'Attaches et supports',     url: '/collections/cable-ties-accessories',                       enabled: 0 },
   ];
+  const guillevinCompanyIds = db.prepare(
+    "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'guillevin'"
+  ).all() as { company_id: number }[];
   for (const c of extraGuillevinCats) {
-    const exists = db.prepare(
-      "SELECT 1 FROM supplier_categories WHERE supplier = 'guillevin' AND category_url = ? LIMIT 1"
-    ).get(c.url);
-    if (!exists) {
-      const companyIds = db.prepare(
-        "SELECT DISTINCT company_id FROM supplier_categories WHERE supplier = 'guillevin'"
-      ).all() as { company_id: number }[];
-      for (const row of companyIds) {
+    for (const row of guillevinCompanyIds) {
+      const exists = db.prepare(
+        "SELECT 1 FROM supplier_categories WHERE supplier = 'guillevin' AND category_url = ? AND company_id = ? LIMIT 1"
+      ).get(c.url, row.company_id);
+      if (!exists) {
         db.prepare(
           "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('guillevin', ?, ?, ?, ?)"
         ).run(c.name, c.url, c.enabled, row.company_id);
