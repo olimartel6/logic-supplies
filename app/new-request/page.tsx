@@ -22,18 +22,32 @@ interface CartItem {
   unit: string;
 }
 
-const ALL_SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin'] as const;
+const ALL_SUPPLIERS = ['lumen', 'canac', 'homedepot', 'guillevin', 'bmr', 'westburne', 'nedco', 'futech', 'deschenes', 'jsv', 'rona'] as const;
 
 function supplierBadge(supplier: string) {
   if (supplier === 'canac') return { label: 'Canac', cls: 'bg-green-100 text-green-700' };
   if (supplier === 'homedepot') return { label: 'Home Depot', cls: 'bg-orange-100 text-orange-700' };
   if (supplier === 'guillevin') return { label: 'Guillevin', cls: 'bg-purple-100 text-purple-700' };
+  if (supplier === 'bmr') return { label: 'BMR', cls: 'bg-red-100 text-red-700' };
+  if (supplier === 'westburne') return { label: 'Westburne', cls: 'bg-teal-100 text-teal-700' };
+  if (supplier === 'nedco') return { label: 'Nedco', cls: 'bg-cyan-100 text-cyan-700' };
+  if (supplier === 'futech') return { label: 'Futech', cls: 'bg-amber-100 text-amber-700' };
+  if (supplier === 'deschenes') return { label: 'Deschênes', cls: 'bg-indigo-100 text-indigo-700' };
+  if (supplier === 'jsv') return { label: 'JSV', cls: 'bg-yellow-100 text-yellow-700' };
+  if (supplier === 'rona') return { label: 'Rona', cls: 'bg-sky-100 text-sky-700' };
   return { label: 'Lumen', cls: 'bg-blue-100 text-blue-700' };
 }
 
 function supplierColor(supplier: string) {
   if (supplier === 'canac') return 'border-green-200 bg-green-50';
   if (supplier === 'homedepot') return 'border-orange-200 bg-orange-50';
+  if (supplier === 'bmr') return 'border-red-200 bg-red-50';
+  if (supplier === 'jsv') return 'border-yellow-200 bg-yellow-50';
+  if (supplier === 'westburne') return 'border-teal-200 bg-teal-50';
+  if (supplier === 'nedco') return 'border-cyan-200 bg-cyan-50';
+  if (supplier === 'futech') return 'border-amber-200 bg-amber-50';
+  if (supplier === 'deschenes') return 'border-indigo-200 bg-indigo-50';
+  if (supplier === 'rona') return 'border-sky-200 bg-sky-50';
   return 'border-blue-200 bg-blue-50';
 }
 
@@ -470,6 +484,13 @@ function NewRequestContent() {
                     { key: 'canac', label: 'Canac', cls: 'text-green-600' },
                     { key: 'homedepot', label: 'Home Depot', cls: 'text-orange-600' },
                     { key: 'guillevin', label: 'Guillevin', cls: 'text-purple-600' },
+                    { key: 'bmr', label: 'BMR', cls: 'text-red-600' },
+                    { key: 'westburne', label: 'Westburne', cls: 'text-teal-600' },
+                    { key: 'nedco', label: 'Nedco', cls: 'text-cyan-600' },
+                    { key: 'futech', label: 'Futech', cls: 'text-amber-600' },
+                    { key: 'deschenes', label: 'Deschênes', cls: 'text-indigo-600' },
+                    { key: 'jsv', label: 'JSV', cls: 'text-yellow-600' },
+                    { key: 'rona', label: 'Rona', cls: 'text-sky-600' },
                   ].map(s => (
                     <label key={s.key} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-gray-50 rounded-lg px-1">
                       <input
