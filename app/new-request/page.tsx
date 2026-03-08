@@ -418,7 +418,7 @@ function NewRequestContent() {
       )}
 
       {/* Sticky search bar */}
-      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-0 sm:top-[56px] z-20 shadow-md">
+      <div className="bg-slate-800 px-4 pt-3 pb-3 sticky top-0 sm:top-[56px] md:top-0 z-20 shadow-md">
         <div className="max-w-lg mx-auto space-y-2">
           {/* Chantier */}
           {jobSites.length > 0 && (
