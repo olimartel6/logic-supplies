@@ -10,6 +10,7 @@ import { importBmrCatalog, getBmrCatalogStats } from '@/lib/bmr-catalog';
 import { importNedcoCatalog, getNedcoCatalogStats } from '@/lib/nedco-catalog';
 import { importFutechCatalog, getFutechCatalogStats } from '@/lib/futech-catalog';
 import { importDeschenessCatalog, getDeschenessCatalogStats } from '@/lib/deschenes-catalog';
+import { importRonaCatalog, getRonaCatalogStats } from '@/lib/rona-catalog';
 
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
         } else if (supplier === 'deschenes') {
           result = await importDeschenessCatalog((progress) => send(progress), companyId);
           stats = getDeschenessCatalogStats();
+        } else if (supplier === 'rona') {
+          result = await importRonaCatalog((progress) => send(progress), companyId);
+          stats = getRonaCatalogStats();
         } else {
           result = await importLumenCatalog((progress) => send(progress), companyId);
           stats = getCatalogStats();
@@ -99,5 +103,6 @@ export async function GET(req: NextRequest) {
   if (supplier === 'nedco') return NextResponse.json(getNedcoCatalogStats());
   if (supplier === 'futech') return NextResponse.json(getFutechCatalogStats());
   if (supplier === 'deschenes') return NextResponse.json(getDeschenessCatalogStats());
+  if (supplier === 'rona') return NextResponse.json(getRonaCatalogStats());
   return NextResponse.json(getCatalogStats());
 }

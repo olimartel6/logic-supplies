@@ -1,27 +1,100 @@
-import { createBrowserbaseBrowser } from './browser';
 import { getDb } from './db';
-import { decrypt } from './encrypt';
 
 import type { ImportProgress } from './westburne-catalog';
 export type { ImportProgress };
+
+// BMR uses Algolia for product search — public API, no login needed
+// Application ID and search-only API key are embedded in every BMR page
+// Products include name, SKU, price, images, stock status
+
+const ALGOLIA_APP_ID = 'DE7LVWVQ9D';
+const ALGOLIA_INDEX = 'bmr_magento2_fr_products';
+
+const BMR_CATEGORIES = [
+  { query: 'disjoncteur', name: 'Disjoncteurs' },
+  { query: 'fusible electrique', name: 'Fusibles' },
+  { query: 'fil electrique nmw', name: 'Fils & Câbles' },
+  { query: 'luminaire led', name: 'Luminaires' },
+  { query: 'ampoule led', name: 'Ampoules' },
+  { query: 'prise electrique', name: 'Prises' },
+  { query: 'interrupteur electrique', name: 'Interrupteurs' },
+  { query: 'boite electrique', name: 'Boîtes électriques' },
+  { query: 'conduit electrique', name: 'Conduits' },
+  { query: 'panneau electrique', name: 'Panneaux' },
+  { query: 'plinthe chauffante', name: 'Plinthes chauffantes' },
+  { query: 'thermostat', name: 'Thermostats' },
+  { query: 'ventilateur', name: 'Ventilateurs' },
+];
+
+const MAX_PAGES_PER_QUERY = 20; // Algolia max 1000 hits (20 pages × 50)
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+
+interface AlgoliaHit {
+  name?: string;
+  sku?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  price?: { CAD?: { default?: number; default_formated?: string } };
+  in_stock?: number;
+}
+
+interface AlgoliaResponse {
+  hits: AlgoliaHit[];
+  nbHits: number;
+  nbPages: number;
+  page: number;
+}
+
+async function getAlgoliaApiKey(): Promise<string> {
+  const res = await fetch('https://www.bmr.ca/fr/', {
+    headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8' },
+  });
+  if (!res.ok) throw new Error(`BMR homepage returned ${res.status}`);
+  const html = await res.text();
+
+  // Extract the Algolia API key from window.algoliaConfig
+  const match = html.match(/"apiKey"\s*:\s*"([^"]+)"/);
+  if (!match) throw new Error('Cannot extract Algolia API key from BMR page');
+  return match[1];
+}
+
+async function searchAlgolia(apiKey: string, query: string, page: number): Promise<AlgoliaResponse> {
+  const res = await fetch(`https://${ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/${ALGOLIA_INDEX}/query`, {
+    method: 'POST',
+    headers: {
+      'X-Algolia-Application-Id': ALGOLIA_APP_ID,
+      'X-Algolia-API-Key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, page, hitsPerPage: 50 }),
+  });
+  if (!res.ok) throw new Error(`Algolia search failed: ${res.status}`);
+  return res.json();
+}
 
 export async function importBmrCatalog(
   onProgress?: (p: ImportProgress) => void,
   companyId?: number | null
 ): Promise<{ total: number; error?: string }> {
   const db = getDb();
+  const cid = companyId ?? null;
 
-  const account = db.prepare(
-    "SELECT * FROM supplier_accounts WHERE supplier = 'bmr' AND active = 1 AND company_id = ? LIMIT 1"
-  ).get(companyId ?? null) as any;
-  if (!account) return { total: 0, error: 'Aucun compte BMR configuré' };
+  // Auto-create default categories if none exist
+  for (const c of BMR_CATEGORIES) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'bmr' AND category_url = ? AND company_id = ? LIMIT 1"
+    ).get(c.query, cid);
+    if (!exists) {
+      db.prepare(
+        "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('bmr', ?, ?, 1, ?)"
+      ).run(c.name, c.query, cid);
+    }
+  }
 
   const categories = db.prepare(
     "SELECT * FROM supplier_categories WHERE supplier = 'bmr' AND enabled = 1 AND company_id = ?"
-  ).all(companyId ?? null) as any[];
-  if (categories.length === 0) return { total: 0, error: 'Aucune catégorie sélectionnée' };
-
-  // BMR catalog is public — no login needed, skip decrypt
+  ).all(cid) as any[];
+  if (categories.length === 0) return { total: 0, error: 'Aucune catégorie BMR sélectionnée' };
 
   const upsert = db.prepare(`
     INSERT INTO products (supplier, sku, name, image_url, price, unit, category, last_synced)
@@ -31,110 +104,63 @@ export async function importBmrCatalog(
       unit = excluded.unit, category = excluded.category, last_synced = CURRENT_TIMESTAMP
   `);
 
-  const browser = await createBrowserbaseBrowser();
   let totalImported = 0;
 
   try {
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      locale: 'fr-CA',
-      extraHTTPHeaders: { 'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8' },
-      viewport: { width: 1280, height: 800 },
-    });
-    const page = await context.newPage();
-
-    // Dismiss cookie banner once on homepage before scraping
-    await page.goto('https://www.bmr.ca/fr/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(2000);
-    const cookieBtn = page.locator([
-      '#axeptio_btn_acceptAll',
-      '.axeptio-btn-accept',
-      'button:has-text("D\'accord")',
-      'button:has-text("Tout accepter")',
-    ].join(', ')).first();
-    if (await cookieBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
-      await cookieBtn.click();
-      await page.waitForTimeout(800);
-    }
+    const apiKey = await getAlgoliaApiKey();
 
     for (const cat of categories) {
-      let pageNum = 1;
+      let pageNum = 0;
       let categoryTotal = 0;
       onProgress?.({ category: cat.category_name, imported: 0, total: 0, done: false });
 
-      while (true) {
-        const url = `https://www.bmr.ca${cat.category_url}?p=${pageNum}`;
-        let products: any[] = [];
+      while (pageNum < MAX_PAGES_PER_QUERY) {
+        let result: AlgoliaResponse;
 
-        try {
-          // networkidle ensures Algolia's API calls finish before we scrape
-          await page.goto(url, { waitUntil: 'networkidle', timeout: 40000 }).catch(() =>
-            page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-          );
-          await page.waitForTimeout(1000);
-
-          products = await page.evaluate(() => {
-            const items: any[] = [];
-            const cards = document.querySelectorAll(
-              'li.item.product, .product-item-info, .link-product'
-            );
-            for (const card of Array.from(cards)) {
-              const nameEl = card.querySelector(
-                '.product-item-name a, .product-item-link, .product-name a, h2 a, h3 a'
-              );
-              const name = nameEl?.textContent?.trim() || '';
-              if (name.length < 3) continue;
-
-              const imgEl = card.querySelector('img.product-image-photo, img') as HTMLImageElement | null;
-              const image_url = imgEl?.src || '';
-
-              // BMR stores SKU as data-product-sku on the add-to-cart form
-              const formEl = card.querySelector('form[data-product-sku]');
-              const sku = formEl?.getAttribute('data-product-sku')
-                || card.querySelector('[data-sku], .sku .value, [itemprop="sku"]')?.textContent?.trim()
-                || name.slice(0, 40);
-
-              const priceEl = card.querySelector(
-                '[data-price-type="finalPrice"] .price, .price-box .price, .price-wrapper .price'
-              );
-              const priceText = priceEl?.textContent?.trim() || '';
-              const priceMatch = priceText.match(/[\d]+[.,][\d]{2}/);
-              const price = priceMatch ? parseFloat(priceMatch[0].replace(',', '.')) : null;
-
-              items.push({ name, sku, image_url, price, unit: 'units' });
-            }
-            return items;
-          });
-        } catch {
-          break;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            result = await searchAlgolia(apiKey, cat.category_url, pageNum);
+            break;
+          } catch (err: any) {
+            console.error(`[BMR] Error searching ${cat.category_name} page ${pageNum}: ${err.message}`);
+            if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
+            else throw err;
+          }
         }
 
-        if (products.length === 0) break;
+        if (!result!.hits || result!.hits.length === 0) break;
 
-        const insertMany = db.transaction((prods: any[]) => {
-          for (const p of prods) {
-            try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch {}
+        const insertMany = db.transaction((hits: AlgoliaHit[]) => {
+          for (const hit of hits) {
+            const sku = hit.sku || '';
+            const name = hit.name || '';
+            if (!sku || name.length < 3) continue;
+
+            const image_url = hit.image_url || hit.thumbnail_url || '';
+            const price = hit.price?.CAD?.default ?? null;
+
+            try { upsert.run(sku, name, image_url, price, 'unité', cat.category_name); } catch {}
           }
         });
-        insertMany(products);
+        insertMany(result!.hits);
 
-        categoryTotal += products.length;
-        totalImported += products.length;
+        const validHits = result!.hits.filter(h => h.sku && (h.name || '').length >= 3);
+        categoryTotal += validHits.length;
+        totalImported += validHits.length;
         onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: false });
 
-        if (products.length < 20) break;
+        if (pageNum >= result!.nbPages - 1) break;
         pageNum++;
-        if (pageNum > 50) break;
+        await new Promise(r => setTimeout(r, 200));
       }
 
       onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: true });
+      await new Promise(r => setTimeout(r, 300));
     }
 
     return { total: totalImported };
   } catch (err: any) {
     return { total: totalImported, error: err.message };
-  } finally {
-    await browser.close();
   }
 }
 
