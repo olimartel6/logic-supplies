@@ -270,10 +270,11 @@ export async function GET(req: NextRequest) {
       // Relevance first: more token groups matching in name = better
       const aRel = relevanceScore(a);
       const bRel = relevanceScore(b);
-      if (aRel !== bRel) return bRel - aRel; // higher score first
-      // Products with price before null-price
-      if (a.price != null && b.price == null) return -1;
-      if (a.price == null && b.price != null) return 1;
+      if (aRel !== bRel) return bRel - aRel;
+      // Products with image+price first, then image-only, then neither
+      const aComplete = (a.image_url ? 2 : 0) + (a.price != null ? 1 : 0);
+      const bComplete = (b.image_url ? 2 : 0) + (b.price != null ? 1 : 0);
+      if (aComplete !== bComplete) return bComplete - aComplete;
       // By price ascending
       if (a.price != null && b.price != null && a.price !== b.price) return a.price - b.price;
       return a.name.localeCompare(b.name);
@@ -301,6 +302,10 @@ export async function GET(req: NextRequest) {
       const aRel = relevanceScore(a);
       const bRel = relevanceScore(b);
       if (aRel !== bRel) return bRel - aRel;
+      // Products with image+price first
+      const aComplete = (a.image_url ? 2 : 0) + (a.price != null ? 1 : 0);
+      const bComplete = (b.image_url ? 2 : 0) + (b.price != null ? 1 : 0);
+      if (aComplete !== bComplete) return bComplete - aComplete;
       // Then by supplier proximity
       const aIdx = supplierOrder.indexOf(a.supplier);
       const bIdx = supplierOrder.indexOf(b.supplier);
