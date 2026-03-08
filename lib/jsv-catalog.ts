@@ -17,9 +17,33 @@ export async function importJsvCatalog(
   const db = getDb();
 
   // JSV is Shopify — products.json is public, no login needed
+
+  // Auto-create default categories if none exist for this company
+  const ALL_JSV_CATEGORIES = [
+    { name: 'Câbles électriques',    url: '/collections/cables-electriques',                  enabled: 1 },
+    { name: 'Câbles',                url: '/collections/cables',                              enabled: 1 },
+    { name: 'Attaches nylon',        url: '/collections/attaches-nylon',                      enabled: 1 },
+    { name: 'Ampoules',              url: '/collections/ampoules',                            enabled: 1 },
+    { name: 'Lampes de poche',       url: '/collections/lampes-de-poche',                     enabled: 0 },
+    { name: 'Rallonges électriques', url: '/collections/devidoirs-et-rallonges-electriques',  enabled: 1 },
+    { name: 'Câbles à survoltage',   url: '/collections/cables-a-survoltage',                 enabled: 1 },
+    { name: 'Ruban électrique',      url: '/collections/rubans-electriques',                  enabled: 1 },
+  ];
+  const cid = companyId ?? null;
+  for (const c of ALL_JSV_CATEGORIES) {
+    const exists = db.prepare(
+      "SELECT 1 FROM supplier_categories WHERE supplier = 'jsv' AND category_url = ? AND company_id = ? LIMIT 1"
+    ).get(c.url, cid);
+    if (!exists) {
+      db.prepare(
+        "INSERT INTO supplier_categories (supplier, category_name, category_url, enabled, company_id) VALUES ('jsv', ?, ?, ?, ?)"
+      ).run(c.name, c.url, c.enabled, cid);
+    }
+  }
+
   const categories = db.prepare(
     "SELECT * FROM supplier_categories WHERE supplier = 'jsv' AND enabled = 1 AND company_id = ?"
-  ).all(companyId ?? null) as any[];
+  ).all(cid) as any[];
   if (categories.length === 0) return { total: 0, error: 'Aucune catégorie JSV sélectionnée' };
 
   const upsert = db.prepare(`
