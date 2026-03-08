@@ -66,6 +66,41 @@ const themes: Record<string, SectionTheme> = {
     subtext: 'text-cyan-700',
     checkboxAccent: 'accent-cyan-600',
   },
+  yellow: {
+    bg: 'bg-yellow-50',
+    border: 'border-yellow-200',
+    heading: 'text-yellow-900',
+    subtext: 'text-yellow-700',
+    checkboxAccent: 'accent-yellow-600',
+  },
+  pink: {
+    bg: 'bg-pink-50',
+    border: 'border-pink-200',
+    heading: 'text-pink-900',
+    subtext: 'text-pink-700',
+    checkboxAccent: 'accent-pink-600',
+  },
+  indigo: {
+    bg: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    heading: 'text-indigo-900',
+    subtext: 'text-indigo-700',
+    checkboxAccent: 'accent-indigo-600',
+  },
+  teal: {
+    bg: 'bg-teal-50',
+    border: 'border-teal-200',
+    heading: 'text-teal-900',
+    subtext: 'text-teal-700',
+    checkboxAccent: 'accent-teal-600',
+  },
+  purple: {
+    bg: 'bg-purple-50',
+    border: 'border-purple-200',
+    heading: 'text-purple-900',
+    subtext: 'text-purple-700',
+    checkboxAccent: 'accent-purple-600',
+  },
 };
 
 function AccordionSection({
@@ -115,7 +150,7 @@ function SupplierSection({
   toggling = false,
   onToggleVisible,
 }: {
-  supplierKey: 'canac' | 'homedepot' | 'guillevin' | 'bmr';
+  supplierKey: string;
   label: string;
   showManualSession?: boolean;
   theme: SectionTheme;
@@ -812,41 +847,82 @@ export default function SettingsPage() {
           </div>
           {/* end supplier credential forms grid */}
 
-          {/* ─── Autres fournisseurs (catalogue seulement) ─── */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 mt-2 px-1">Autres fournisseurs</p>
-          <div className="bg-gray-50 rounded-xl border border-gray-200 divide-y divide-gray-100">
-            {[
-              { key: 'jsv',       label: 'JSV',       dot: 'bg-yellow-500' },
-              { key: 'westburne', label: 'Westburne', dot: 'bg-red-700'    },
-              { key: 'nedco',     label: 'Nedco',     dot: 'bg-pink-500'   },
-              { key: 'futech',    label: 'Futech',    dot: 'bg-indigo-500' },
-              { key: 'deschenes', label: 'Deschênes', dot: 'bg-teal-500'   },
-            ].map(s => {
-              const isVisible = supplierVisibility.find(v => v.supplier === s.key)?.visible ?? false;
-              return (
-                <div key={s.key} className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`w-2.5 h-2.5 rounded-full ${s.dot} flex-shrink-0`} />
-                    <span className="text-sm font-medium text-gray-800">{s.label}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Catalogue</span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleVisibility(s.key, !isVisible)}
-                      disabled={togglingSupplier === s.key}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-                        isVisible ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        isVisible ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          {/* ─── JSV ─── */}
+          <div>
+          <p className="text-xs font-bold text-yellow-500 uppercase tracking-widest mb-2 px-1">JSV</p>
+          <SupplierSection
+            supplierKey="jsv"
+            label="JSV"
+            theme={themes.yellow}
+            visible={supplierVisibility.find(v => v.supplier === 'jsv')?.visible ?? false}
+            toggling={togglingSupplier === 'jsv'}
+            onToggleVisible={v => handleToggleVisibility('jsv', v)}
+          />
+          </div>
+
+          {/* ─── WESTBURNE ─── */}
+          <div>
+          <p className="text-xs font-bold text-red-700 uppercase tracking-widest mb-2 px-1">Westburne</p>
+          <SupplierSection
+            supplierKey="westburne"
+            label="Westburne"
+            theme={themes.red}
+            visible={supplierVisibility.find(v => v.supplier === 'westburne')?.visible ?? false}
+            toggling={togglingSupplier === 'westburne'}
+            onToggleVisible={v => handleToggleVisibility('westburne', v)}
+          />
+          </div>
+
+          {/* ─── NEDCO ─── */}
+          <div>
+          <p className="text-xs font-bold text-pink-500 uppercase tracking-widest mb-2 px-1">Nedco</p>
+          <SupplierSection
+            supplierKey="nedco"
+            label="Nedco"
+            theme={themes.pink}
+            visible={supplierVisibility.find(v => v.supplier === 'nedco')?.visible ?? false}
+            toggling={togglingSupplier === 'nedco'}
+            onToggleVisible={v => handleToggleVisibility('nedco', v)}
+          />
+          </div>
+
+          {/* ─── FUTECH ─── */}
+          <div>
+          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 px-1">Futech</p>
+          <SupplierSection
+            supplierKey="futech"
+            label="Futech"
+            theme={themes.indigo}
+            visible={supplierVisibility.find(v => v.supplier === 'futech')?.visible ?? false}
+            toggling={togglingSupplier === 'futech'}
+            onToggleVisible={v => handleToggleVisibility('futech', v)}
+          />
+          </div>
+
+          {/* ─── DESCHÊNES ─── */}
+          <div>
+          <p className="text-xs font-bold text-teal-500 uppercase tracking-widest mb-2 px-1">Deschênes</p>
+          <SupplierSection
+            supplierKey="deschenes"
+            label="Deschênes"
+            theme={themes.teal}
+            visible={supplierVisibility.find(v => v.supplier === 'deschenes')?.visible ?? false}
+            toggling={togglingSupplier === 'deschenes'}
+            onToggleVisible={v => handleToggleVisibility('deschenes', v)}
+          />
+          </div>
+
+          {/* ─── RONA ─── */}
+          <div>
+          <p className="text-xs font-bold text-purple-500 uppercase tracking-widest mb-2 px-1">Rona</p>
+          <SupplierSection
+            supplierKey="rona"
+            label="Rona"
+            theme={themes.purple}
+            visible={supplierVisibility.find(v => v.supplier === 'rona')?.visible ?? false}
+            toggling={togglingSupplier === 'rona'}
+            onToggleVisible={v => handleToggleVisibility('rona', v)}
+          />
           </div>
         </AccordionSection>
 
