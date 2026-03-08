@@ -844,9 +844,6 @@ export default function SettingsPage() {
           />
           </div>
 
-          </div>
-          {/* end supplier credential forms grid */}
-
           {/* ─── JSV ─── */}
           <div>
           <p className="text-xs font-bold text-yellow-500 uppercase tracking-widest mb-2 px-1">JSV</p>
@@ -924,6 +921,9 @@ export default function SettingsPage() {
             onToggleVisible={v => handleToggleVisibility('rona', v)}
           />
           </div>
+
+          </div>
+          {/* end supplier credential forms grid */}
         </AccordionSection>
 
         {/* ─── ALERTES ─── */}
