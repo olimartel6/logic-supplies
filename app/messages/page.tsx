@@ -267,10 +267,10 @@ export default function MessagesPage() {
   const threadPanel = activeChat ? (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3 bg-white">
+      <div className="px-3 py-2.5 border-b border-gray-200 flex items-center gap-2 bg-white flex-shrink-0">
         <button
           onClick={() => setActiveChat(null)}
-          className="md:hidden w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+          className="md:hidden w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition -ml-1"
         >
           <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -318,20 +318,20 @@ export default function MessagesPage() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="px-4 py-3 border-t border-gray-200 bg-white flex gap-2">
+      <form onSubmit={handleSend} className="px-3 py-2 border-t border-gray-200 bg-white flex gap-2 flex-shrink-0">
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder={t('msg_type_message')}
-          className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+          className="flex-1 rounded-full border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           autoComplete="off"
         />
         <button
           type="submit"
           disabled={!input.trim() || sending}
-          className="bg-blue-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="bg-blue-600 text-white w-11 h-11 rounded-full font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 flex items-center justify-center"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -346,10 +346,12 @@ export default function MessagesPage() {
   );
 
   return (
-    <div className="pb-16 md:pb-0">
+    <div>
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
 
-      <div className="md:ml-56 h-[calc(100dvh-56px)] md:h-dvh flex">
+      {/* Mobile: 100dvh - top bar (56px) - bottom nav (~76px with safe area) */}
+      {/* Desktop: full viewport, sidebar margin */}
+      <div className="md:ml-56 h-[calc(100dvh-132px)] md:h-dvh flex">
         {/* Mobile: show either conv list or thread */}
         <div className={`md:hidden w-full h-full ${activeChat ? 'hidden' : 'block'}`}>
           {convPanel}
