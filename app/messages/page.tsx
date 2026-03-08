@@ -385,25 +385,21 @@ export default function MessagesPage() {
     <div>
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
 
-      {/* Mobile: 100dvh - top bar (56px) - bottom nav (~76px with safe area) */}
-      {/* Desktop: full viewport, sidebar margin */}
-      <div className="md:ml-56 h-[calc(100dvh-132px)] md:h-dvh flex">
-        {/* Mobile: show either conv list or thread */}
-        <div className={`md:hidden w-full h-full ${activeChat ? 'hidden' : 'block'}`}>
+      {/* Mobile: fixed between top bar (56px) and bottom nav (68px + safe area) */}
+      <div className={`md:hidden fixed top-[56px] bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-20 ${activeChat ? 'hidden' : 'flex flex-col'}`}>
+        {convPanel}
+      </div>
+      <div className={`md:hidden fixed top-[56px] bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-20 ${activeChat ? 'flex flex-col' : 'hidden'}`}>
+        {threadPanel}
+      </div>
+
+      {/* Desktop: two-column with sidebar */}
+      <div className="hidden md:flex md:ml-56 h-dvh">
+        <div className="w-80 border-r border-gray-200 flex-shrink-0 bg-white">
           {convPanel}
         </div>
-        <div className={`md:hidden w-full h-full ${activeChat ? 'block' : 'hidden'}`}>
+        <div className="flex-1 flex flex-col">
           {threadPanel}
-        </div>
-
-        {/* Desktop: two-column */}
-        <div className="hidden md:flex w-full h-full">
-          <div className="w-80 border-r border-gray-200 flex-shrink-0 bg-white">
-            {convPanel}
-          </div>
-          <div className="flex-1 flex flex-col">
-            {threadPanel}
-          </div>
         </div>
       </div>
     </div>
