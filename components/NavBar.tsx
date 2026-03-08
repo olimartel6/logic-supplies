@@ -241,12 +241,12 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
     <>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex fixed left-0 top-0 h-screen w-56 bg-slate-800 border-r border-slate-700 flex-col z-30">
-        <div className="px-4 py-4 border-b border-slate-700 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo-shield.svg" className="h-7 w-auto flex-shrink-0" alt="LogicSupplies" />
+        <div className="px-4 py-5 border-b border-slate-700 flex-shrink-0">
+          <div className="flex items-center justify-center gap-3">
+            <img src="/logo-shield.svg" className="h-9 w-auto flex-shrink-0" alt="LogicSupplies" />
             <div className="flex flex-col leading-none gap-0.5">
-              <span className="font-extrabold text-white text-sm tracking-wide">Logic</span>
-              <span className="font-extrabold text-blue-400 text-sm tracking-wide">Supplies</span>
+              <span className="font-extrabold text-white text-base tracking-wide">Logic</span>
+              <span className="font-extrabold text-blue-400 text-base tracking-wide">Supplies</span>
             </div>
           </div>
         </div>
