@@ -4,6 +4,12 @@ import { importLumenCatalog, getCatalogStats } from '@/lib/lumen-catalog';
 import { importCanacCatalog, getCanacCatalogStats } from '@/lib/canac-catalog';
 import { importHomeDepotCatalog, getHomeDepotCatalogStats } from '@/lib/homedepot-catalog';
 import { importGuillevinCatalog, getGuillevinCatalogStats } from '@/lib/guillevin-catalog';
+import { importJsvCatalog, getJsvCatalogStats } from '@/lib/jsv-catalog';
+import { importWestburneCatalog, getWestburneCatalogStats } from '@/lib/westburne-catalog';
+import { importBmrCatalog, getBmrCatalogStats } from '@/lib/bmr-catalog';
+import { importNedcoCatalog, getNedcoCatalogStats } from '@/lib/nedco-catalog';
+import { importFutechCatalog, getFutechCatalogStats } from '@/lib/futech-catalog';
+import { importDeschenessCatalog, getDeschenessCatalogStats } from '@/lib/deschenes-catalog';
 
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
@@ -35,6 +41,24 @@ export async function POST(req: NextRequest) {
         } else if (supplier === 'guillevin') {
           result = await importGuillevinCatalog((progress) => send(progress), companyId);
           stats = getGuillevinCatalogStats();
+        } else if (supplier === 'jsv') {
+          result = await importJsvCatalog((progress) => send(progress), companyId);
+          stats = getJsvCatalogStats();
+        } else if (supplier === 'westburne') {
+          result = await importWestburneCatalog((progress) => send(progress), companyId);
+          stats = getWestburneCatalogStats();
+        } else if (supplier === 'bmr') {
+          result = await importBmrCatalog((progress) => send(progress), companyId);
+          stats = getBmrCatalogStats();
+        } else if (supplier === 'nedco') {
+          result = await importNedcoCatalog((progress) => send(progress), companyId);
+          stats = getNedcoCatalogStats();
+        } else if (supplier === 'futech') {
+          result = await importFutechCatalog((progress) => send(progress), companyId);
+          stats = getFutechCatalogStats();
+        } else if (supplier === 'deschenes') {
+          result = await importDeschenessCatalog((progress) => send(progress), companyId);
+          stats = getDeschenessCatalogStats();
         } else {
           result = await importLumenCatalog((progress) => send(progress), companyId);
           stats = getCatalogStats();
@@ -69,5 +93,11 @@ export async function GET(req: NextRequest) {
   if (supplier === 'canac') return NextResponse.json(getCanacCatalogStats());
   if (supplier === 'homedepot') return NextResponse.json(getHomeDepotCatalogStats());
   if (supplier === 'guillevin') return NextResponse.json(getGuillevinCatalogStats());
+  if (supplier === 'jsv') return NextResponse.json(getJsvCatalogStats());
+  if (supplier === 'westburne') return NextResponse.json(getWestburneCatalogStats());
+  if (supplier === 'bmr') return NextResponse.json(getBmrCatalogStats());
+  if (supplier === 'nedco') return NextResponse.json(getNedcoCatalogStats());
+  if (supplier === 'futech') return NextResponse.json(getFutechCatalogStats());
+  if (supplier === 'deschenes') return NextResponse.json(getDeschenessCatalogStats());
   return NextResponse.json(getCatalogStats());
 }
