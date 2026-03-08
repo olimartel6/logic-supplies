@@ -70,8 +70,10 @@ export default function MessagesPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showNewConv, setShowNewConv] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const router = useRouter();
   const t = useT();
 
@@ -363,6 +365,8 @@ export default function MessagesPage() {
           placeholder={t('msg_type_message')}
           className="flex-1 rounded-full border border-gray-300 bg-white px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           autoComplete="off"
+          onFocus={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); setInputFocused(true); }}
+          onBlur={() => { blurTimeout.current = setTimeout(() => setInputFocused(false), 150); }}
         />
         <button
           type="submit"
@@ -383,13 +387,13 @@ export default function MessagesPage() {
 
   return (
     <div className="h-dvh overflow-hidden overscroll-none">
-      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} hideBottomNav={inputFocused} />
 
-      {/* Mobile: fixed between top bar (56px) and bottom nav (68px + safe area) */}
-      <div className={`md:hidden fixed top-[56px] bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-20 ${activeChat ? 'hidden' : 'flex flex-col'}`}>
+      {/* Mobile: fixed between top bar and bottom nav (hidden when keyboard open) */}
+      <div className={`md:hidden fixed top-[56px] left-0 right-0 z-20 transition-[bottom] duration-200 ${inputFocused ? 'bottom-0' : 'bottom-[calc(68px+env(safe-area-inset-bottom))]'} ${activeChat ? 'hidden' : 'flex flex-col'}`}>
         {convPanel}
       </div>
-      <div className={`md:hidden fixed top-[56px] bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-20 ${activeChat ? 'flex flex-col' : 'hidden'}`}>
+      <div className={`md:hidden fixed top-[56px] left-0 right-0 z-20 transition-[bottom] duration-200 ${inputFocused ? 'bottom-0' : 'bottom-[calc(68px+env(safe-area-inset-bottom))]'} ${activeChat ? 'flex flex-col' : 'hidden'}`}>
         {threadPanel}
       </div>
 

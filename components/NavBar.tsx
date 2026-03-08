@@ -10,6 +10,7 @@ interface NavBarProps {
   inventoryEnabled?: boolean;
   marketingEnabled?: boolean;
   hideTopOnMobile?: boolean;
+  hideBottomNav?: boolean;
 }
 
 const IconPlus = () => (
@@ -79,7 +80,7 @@ const IconMegaphone = () => (
   </svg>
 );
 
-export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, hideTopOnMobile }: NavBarProps) {
+export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, hideTopOnMobile, hideBottomNav }: NavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
@@ -347,7 +348,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       </div>
 
       {/* Bottom nav (mobile only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu">
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu transition-transform duration-200 ${hideBottomNav ? 'translate-y-full' : ''}`}>
         <div className="flex justify-around max-w-lg mx-auto">
           {navItems}
         </div>
