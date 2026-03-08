@@ -69,10 +69,27 @@ export async function importJsvCatalog(
         let products: any[] = [];
         let fatalError = false;
 
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            const json = await res.json();
+            const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+            if (res.status === 429) {
+              console.error(`[JSV] Rate limited on ${cat.category_name} page ${currentPage}, waiting ${(attempt + 1) * 5}s...`);
+              await new Promise(r => setTimeout(r, (attempt + 1) * 5000));
+              continue;
+            }
+            if (!res.ok) {
+              console.error(`[JSV] HTTP ${res.status} on ${url}`);
+              if (attempt < 2) { await new Promise(r => setTimeout(r, 3000)); continue; }
+              fatalError = true;
+              break;
+            }
+            const text = await res.text();
+            if (text.startsWith('<')) {
+              console.error(`[JSV] Got HTML instead of JSON on ${cat.category_name} page ${currentPage}, retrying...`);
+              await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
+              continue;
+            }
+            const json = JSON.parse(text);
             const shopifyProducts: any[] = json.products || [];
 
             const parsed: any[] = [];
@@ -89,8 +106,9 @@ export async function importJsvCatalog(
             }
             products = parsed;
             break;
-          } catch {
-            if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+          } catch (err: any) {
+            console.error(`[JSV] Error on ${cat.category_name} page ${currentPage}: ${err.message}`);
+            if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
             else fatalError = true;
           }
         }
@@ -115,9 +133,13 @@ export async function importJsvCatalog(
         if (products.length < JSV_PAGE_SIZE) break;
         currentPage++;
         if (currentPage > 50) break;
+        // Delay between pages to avoid Shopify rate limiting
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       onProgress?.({ category: cat.category_name, imported: categoryTotal, total: categoryTotal, done: true });
+      // Delay between categories to avoid rate limiting
+      await new Promise(r => setTimeout(r, 2000));
     }
 
     return { total: totalImported };
