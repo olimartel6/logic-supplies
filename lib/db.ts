@@ -537,6 +537,26 @@ function initDb(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_product_favorites_user ON product_favorites(user_id);
 
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL REFERENCES companies(id),
+      sender_id INTEGER NOT NULL REFERENCES users(id),
+      recipient_id INTEGER REFERENCES users(id),
+      body TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS message_reads (
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(message_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_company ON messages(company_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(company_id, recipient_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(company_id, sender_id);
+
     CREATE TABLE IF NOT EXISTS company_payment_methods (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,

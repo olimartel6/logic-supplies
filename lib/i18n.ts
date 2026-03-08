@@ -50,7 +50,19 @@ export const translations: Record<Lang, Record<string, string>> = {
     nav_profile: 'Profil',
     nav_admin: 'Admin',
     nav_settings: 'Paramètres',
+    nav_messages: 'Messages',
     nav_logout: 'Déconnexion',
+
+    // Messages
+    msg_general_channel: 'Canal général',
+    msg_new_conversation: 'Nouvelle conversation',
+    msg_select_recipient: 'Choisir un employé',
+    msg_type_message: 'Écrire un message...',
+    msg_send: 'Envoyer',
+    msg_no_messages: 'Aucun message',
+    msg_no_conversations: 'Aucune conversation',
+    msg_today: "Aujourd'hui",
+    msg_yesterday: 'Hier',
 
     // New request
     new_request_title: 'Nouvelle demande',
@@ -219,7 +231,19 @@ export const translations: Record<Lang, Record<string, string>> = {
     nav_profile: 'Profile',
     nav_admin: 'Admin',
     nav_settings: 'Settings',
+    nav_messages: 'Messages',
     nav_logout: 'Sign out',
+
+    // Messages
+    msg_general_channel: 'General channel',
+    msg_new_conversation: 'New conversation',
+    msg_select_recipient: 'Choose an employee',
+    msg_type_message: 'Write a message...',
+    msg_send: 'Send',
+    msg_no_messages: 'No messages',
+    msg_no_conversations: 'No conversations',
+    msg_today: 'Today',
+    msg_yesterday: 'Yesterday',
 
     // New request
     new_request_title: 'New request',
@@ -388,7 +412,19 @@ export const translations: Record<Lang, Record<string, string>> = {
     nav_profile: 'Perfil',
     nav_admin: 'Admin',
     nav_settings: 'Configuración',
+    nav_messages: 'Mensajes',
     nav_logout: 'Cerrar sesión',
+
+    // Messages
+    msg_general_channel: 'Canal general',
+    msg_new_conversation: 'Nueva conversación',
+    msg_select_recipient: 'Elegir un empleado',
+    msg_type_message: 'Escribir un mensaje...',
+    msg_send: 'Enviar',
+    msg_no_messages: 'No hay mensajes',
+    msg_no_conversations: 'No hay conversaciones',
+    msg_today: 'Hoy',
+    msg_yesterday: 'Ayer',
 
     // New request
     new_request_title: 'Nueva solicitud',
