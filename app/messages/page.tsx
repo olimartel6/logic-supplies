@@ -382,7 +382,7 @@ export default function MessagesPage() {
   );
 
   return (
-    <div>
+    <div className="h-dvh overflow-hidden overscroll-none">
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
 
       {/* Mobile: fixed between top bar (56px) and bottom nav (68px + safe area) */}
