@@ -490,12 +490,12 @@ function ApprovalsContent() {
                       disabled={loading}
                       className="w-full mt-3 bg-emerald-600 text-white py-3 rounded-2xl font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
                     >
-                      ✅ Marquer comme reçu
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 inline-block align-text-bottom mr-1"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Marquer comme reçu
                     </button>
                   )}
                   {selected.tracking_status === 'received' && (
                     <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                      <p className="text-sm font-medium text-emerald-800">✅ Reçu et ajouté à l&apos;inventaire</p>
+                      <p className="text-sm font-medium text-emerald-800"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 inline-block align-text-bottom mr-1"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Reçu et ajouté à l&apos;inventaire</p>
                       {selected.picked_up_by_name ? (
                         <p className="text-xs text-emerald-600 mt-1">
                           Récupéré par {selected.picked_up_by_name}
@@ -822,12 +822,12 @@ function ApprovalsContent() {
                     disabled={loading}
                     className="w-full mt-3 bg-emerald-600 text-white py-3 rounded-2xl font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
                   >
-                    ✅ Marquer comme reçu
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 inline-block align-text-bottom mr-1"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Marquer comme reçu
                   </button>
                 )}
                 {selected.tracking_status === 'received' && (
                   <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                    <p className="text-sm font-medium text-emerald-800">✅ Reçu et ajouté à l&apos;inventaire</p>
+                    <p className="text-sm font-medium text-emerald-800"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 inline-block align-text-bottom mr-1"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Reçu et ajouté à l&apos;inventaire</p>
                     {selected.picked_up_by_name ? (
                       <p className="text-xs text-emerald-600 mt-1">
                         Récupéré par {selected.picked_up_by_name}
