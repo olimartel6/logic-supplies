@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import { useT } from '@/lib/LanguageContext';
@@ -38,6 +38,15 @@ function formatTime(dateStr: string) {
   if (diffDays === 1) return `Hier ${time}`;
   if (diffDays < 7) return d.toLocaleDateString('fr-CA', { weekday: 'short' }) + ` ${time}`;
   return d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' }) + ` ${time}`;
+}
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Hier';
+  return d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 function roleBadge(role: string) {
@@ -267,12 +276,12 @@ export default function MessagesPage() {
   const threadPanel = activeChat ? (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-3 py-2.5 border-b border-gray-200 flex items-center gap-2 bg-white flex-shrink-0">
+      <div className="px-2 py-2 border-b border-gray-200 flex items-center gap-2 bg-white/95 backdrop-blur-sm flex-shrink-0">
         <button
           onClick={() => setActiveChat(null)}
-          className="md:hidden w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition -ml-1"
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
         >
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -287,54 +296,81 @@ export default function MessagesPage() {
             {activeChat.partnerName.charAt(0).toUpperCase()}
           </div>
         )}
-        <h3 className="font-semibold text-gray-900">{chatTitle}</h3>
+        <h3 className="font-semibold text-sm text-gray-900">{chatTitle}</h3>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
+      <div className="flex-1 overflow-y-auto px-3 py-2 bg-gray-100">
         {messages.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">{t('msg_no_messages')}</div>
         )}
         {messages.map((msg, i) => {
           const isMine = msg.sender_id === userId;
-          const showName = !isMine && (i === 0 || messages[i - 1].sender_id !== msg.sender_id);
+          const prev = messages[i - 1];
+          const next = messages[i + 1];
+          const sameSenderAsPrev = prev && prev.sender_id === msg.sender_id;
+          const sameSenderAsNext = next && next.sender_id === msg.sender_id;
+          const showName = !isMine && !sameSenderAsPrev;
+          const showTime = !sameSenderAsNext;
+
+          // Date separator
+          const msgDate = new Date(msg.created_at).toDateString();
+          const prevDate = prev ? new Date(prev.created_at).toDateString() : null;
+          const showDateSep = !prev || msgDate !== prevDate;
+
+          // iMessage-style grouped corners
+          const corners = isMine
+            ? `rounded-l-2xl ${sameSenderAsPrev && !showDateSep ? 'rounded-tr-[5px]' : 'rounded-tr-2xl'} ${sameSenderAsNext ? 'rounded-br-[5px]' : 'rounded-br-2xl'}`
+            : `rounded-r-2xl ${sameSenderAsPrev && !showDateSep ? 'rounded-tl-[5px]' : 'rounded-tl-2xl'} ${sameSenderAsNext ? 'rounded-bl-[5px]' : 'rounded-bl-2xl'}`;
+
           return (
-            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] ${isMine ? 'items-end' : 'items-start'}`}>
-                {showName && (
-                  <p className="text-[11px] text-gray-500 font-medium mb-0.5 px-1">{msg.sender_name}</p>
-                )}
-                <div className={`rounded-2xl px-3.5 py-2 ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 border border-gray-200'}`}>
-                  <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+            <Fragment key={msg.id}>
+              {showDateSep && (
+                <div className="flex justify-center py-3">
+                  <span className="text-[11px] text-gray-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm">
+                    {formatDate(msg.created_at)}
+                  </span>
                 </div>
-                <p className={`text-[10px] mt-0.5 px-1 ${isMine ? 'text-right text-gray-400' : 'text-gray-400'}`}>
-                  {formatTime(msg.created_at)}
-                </p>
+              )}
+              <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${sameSenderAsPrev && !showDateSep ? 'mt-[2px]' : 'mt-2.5'}`}>
+                <div className="max-w-[78%]">
+                  {showName && (
+                    <p className="text-[11px] text-gray-500 font-medium mb-0.5 ml-3">{msg.sender_name}</p>
+                  )}
+                  <div className={`px-3 py-[7px] ${corners} ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 shadow-sm'}`}>
+                    <p className="text-[15px] leading-snug whitespace-pre-wrap break-words">{msg.body}</p>
+                  </div>
+                  {showTime && (
+                    <p className={`text-[10px] mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-3'} text-gray-400`}>
+                      {formatTime(msg.created_at)}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
+            </Fragment>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="px-3 py-2 border-t border-gray-200 bg-white flex gap-2 flex-shrink-0">
+      <form onSubmit={handleSend} className="px-2 py-1.5 bg-gray-100 flex items-end gap-1.5 flex-shrink-0">
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder={t('msg_type_message')}
-          className="flex-1 rounded-full border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+          className="flex-1 rounded-full border border-gray-300 bg-white px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           autoComplete="off"
         />
         <button
           type="submit"
           disabled={!input.trim() || sending}
-          className="bg-blue-600 text-white w-11 h-11 rounded-full font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 flex items-center justify-center"
+          className="bg-blue-600 text-white w-9 h-9 rounded-full hover:bg-blue-700 transition disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0 flex items-center justify-center mb-[1px]"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
           </svg>
         </button>
       </form>
