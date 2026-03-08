@@ -91,6 +91,9 @@ async function loadAllProducts(page: any): Promise<void> {
 
 /** Extract products from a leaf category page */
 async function extractProducts(page: any): Promise<any[]> {
+  // Wait for images to load after scrolling
+  await page.waitForTimeout(1500);
+
   return page.evaluate(() => {
     const items: any[] = [];
     const seen = new Set<string>();
@@ -109,8 +112,32 @@ async function extractProducts(page: any): Promise<any[]> {
       if (seen.has(name)) continue;
       seen.add(name);
 
+      // Image: check multiple attributes for lazy-loaded images
       const imgEl = container.querySelector('img') as HTMLImageElement | null;
-      const image_url = imgEl?.src || imgEl?.getAttribute('data-src') || '';
+      let image_url = '';
+      if (imgEl) {
+        image_url = imgEl.currentSrc
+          || imgEl.src
+          || imgEl.getAttribute('data-src')
+          || imgEl.getAttribute('data-lazy-src')
+          || imgEl.getAttribute('data-original')
+          || '';
+        // Skip placeholder/blank images
+        if (image_url.includes('data:image') || image_url.includes('placeholder') || image_url.includes('blank.')) {
+          image_url = imgEl.getAttribute('data-src')
+            || imgEl.getAttribute('data-lazy-src')
+            || imgEl.getAttribute('data-srcset')?.split(' ')[0]
+            || '';
+        }
+      }
+      // Also check for background-image on the container or its children
+      if (!image_url) {
+        const bgEl = container.querySelector('[style*="background-image"]') as HTMLElement | null;
+        if (bgEl) {
+          const bgMatch = bgEl.style.backgroundImage.match(/url\(["']?([^"')]+)["']?\)/);
+          if (bgMatch) image_url = bgMatch[1];
+        }
+      }
 
       // Price
       const priceEl = Array.from(container.querySelectorAll('*')).find(el =>
@@ -122,13 +149,21 @@ async function extractProducts(page: any): Promise<any[]> {
       const unit = priceText.toLowerCase().includes('/ m') ? 'm'
         : priceText.toLowerCase().includes('/ pi') ? 'feet' : 'units';
 
-      // SKU: look for short uppercase text in sibling product links
-      const siblings = Array.from(container.querySelectorAll('a[href*="/p-"]'));
-      const skuLink = siblings.find(s => {
-        const t = s.textContent?.trim() || '';
-        return t.length > 3 && t.length < 30 && t === t.toUpperCase() && t !== name;
-      });
-      const sku = skuLink?.textContent?.trim() || name.slice(0, 30);
+      // SKU: extract from product URL (e.g. /p-ABC123) or from sibling links
+      const href = (link as HTMLAnchorElement).href || '';
+      const urlSkuMatch = href.match(/\/p-([^/?#]+)/);
+      let sku = '';
+      if (urlSkuMatch) {
+        sku = decodeURIComponent(urlSkuMatch[1]).replace(/-/g, ' ').toUpperCase();
+      }
+      if (!sku) {
+        const siblings = Array.from(container.querySelectorAll('a[href*="/p-"]'));
+        const skuLink = siblings.find(s => {
+          const t = s.textContent?.trim() || '';
+          return t.length > 3 && t.length < 30 && t === t.toUpperCase() && t !== name;
+        });
+        sku = skuLink?.textContent?.trim() || name.slice(0, 40);
+      }
 
       items.push({ name, sku, image_url, price, unit });
     }
