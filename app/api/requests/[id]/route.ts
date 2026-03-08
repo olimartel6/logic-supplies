@@ -12,11 +12,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const { status, office_comment, delivery_override } = await req.json();
+  const { status, office_comment, delivery_override, supplier_override } = await req.json();
   const db = getDb();
 
   if (!ctx.companyId) {
     return NextResponse.json({ error: 'Contexte entreprise manquant' }, { status: 400 });
+  }
+
+  // Update supplier if admin changed it before approving
+  if (supplier_override) {
+    const currentReq = db.prepare('SELECT supplier FROM requests WHERE id = ? AND company_id = ?').get(id, ctx.companyId) as any;
+    if (currentReq && currentReq.supplier !== supplier_override) {
+      const user = db.prepare('SELECT name FROM users WHERE id = ?').get(ctx.userId) as any;
+      db.prepare('UPDATE requests SET supplier = ?, supplier_modified_by = ? WHERE id = ? AND company_id = ?')
+        .run(supplier_override, user?.name || 'Admin', id, ctx.companyId);
+    }
   }
 
   if (status === 'approved') {

@@ -22,6 +22,7 @@ interface Request {
   picked_up_by_name: string | null;
   picked_up_at: string | null;
   picked_up_job_site_name: string | null;
+  supplier_modified_by: string | null;
 }
 
 interface User {
@@ -138,6 +139,11 @@ export default function MyRequestsPage() {
                          <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 inline-block align-text-bottom mr-0.5"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Reçu</>}
                       </span>
                     )}
+                    {r.supplier_modified_by && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                        Modifié par {r.supplier_modified_by}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -200,6 +206,14 @@ export default function MyRequestsPage() {
                      selected.tracking_status === 'shipped' ? '🚚 Expédié' :
                      <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 inline-block align-text-bottom mr-0.5"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" /></svg> Reçu</>}
                   </span>
+                </div>
+              )}
+              {selected.supplier_modified_by && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-xs text-amber-700 font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 inline-block align-text-bottom mr-1"><path d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" /></svg>
+                    Fournisseur modifié par {selected.supplier_modified_by}
+                  </p>
                 </div>
               )}
               {selected.picked_up_by && selected.picked_up_at && (

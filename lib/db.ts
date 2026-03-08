@@ -586,6 +586,9 @@ function initDb(db: Database.Database) {
   if (!reqCols.find(c => c.name === 'picked_up_job_site_id')) {
     db.exec("ALTER TABLE requests ADD COLUMN picked_up_job_site_id INTEGER REFERENCES job_sites(id)");
   }
+  if (!reqCols.find(c => c.name === 'supplier_modified_by')) {
+    db.exec("ALTER TABLE requests ADD COLUMN supplier_modified_by TEXT DEFAULT NULL");
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_requests_tracking ON requests(company_id, tracking_status)");
 
   // Low-stock alert threshold

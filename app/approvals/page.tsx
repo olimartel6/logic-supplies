@@ -61,6 +61,10 @@ function ApprovalsContent() {
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
+  // Supplier override state
+  const [alternativeSuppliers, setAlternativeSuppliers] = useState<string[]>([]);
+  const [supplierOverride, setSupplierOverride] = useState('');
+
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -91,6 +95,20 @@ function ApprovalsContent() {
     setSendError(null);
   }
   const router = useRouter();
+
+  // Fetch alternative suppliers when a pending request is selected
+  useEffect(() => {
+    if (!selected || selected.status !== 'pending') {
+      setAlternativeSuppliers([]);
+      setSupplierOverride('');
+      return;
+    }
+    setSupplierOverride(selected.supplier || '');
+    fetch(`/api/products/alternatives?name=${encodeURIComponent(selected.product)}`)
+      .then(r => r.json())
+      .then((suppliers: string[]) => setAlternativeSuppliers(suppliers))
+      .catch(() => setAlternativeSuppliers([]));
+  }, [selected?.id]);
 
   // Debounce ref for search
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -179,7 +197,7 @@ function ApprovalsContent() {
     await fetch(`/api/requests/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, office_comment: comment, delivery_override: deliveryOverride }),
+      body: JSON.stringify({ status, office_comment: comment, delivery_override: deliveryOverride, supplier_override: supplierOverride || undefined }),
     });
     await loadRequests(1, false);
     setSelected(null);
@@ -446,8 +464,26 @@ function ApprovalsContent() {
                 <button onClick={() => { setSelected(null); }} className="text-gray-400 text-2xl leading-none">×</button>
               </div>
 
-              {/* ── Boutons Rejeter / Approuver ── */}
+              {/* ── Supplier override + Boutons Rejeter / Approuver ── */}
               {selected.status === 'pending' && (
+                <>
+                {alternativeSuppliers.length > 1 && (
+                  <div className="px-6 pb-2 flex-shrink-0">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Fournisseur</label>
+                    <select
+                      value={supplierOverride}
+                      onChange={e => setSupplierOverride(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {alternativeSuppliers.map(s => (
+                        <option key={s} value={s}>{s === 'homedepot' ? 'Home Depot' : s === 'deschenes' ? 'Deschênes' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                      ))}
+                    </select>
+                    {supplierOverride && selected.supplier && supplierOverride !== selected.supplier && (
+                      <p className="text-xs text-amber-600 mt-1">Fournisseur sera changé de {selected.supplier} à {supplierOverride}</p>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-3 px-6 pb-3 flex-shrink-0">
                   <button
                     onClick={() => handleDecision('rejected')}
@@ -470,6 +506,7 @@ function ApprovalsContent() {
                     </span>
                   </button>
                 </div>
+                </>
               )}
 
               {/* ── Tracking actions ── */}
@@ -778,8 +815,26 @@ function ApprovalsContent() {
               <button onClick={() => { setSelected(null); }} className="text-gray-400 text-2xl leading-none">×</button>
             </div>
 
-            {/* ── Boutons Rejeter / Approuver (toujours visibles, juste sous le header) ── */}
+            {/* ── Supplier override + Boutons Rejeter / Approuver (mobile) ── */}
             {selected.status === 'pending' && (
+              <>
+              {alternativeSuppliers.length > 1 && (
+                <div className="px-6 pb-2 flex-shrink-0">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Fournisseur</label>
+                  <select
+                    value={supplierOverride}
+                    onChange={e => setSupplierOverride(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {alternativeSuppliers.map(s => (
+                      <option key={s} value={s}>{s === 'homedepot' ? 'Home Depot' : s === 'deschenes' ? 'Deschênes' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    ))}
+                  </select>
+                  {supplierOverride && selected.supplier && supplierOverride !== selected.supplier && (
+                    <p className="text-xs text-amber-600 mt-1">Fournisseur sera changé de {selected.supplier} à {supplierOverride}</p>
+                  )}
+                </div>
+              )}
               <div className="flex gap-3 px-6 pb-3 flex-shrink-0">
                 <button
                   onClick={() => handleDecision('rejected')}
@@ -802,6 +857,7 @@ function ApprovalsContent() {
                   </span>
                 </button>
               </div>
+              </>
             )}
 
             {/* ── Tracking actions (mobile) ── */}
