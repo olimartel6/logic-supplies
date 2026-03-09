@@ -27,6 +27,8 @@ interface CatalogAccount {
 interface CatalogStats {
   count: number;
   lastSync: string | null;
+  withPrice?: number;
+  withImage?: number;
 }
 
 export default function SuperAdminPage() {
@@ -522,11 +524,22 @@ export default function SuperAdminPage() {
                     <p className="text-xs text-gray-500 italic mb-1">Non configuré</p>
                   )}
                   {stats && (
-                    <p className="text-xs text-gray-400 mb-3">
-                      {stats.count > 0
-                        ? `${stats.count} produits · ${stats.lastSync ? new Date(stats.lastSync).toLocaleDateString('fr-CA') : '—'}`
-                        : 'Aucun produit'}
-                    </p>
+                    <div className="text-xs text-gray-400 mb-3">
+                      {stats.count > 0 ? (
+                        <>
+                          <p>{stats.count} produits · {stats.lastSync ? new Date(stats.lastSync).toLocaleDateString('fr-CA') : '—'}</p>
+                          {(stats.withImage != null || stats.withPrice != null) && (
+                            <p className="text-gray-500 mt-0.5">
+                              {stats.withImage != null && `${stats.withImage} images`}
+                              {stats.withImage != null && stats.withPrice != null && ' · '}
+                              {stats.withPrice != null && `${stats.withPrice} prix`}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p>Aucun produit</p>
+                      )}
+                    </div>
                   )}
 
                   {!isOpen ? (
