@@ -634,6 +634,171 @@ export async function GET(req: NextRequest) {
       { 2: '#,##0.00" $"', 3: '0.0%' });
   }
 
+  // ── Sheet: Comparaison annuelle des prix ──────────────────────────────────
+  const compRows = db.prepare(`
+    SELECT
+      r.product,
+      strftime('%Y', COALESCE(r.decision_date, r.created_at)) as year,
+      SUM(r.quantity) as total_qty,
+      COUNT(*) as order_count,
+      (SELECT price FROM products
+       WHERE LOWER(name) LIKE '%' || LOWER(r.product) || '%'
+       ORDER BY price ASC LIMIT 1) as unit_price
+    FROM requests r
+    WHERE r.company_id = ? AND r.status = 'approved'
+    GROUP BY LOWER(r.product), strftime('%Y', COALESCE(r.decision_date, r.created_at))
+    ORDER BY LOWER(r.product), year
+  `).all(ctx.companyId) as { product: string; year: string; total_qty: number; order_count: number; unit_price: number | null }[];
+
+  if (compRows.length > 0) {
+    // Pivot: group by product, columns per year
+    const years = [...new Set(compRows.map(r => r.year))].sort();
+    const productMap = new Map<string, { product: string; price: number | null; years: Record<string, { qty: number; count: number }> }>();
+
+    for (const row of compRows) {
+      const key = row.product.toLowerCase();
+      if (!productMap.has(key)) {
+        productMap.set(key, { product: row.product, price: row.unit_price, years: {} });
+      }
+      productMap.get(key)!.years[row.year] = { qty: row.total_qty, count: row.order_count };
+    }
+
+    const products = [...productMap.values()].sort((a, b) => {
+      // Sort by total spending desc
+      const totalA = Object.values(a.years).reduce((s, y) => s + y.qty * (a.price ?? 0), 0);
+      const totalB = Object.values(b.years).reduce((s, y) => s + y.qty * (b.price ?? 0), 0);
+      return totalB - totalA;
+    });
+
+    const wsComp = wb.addWorksheet('📈 Comparaison prix', { views: [{ state: 'frozen', ySplit: 3, showGridLines: false }] });
+
+    // Build header columns: Produit | Prix unit. | [Year1 Qté | Year1 Total] | [Year2 Qté | Year2 Total] | ... | Var. %
+    const colDefs: { header: string; width: number }[] = [
+      { header: 'Produit', width: 36 },
+      { header: 'Prix unitaire', width: 16 },
+    ];
+    for (const y of years) {
+      colDefs.push({ header: `${y} Qté`, width: 10 });
+      colDefs.push({ header: `${y} Total`, width: 16 });
+    }
+    if (years.length >= 2) {
+      colDefs.push({ header: 'Var. %', width: 12 });
+    }
+
+    wsComp.columns = colDefs.map(d => ({ width: d.width }));
+
+    // Title
+    const lastCol = String.fromCharCode(64 + colDefs.length);
+    wsComp.mergeCells(`A1:${lastCol}1`);
+    const compTitle = wsComp.getCell('A1');
+    compTitle.value = `📈 Comparaison annuelle des prix — ${years.join(' vs ')}`;
+    compTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    compTitle.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+    compTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+    wsComp.getRow(1).height = 26;
+
+    // Year group headers (row 2)
+    wsComp.getCell('A2').value = '';
+    wsComp.getCell('B2').value = '';
+    ['A', 'B'].forEach(c => {
+      wsComp.getCell(`${c}2`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    });
+    let colIdx = 2; // 0-indexed for merge
+    for (const y of years) {
+      const startCol = String.fromCharCode(65 + colIdx);
+      const endCol = String.fromCharCode(65 + colIdx + 1);
+      wsComp.mergeCells(`${startCol}2:${endCol}2`);
+      const yCell = wsComp.getCell(`${startCol}2`);
+      yCell.value = y;
+      yCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      yCell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      yCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      colIdx += 2;
+    }
+    if (years.length >= 2) {
+      const varCol = String.fromCharCode(65 + colIdx);
+      wsComp.getCell(`${varCol}2`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    }
+    wsComp.getRow(2).height = 22;
+
+    // Detail headers (row 3)
+    headerRow(wsComp, 3, colDefs.map(d => d.header));
+
+    // Data rows
+    let rComp = 4;
+    const yearTotals: Record<string, number> = {};
+    years.forEach(y => { yearTotals[y] = 0; });
+
+    for (const p of products) {
+      const vals: (string | number | null)[] = [
+        p.product,
+        p.price ?? null,
+      ];
+      const fmts: Record<number, string> = { 1: '#,##0.00" $"' };
+
+      let prevTotal: number | null = null;
+      for (let yi = 0; yi < years.length; yi++) {
+        const y = years[yi];
+        const yd = p.years[y];
+        const qty = yd?.qty ?? 0;
+        const total = qty * (p.price ?? 0);
+        vals.push(qty || null);
+        vals.push(total > 0 ? total : null);
+        fmts[2 + yi * 2 + 1] = '#,##0.00" $"';
+        yearTotals[y] += total;
+        if (yi === years.length - 2) prevTotal = total;
+        if (yi === years.length - 1 && years.length >= 2) {
+          // Variation % between last two years
+          if (prevTotal && prevTotal > 0 && total > 0) {
+            vals.push((total - prevTotal) / prevTotal);
+            fmts[vals.length - 1] = '+0.0%;-0.0%';
+          } else {
+            vals.push(null);
+          }
+        }
+      }
+
+      const fillColor = rComp % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF';
+      dataRow(wsComp, rComp, vals, fillColor, fmts);
+
+      // Color the variation cell
+      if (years.length >= 2) {
+        const varCellRef = `${String.fromCharCode(65 + colDefs.length - 1)}${rComp}`;
+        const varCell = wsComp.getCell(varCellRef);
+        const varVal = varCell.value as number | null;
+        if (varVal != null) {
+          varCell.font = {
+            size: 10,
+            bold: true,
+            color: { argb: varVal > 0 ? 'FFDC2626' : varVal < 0 ? 'FF16A34A' : 'FF475569' },
+          };
+        }
+      }
+
+      rComp++;
+    }
+
+    // Total row
+    const totVals: (string | number | null)[] = ['TOTAL', null];
+    const totFmts: Record<number, string> = {};
+    for (let yi = 0; yi < years.length; yi++) {
+      totVals.push(null); // qty column
+      totVals.push(yearTotals[years[yi]]);
+      totFmts[2 + yi * 2 + 1] = '#,##0.00" $"';
+    }
+    if (years.length >= 2) {
+      const lastY = yearTotals[years[years.length - 1]];
+      const prevY = yearTotals[years[years.length - 2]];
+      if (prevY > 0 && lastY > 0) {
+        totVals.push((lastY - prevY) / prevY);
+        totFmts[totVals.length - 1] = '+0.0%;-0.0%';
+      } else {
+        totVals.push(null);
+      }
+    }
+    totalRow(wsComp, rComp, totVals, totFmts);
+  }
+
   // ─── Write and return ─────────────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
 
