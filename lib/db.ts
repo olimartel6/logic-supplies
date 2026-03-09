@@ -640,6 +640,8 @@ function initDb(db: Database.Database) {
     db.exec('ALTER TABLE companies ADD COLUMN stripe_subscription_id TEXT');
   if (!compCols.find(c => c.name === 'superadmin_created'))
     db.exec('ALTER TABLE companies ADD COLUMN superadmin_created INTEGER DEFAULT 0');
+  if (!compCols.find(c => c.name === 'features'))
+    db.exec("ALTER TABLE companies ADD COLUMN features TEXT DEFAULT '{}'");
 
   // Error message column on supplier_orders
   const soCols = db.pragma('table_info(supplier_orders)') as { name: string }[];

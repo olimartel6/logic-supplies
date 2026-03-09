@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getTenantContext } from '@/lib/tenant';
 import { getDb } from '@/lib/db';
+import { isFeatureEnabled } from '@/lib/features';
 
 export async function GET() {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
+
+  const enabled = ctx.companyId ? isFeatureEnabled(ctx.companyId, 'messaging') : false;
+  if (!enabled) return NextResponse.json({ count: 0, enabled: false });
 
   const db = getDb();
   const result = db.prepare(`
@@ -17,5 +21,5 @@ export async function GET() {
       )
   `).get(ctx.companyId, ctx.userId, ctx.userId, ctx.userId) as any;
 
-  return NextResponse.json({ count: result?.count || 0 });
+  return NextResponse.json({ count: result?.count || 0, enabled: true });
 }

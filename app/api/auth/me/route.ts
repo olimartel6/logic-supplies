@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { getDb } from '@/lib/db';
+import { getCompanyFeatures } from '@/lib/features';
 import bcrypt from 'bcryptjs';
 
 export async function PATCH(req: NextRequest) {
@@ -58,5 +59,6 @@ export async function GET() {
     subscriptionStatus: company?.subscription_status ?? 'active',
     superadminCreated: !!company?.superadmin_created,
     language: userRow?.language ?? 'fr',
+    features: session.companyId ? getCompanyFeatures(session.companyId) : {},
   });
 }

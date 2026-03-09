@@ -9,6 +9,7 @@ interface NavBarProps {
   name: string;
   inventoryEnabled?: boolean;
   marketingEnabled?: boolean;
+  messagingEnabled?: boolean;
   hideTopOnMobile?: boolean;
   hideBottomNav?: boolean;
 }
@@ -80,11 +81,12 @@ const IconMegaphone = () => (
   </svg>
 );
 
-export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, hideTopOnMobile, hideBottomNav }: NavBarProps) {
+export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, messagingEnabled = true, hideTopOnMobile, hideBottomNav }: NavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [messagingFeatureEnabled, setMessagingFeatureEnabled] = useState(messagingEnabled);
   const t = useT();
 
   const isElectrician = role === 'electrician';
@@ -104,7 +106,10 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
     const fetchUnread = () => {
       fetch('/api/messages/unread')
         .then(r => r.json())
-        .then(d => setUnreadMessages(d.count || 0))
+        .then(d => {
+          setUnreadMessages(d.count || 0);
+          if (d.enabled !== undefined) setMessagingFeatureEnabled(d.enabled);
+        })
         .catch(() => {});
     };
     fetchUnread();
@@ -145,6 +150,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               <span>{t('nav_inventory')}</span>
             </Link>
           )}
+          {messagingFeatureEnabled && (
           <Link href="/messages" prefetch className={`${linkClass('/messages')} relative`}>
             <span className="relative">
               <IconEnvelope />
@@ -156,6 +162,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
             </span>
             <span>{t('nav_messages')}</span>
           </Link>
+          )}
           <Link href="/profile" prefetch className={linkClass('/profile')}>
             <IconGear />
             <span>{t('nav_profile')}</span>
@@ -193,7 +200,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
           )}
         </>
       )}
-      {isOfficeOrAdmin && (
+      {isOfficeOrAdmin && messagingFeatureEnabled && (
         <Link href="/messages" prefetch className={`${linkClass('/messages')} relative`}>
           <span className="relative">
             <IconEnvelope />
@@ -236,6 +243,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               <IconBox /><span>{t('nav_inventory')}</span>
             </Link>
           )}
+          {messagingFeatureEnabled && (
           <Link href="/messages" prefetch className={`${sidebarLinkClass('/messages')} relative`}>
             <span className="relative">
               <IconEnvelope />
@@ -247,6 +255,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
             </span>
             <span>{t('nav_messages')}</span>
           </Link>
+          )}
           <Link href="/profile" prefetch className={sidebarLinkClass('/profile')}>
             <IconGear /><span>{t('nav_profile')}</span>
           </Link>
@@ -278,6 +287,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               <IconBox /><span>{t('nav_inventory')}</span>
             </Link>
           )}
+          {messagingFeatureEnabled && (
           <Link href="/messages" prefetch className={`${sidebarLinkClass('/messages')} relative`}>
             <span className="relative">
               <IconEnvelope />
@@ -289,6 +299,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
             </span>
             <span>{t('nav_messages')}</span>
           </Link>
+          )}
         </>
       )}
       {role === 'admin' && (

@@ -11,7 +11,12 @@ interface Company {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   superadmin_created: number;
+  features: string;
 }
+
+const FEATURE_LABELS: Record<string, string> = {
+  messaging: 'Messagerie',
+};
 
 interface CatalogAccount {
   supplier: string;
@@ -48,6 +53,8 @@ export default function SuperAdminPage() {
   const [savingAccount, setSavingAccount] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [featuresOpen, setFeaturesOpen] = useState<number | null>(null);
+  const [togglingFeature, setTogglingFeature] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(u => {
@@ -244,6 +251,17 @@ export default function SuperAdminPage() {
     setTimeout(() => setLinkSaved(false), 3000);
   }
 
+  async function toggleFeature(companyId: number, feature: string, enabled: boolean) {
+    setTogglingFeature(true);
+    await fetch(`/api/superadmin/companies/${companyId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ features: { [feature]: enabled } }),
+    });
+    loadCompanies();
+    setTogglingFeature(false);
+  }
+
   async function handleToggle(c: Company) {
     const newStatus = c.subscription_status === 'active' ? 'suspended' : 'active';
     await fetch(`/api/superadmin/companies/${c.id}`, {
@@ -372,43 +390,81 @@ export default function SuperAdminPage() {
           <p className="text-gray-500 text-sm italic">Aucune compagnie créée.</p>
         ) : (
           <div className="space-y-3">
-            {companies.map(c => (
-              <div key={c.id} className="bg-gray-900 rounded-2xl p-4 border border-gray-800 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">{c.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {c.user_count} utilisateur{c.user_count > 1 ? 's' : ''} ·{' '}
-                    {new Date(c.created_at).toLocaleDateString('fr-CA')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      c.subscription_status === 'active'
-                        ? 'bg-green-500/20 text-green-400'
-                        : c.subscription_status === 'suspended'
-                        ? 'bg-orange-500/20 text-orange-400'
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      {c.subscription_status}
-                    </span>
-                    {c.superadmin_created ? (
-                      <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full font-medium">Gratuit</span>
-                    ) : c.stripe_customer_id ? (
-                      <span className="text-xs text-gray-500 font-mono">cus_••••{c.stripe_customer_id.slice(-4)}</span>
-                    ) : (
-                      <span className="text-xs text-gray-600 italic">Pas de Stripe</span>
-                    )}
+            {companies.map(c => {
+              const features: Record<string, boolean> = (() => {
+                try { return JSON.parse(c.features || '{}'); } catch { return {}; }
+              })();
+              const isOpen = featuresOpen === c.id;
+              return (
+                <div key={c.id} className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+                  <div className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-white">{c.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {c.user_count} utilisateur{c.user_count > 1 ? 's' : ''} ·{' '}
+                        {new Date(c.created_at).toLocaleDateString('fr-CA')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          c.subscription_status === 'active'
+                            ? 'bg-green-500/20 text-green-400'
+                            : c.subscription_status === 'suspended'
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {c.subscription_status}
+                        </span>
+                        {c.superadmin_created ? (
+                          <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full font-medium">Gratuit</span>
+                        ) : c.stripe_customer_id ? (
+                          <span className="text-xs text-gray-500 font-mono">cus_••••{c.stripe_customer_id.slice(-4)}</span>
+                        ) : (
+                          <span className="text-xs text-gray-600 italic">Pas de Stripe</span>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => handleToggle(c)}
+                          className="text-xs text-gray-400 hover:text-white underline"
+                        >
+                          {c.subscription_status === 'active' ? 'Suspendre' : 'Réactiver'}
+                        </button>
+                        <button
+                          onClick={() => setFeaturesOpen(isOpen ? null : c.id)}
+                          className="text-xs text-blue-400 hover:text-blue-300 underline"
+                        >
+                          Features
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleToggle(c)}
-                    className="text-xs text-gray-400 hover:text-white underline"
-                  >
-                    {c.subscription_status === 'active' ? 'Suspendre' : 'Réactiver'}
-                  </button>
+                  {isOpen && (
+                    <div className="border-t border-gray-800 px-4 py-3 bg-gray-800/50">
+                      <p className="text-xs text-gray-400 font-medium mb-2">Fonctionnalités</p>
+                      <div className="space-y-2">
+                        {Object.entries(FEATURE_LABELS).map(([key, label]) => {
+                          const enabled = features[key] !== false;
+                          return (
+                            <div key={key} className="flex items-center justify-between">
+                              <span className="text-sm text-white">{label}</span>
+                              <button
+                                onClick={() => toggleFeature(c.id, key, !enabled)}
+                                disabled={togglingFeature}
+                                className={`relative w-10 h-6 rounded-full transition ${enabled ? 'bg-green-500' : 'bg-gray-600'}`}
+                              >
+                                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
