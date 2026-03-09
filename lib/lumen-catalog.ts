@@ -287,80 +287,198 @@ async function loginToLumen(page: any, username: string, password: string): Prom
   return !url.includes('/account/login') && !url.includes('/login');
 }
 
-/** Use the search typeahead to look up prices for products */
+/**
+ * Extract prices by browsing category pages while logged in.
+ * Lumen shows B2B prices on product listing pages for authenticated users.
+ * We navigate to each category URL, wait for rendering, and scrape prices.
+ */
 async function enrichPricesViaBrowser(
   page: any,
-  products: Map<string, { sku: string; name: string }>,
-  onProgress?: (count: number) => void,
+  categoryUrls: string[],
+  onProgress?: (msg: string, count: number) => void,
 ): Promise<Map<string, number>> {
   const prices = new Map<string, number>();
-  const skus = Array.from(products.keys());
-  let processed = 0;
+  let totalFound = 0;
 
-  for (const sku of skus) {
-    const product = products.get(sku)!;
-    // Use SKU as search term (clean up for search)
-    const searchTerm = sku
-      .replace(/^(SKU_CAN_|LUM)/, '')
-      .replace(/[_]/g, ' ')
-      .slice(0, 20);
+  for (let i = 0; i < categoryUrls.length; i++) {
+    const catUrl = categoryUrls[i];
+    onProgress?.(`Page ${i + 1}/${categoryUrls.length}`, totalFound);
 
     try {
-      await page.goto('https://www.lumen.ca/en', { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(1000);
+      await page.goto(`https://www.lumen.ca${catUrl}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      // Wait for Bloomreach product widget to render
+      await page.waitForTimeout(4000);
 
-      const searchBar = page.locator('input[placeholder*="Search"], input[placeholder*="search"], input[placeholder*="Rechercher"]').first();
-      await searchBar.click();
-      await searchBar.fill('');
-      await searchBar.type(searchTerm, { delay: 80 });
-      await page.waitForTimeout(2500);
+      // Scroll down to trigger lazy loading
+      for (let s = 0; s < 5; s++) {
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(1000);
+      }
 
-      // Extract price from typeahead dropdown
-      const priceText = await page.evaluate(() => {
-        // Look for price elements in the search results dropdown
-        const priceEls = document.querySelectorAll('[class*="price"], [class*="Price"], .product-price, .search-price');
-        for (const el of priceEls) {
-          const text = el.textContent?.trim() || '';
-          const match = text.match(/\$\s*([\d]+[.,][\d]{2})/);
-          if (match) {
+      // Take debug screenshot for first page
+      if (i === 0) {
+        await page.screenshot({ path: process.cwd() + '/public/debug-lumen-prices.png' }).catch(() => {});
+      }
+
+      // Extract all products with prices from the page
+      const pageProducts = await page.evaluate(() => {
+        const results: { name: string; price: number }[] = [];
+
+        // Strategy 1: Look for product cards with price elements
+        // Common patterns for B2B product listings:
+        const cards = document.querySelectorAll(
+          '[class*="product"], [class*="Product"], [class*="item-card"], [class*="tile"], ' +
+          'li[class*="item"], article, [data-product], [data-pid]'
+        );
+        for (const card of cards) {
+          // Find product name
+          const nameEl = card.querySelector(
+            'h2, h3, h4, [class*="name"], [class*="title"], [class*="Name"], [class*="Title"], a[href*="/p-"], a[href*="/products/detail"]'
+          );
+          const name = nameEl?.textContent?.trim() || '';
+          if (!name || name.length < 5) continue;
+
+          // Find price
+          const priceEl = card.querySelector(
+            '[class*="price"], [class*="Price"], [class*="cost"], [class*="Cost"]'
+          );
+          if (!priceEl) continue;
+          const priceText = priceEl.textContent?.trim() || '';
+          const match = priceText.match(/\$\s*([\d]+[.,][\d]{2})/);
+          if (!match) continue;
+          const price = parseFloat(match[1].replace(',', '.'));
+          if (price <= 0.02) continue; // Skip placeholders
+
+          results.push({ name, price });
+        }
+
+        // Strategy 2: If no cards found, try form-based product listings (add-to-cart forms)
+        if (results.length === 0) {
+          const forms = document.querySelectorAll('form[action*="additemtocart"], form[action*="cart"]');
+          for (const form of forms) {
+            const container = form.closest('div, li, article') || form.parentElement;
+            if (!container) continue;
+            const nameEl = container.querySelector('a, h3, h4, [class*="name"]');
+            const name = nameEl?.textContent?.trim() || '';
+            if (!name || name.length < 5) continue;
+
+            const priceEl = container.querySelector('[class*="price"], [class*="Price"]');
+            if (!priceEl) continue;
+            const priceText = priceEl.textContent?.trim() || '';
+            const match = priceText.match(/\$\s*([\d]+[.,][\d]{2})/);
+            if (!match) continue;
             const price = parseFloat(match[1].replace(',', '.'));
-            if (price > 0.02) return price; // Skip $0.01 placeholders
+            if (price <= 0.02) continue;
+
+            results.push({ name, price });
           }
         }
-        // Broader search for $ in the page
-        const allEls = document.querySelectorAll('*');
-        for (const el of allEls) {
-          if (el.children.length > 0) continue;
-          const text = el.textContent?.trim() || '';
-          if (text.includes('$') && text.length < 30) {
+
+        // Strategy 3: Broadest — find any element with $ that has a nearby text
+        if (results.length === 0) {
+          const allEls = document.querySelectorAll('*');
+          for (const el of allEls) {
+            if (el.children.length > 0) continue;
+            const text = el.textContent?.trim() || '';
+            if (!text.includes('$') || text.length > 30) continue;
             const match = text.match(/\$\s*([\d]+[.,][\d]{2})/);
-            if (match) {
-              const price = parseFloat(match[1].replace(',', '.'));
-              if (price > 0.02) return price;
-            }
+            if (!match) continue;
+            const price = parseFloat(match[1].replace(',', '.'));
+            if (price <= 0.02) continue;
+
+            // Find the closest product name
+            const parent = el.closest('li, article, div[class], tr');
+            if (!parent) continue;
+            const nameEl = parent.querySelector('a, h2, h3, h4, span[class*="name"]');
+            const name = nameEl?.textContent?.trim() || '';
+            if (!name || name.length < 5) continue;
+
+            results.push({ name, price });
           }
         }
-        return null;
+
+        return results;
       });
 
-      if (priceText) {
-        prices.set(sku, priceText);
+      for (const p of pageProducts) {
+        // Store by normalized product name for matching later
+        const key = p.name.toLowerCase().trim();
+        if (!prices.has(key)) {
+          prices.set(key, p.price);
+          totalFound++;
+        }
       }
-    } catch {
-      // Non-fatal — continue with next product
-    }
 
-    processed++;
-    if (processed % 10 === 0) {
-      onProgress?.(processed);
-    }
-
-    // Rate limit to avoid being blocked
-    if (processed % 50 === 0) {
-      await page.waitForTimeout(2000);
+      if (pageProducts.length > 0) {
+        console.error(`[Lumen prices] ${catUrl}: ${pageProducts.length} prices found`);
+      }
+    } catch (err: any) {
+      console.error(`[Lumen prices] Error on ${catUrl}: ${err.message}`);
     }
   }
 
+  // Also try the search typeahead for common product types
+  const quickSearches = [
+    'nmd90', 'teck cable', 'breaker 15', 'breaker 20', 'breaker 30',
+    'EMT conduit', 'receptacle', 'switch decora', 'LED fixture',
+    'junction box', 'wire nut', 'GFCI', 'dimmer',
+  ];
+  for (const term of quickSearches) {
+    try {
+      // Clear and type in the search bar without reloading
+      const searchBar = page.locator('input[placeholder*="Search"], input[placeholder*="search"], input[placeholder*="Rechercher"]').first();
+      if (!(await searchBar.isVisible({ timeout: 2000 }).catch(() => false))) {
+        await page.goto('https://www.lumen.ca/en', { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(2000);
+      }
+      await searchBar.click();
+      await searchBar.fill('');
+      await searchBar.type(term, { delay: 100 });
+      await page.waitForTimeout(3000);
+
+      // Extract prices from typeahead dropdown
+      const typeaheadPrices = await page.evaluate(() => {
+        const results: { name: string; price: number }[] = [];
+        // Typeahead dropdown product cards
+        const priceEls = document.querySelectorAll('[class*="price"], [class*="Price"]');
+        for (const el of priceEls) {
+          const text = el.textContent?.trim() || '';
+          const match = text.match(/\$\s*([\d]+[.,][\d]{2})/);
+          if (!match) continue;
+          const price = parseFloat(match[1].replace(',', '.'));
+          if (price <= 0.02) continue;
+
+          // Find product name in the same card
+          const card = el.closest('div, li, form, article');
+          if (!card) continue;
+          const nameEl = card.querySelector('a, h3, h4, [class*="name"], [class*="title"]');
+          const name = nameEl?.textContent?.trim() || '';
+          if (!name || name.length < 5) continue;
+          results.push({ name, price });
+        }
+        return results;
+      });
+
+      for (const p of typeaheadPrices) {
+        const key = p.name.toLowerCase().trim();
+        if (!prices.has(key)) {
+          prices.set(key, p.price);
+          totalFound++;
+        }
+      }
+
+      if (typeaheadPrices.length > 0) {
+        console.error(`[Lumen prices] Search "${term}": ${typeaheadPrices.length} prices`);
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  onProgress?.('Terminé', totalFound);
   return prices;
 }
 
@@ -433,7 +551,6 @@ export async function importLumenCatalog(
   `);
 
   let totalImported = 0;
-  const productsForPricing = new Map<string, { sku: string; name: string }>();
 
   // ── Phase 1: Import via Bloomreach API ──
   for (const cat of categories) {
@@ -464,10 +581,6 @@ export async function importLumenCatalog(
           try {
             upsert.run(sku, p.title, imageUrl, price, 'units', cat.category_name);
             categoryCount++;
-            // Track for price enrichment (only if no price)
-            if (!price) {
-              productsForPricing.set(sku, { sku, name: p.title });
-            }
           } catch {}
         }
       });
@@ -483,60 +596,67 @@ export async function importLumenCatalog(
   }
 
   // ── Phase 2: Browser-based price enrichment ──
-  if (productsForPricing.size > 0) {
-    onProgress?.({ category: `Phase 2: Prix — ${Math.min(productsForPricing.size, 200)} produits`, imported: 0, total: 0, done: false });
-    console.error(`[Lumen catalog] Starting price enrichment for ${productsForPricing.size} products`);
+  onProgress?.({ category: 'Phase 2: Prix (login...)', imported: 0, total: 0, done: false });
+  console.error('[Lumen catalog] Starting price enrichment via browser');
 
-    let browser;
-    try {
-      const password = decrypt(account.password_encrypted);
-      browser = await createBrowserbaseBrowser();
-      const page = await createStealthPage(browser);
+  let browser;
+  try {
+    const password = decrypt(account.password_encrypted);
+    browser = await createBrowserbaseBrowser();
+    const page = await createStealthPage(browser);
 
-      const loggedIn = await loginToLumen(page, account.username, password);
-      if (loggedIn) {
-        console.error('[Lumen catalog] Login successful for price enrichment');
+    const loggedIn = await loginToLumen(page, account.username, password);
+    if (loggedIn) {
+      console.error('[Lumen catalog] Login successful for price enrichment');
 
-        // Limit to 200 products for price enrichment (typeahead is slow)
-        const limitedProducts = new Map<string, { sku: string; name: string }>();
-        let count = 0;
-        for (const [key, val] of productsForPricing) {
-          if (count >= 200) break;
-          limitedProducts.set(key, val);
-          count++;
-        }
+      // Build list of category page URLs to browse
+      const categoryPageUrls = categories.map((c: any) => c.category_url);
 
-        const prices = await enrichPricesViaBrowser(page, limitedProducts, (processed) => {
-          onProgress?.({
-            category: `Prix: ${processed}/${limitedProducts.size}`,
-            imported: processed,
-            total: limitedProducts.size,
-            done: false,
-          });
+      const priceMap = await enrichPricesViaBrowser(page, categoryPageUrls, (msg, count) => {
+        onProgress?.({
+          category: `Prix: ${msg}`,
+          imported: count,
+          total: count,
+          done: false,
         });
+      });
 
-        // Update prices in DB
+      // Match prices to imported products by name
+      if (priceMap.size > 0) {
+        const allProducts = db.prepare(
+          "SELECT sku, name FROM products WHERE supplier = 'lumen'"
+        ).all() as { sku: string; name: string }[];
+
         const updatePrice = db.prepare(
           "UPDATE products SET price = ?, last_synced = CURRENT_TIMESTAMP WHERE supplier = 'lumen' AND sku = ?"
         );
-        const updateMany = db.transaction((entries: [string, number][]) => {
-          for (const [sku, price] of entries) {
-            updatePrice.run(price, sku);
+        let matched = 0;
+        const updateMany = db.transaction(() => {
+          for (const product of allProducts) {
+            const key = product.name.toLowerCase().trim();
+            const price = priceMap.get(key);
+            if (price) {
+              updatePrice.run(price, product.sku);
+              matched++;
+            }
           }
         });
-        updateMany(Array.from(prices.entries()));
-        console.error(`[Lumen catalog] Enriched ${prices.size} products with prices`);
-        onProgress?.({ category: `Prix enrichis: ${prices.size}`, imported: prices.size, total: prices.size, done: true });
+        updateMany();
+        console.error(`[Lumen catalog] Matched ${matched} prices out of ${priceMap.size} found`);
+        onProgress?.({ category: `Prix: ${matched} enrichis`, imported: matched, total: matched, done: true });
       } else {
-        console.error('[Lumen catalog] Login failed for price enrichment — skipping');
-        onProgress?.({ category: 'Prix: login échoué', imported: 0, total: 0, done: true, error: 'Login échoué' });
+        console.error('[Lumen catalog] No prices found on category pages');
+        onProgress?.({ category: 'Prix: aucun prix trouvé', imported: 0, total: 0, done: true });
       }
-    } catch (err: any) {
-      console.error(`[Lumen catalog] Price enrichment error: ${err.message}`);
-      onProgress?.({ category: 'Prix', imported: 0, total: 0, done: true, error: err.message });
-    } finally {
-      if (browser) await browser.close();
+    } else {
+      console.error('[Lumen catalog] Login failed for price enrichment — skipping');
+      onProgress?.({ category: 'Prix: login échoué', imported: 0, total: 0, done: true, error: 'Login échoué' });
     }
+  } catch (err: any) {
+    console.error(`[Lumen catalog] Price enrichment error: ${err.message}`);
+    onProgress?.({ category: 'Prix', imported: 0, total: 0, done: true, error: err.message });
+  } finally {
+    if (browser) await browser.close();
   }
 
   return { total: totalImported };
