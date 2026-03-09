@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useT } from '@/lib/LanguageContext';
+import { useBranding } from '@/lib/BrandingContext';
 
 interface NavBarProps {
   role: string;
@@ -84,6 +85,7 @@ const IconMegaphone = () => (
 export default function NavBar({ role, name, inventoryEnabled, marketingEnabled, messagingEnabled = true, hideTopOnMobile, hideBottomNav }: NavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { branding } = useBranding();
   const [unseenAlerts, setUnseenAlerts] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [messagingFeatureEnabled, setMessagingFeatureEnabled] = useState(messagingEnabled);
@@ -318,14 +320,16 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-56 bg-slate-800 border-r border-slate-700 flex-col z-30">
-        <div className="px-4 py-5 border-b border-slate-700 flex-shrink-0">
+      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-56 border-r border-white/10 flex-col z-30" style={{ backgroundColor: branding.sidebarBg }}>
+        <div className="px-4 py-5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <img src="/logo-shield.svg" className="h-9 w-auto flex-shrink-0" alt="LogicSupplies" />
+            <img src={branding.logoUrl || '/logo-shield.svg'} className="h-9 w-auto flex-shrink-0" alt={branding.appName} />
+            {!branding.logoUrl && (
             <div className="flex flex-col leading-none gap-0.5">
               <span className="font-extrabold text-white text-base tracking-wide">Logic</span>
-              <span className="font-extrabold text-blue-400 text-base tracking-wide">Supplies</span>
+              <span className="font-extrabold text-base tracking-wide" style={{ color: branding.primaryColor }}>Supplies</span>
             </div>
+            )}
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto py-3 px-2">
@@ -342,13 +346,15 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       </aside>
 
       {/* Top bar */}
-      <div className={`bg-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md md:hidden ${hideTopOnMobile ? 'hidden sm:flex' : ''}`}>
+      <div className={`px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md md:hidden ${hideTopOnMobile ? 'hidden sm:flex' : ''}`} style={{ backgroundColor: branding.sidebarBg }}>
         <div className="flex items-center gap-2.5 md:hidden">
-          <img src="/logo-shield.svg" className="h-8 w-auto flex-shrink-0" alt="LogicSupplies" />
+          <img src={branding.logoUrl || '/logo-shield.svg'} className="h-8 w-auto flex-shrink-0" alt={branding.appName} />
+          {!branding.logoUrl && (
           <div className="flex flex-col leading-none gap-0.5">
             <span className="font-extrabold text-white text-sm tracking-wide">Logic</span>
-            <span className="font-extrabold text-blue-400 text-sm tracking-wide">Supplies</span>
+            <span className="font-extrabold text-sm tracking-wide" style={{ color: branding.primaryColor }}>Supplies</span>
           </div>
+          )}
         </div>
         <div className="flex items-center gap-3 md:ml-auto">
           <span className="text-sm text-slate-300">{name}</span>
@@ -359,7 +365,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       </div>
 
       {/* Bottom nav (mobile only) */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu transition-transform duration-200 ${hideBottomNav ? 'translate-y-full' : ''}`}>
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu transition-transform duration-200 ${hideBottomNav ? 'translate-y-full' : ''}`} style={{ backgroundColor: branding.sidebarBg }}>
         <div className="flex justify-around max-w-lg mx-auto">
           {navItems}
         </div>

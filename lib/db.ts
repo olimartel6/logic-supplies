@@ -817,6 +817,7 @@ function initDb(db: Database.Database) {
   // --- Marketing features ---
   try { db.exec('ALTER TABLE company_settings ADD COLUMN google_review_url TEXT'); } catch {}
   try { db.exec('ALTER TABLE company_settings ADD COLUMN company_logo_url TEXT'); } catch {}
+  try { db.exec("ALTER TABLE company_settings ADD COLUMN branding TEXT DEFAULT '{}'"); } catch {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS request_photos (

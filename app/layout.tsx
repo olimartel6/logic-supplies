@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { LanguageProvider } from "@/lib/LanguageContext";
+import { BrandingProvider } from "@/lib/BrandingContext";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const inter = localFont({
@@ -33,7 +34,9 @@ export default function RootLayout({
       <body className={`${inter.className} bg-slate-200 min-h-screen`}>
         <ServiceWorkerRegistrar />
         <LanguageProvider>
-          {children}
+          <BrandingProvider>
+            {children}
+          </BrandingProvider>
         </LanguageProvider>
       </body>
     </html>
