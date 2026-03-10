@@ -444,8 +444,8 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 gap-8">
               <div>
                 <h3 className="font-bold text-lg mb-4">Contactez-nous par courriel</h3>
-                <a href="mailto:loggicsupplies@gmail.com" className="text-blue-600 hover:text-blue-700 text-lg font-semibold transition">
-                  loggicsupplies@gmail.com
+                <a href="mailto:info@logicsupplies.ca" className="text-blue-600 hover:text-blue-700 text-lg font-semibold transition">
+                  info@logicsupplies.ca
                 </a>
                 <p className="text-gray-500 mt-4 leading-relaxed">
                   Nous répondons généralement en moins de 24 heures. Décrivez vos besoins et nous vous proposerons une solution adaptée.
