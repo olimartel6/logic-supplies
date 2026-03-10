@@ -1,5 +1,5 @@
 import { createBrowserbaseBrowser } from './browser';
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 
 // HD internal search API — JSON endpoint, no login required.
 // Strategy: trigger one UI search to satisfy Akamai's JavaScript challenge,
@@ -127,6 +127,7 @@ export async function importHomeDepotCatalog(
             const price = p.pricing?.displayPrice?.value ?? null;
             const imageUrl = p.imageUrl || '';
             upsert.run(sku, name, imageUrl, price, 'units', categoryName);
+            if (price) recordPriceHistory(db, 'homedepot', sku, price);
           } catch { /* skip */ }
         }
       });

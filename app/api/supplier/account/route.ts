@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { encrypt } from '@/lib/encrypt';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   const ctx = await getTenantContext();
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
   if (ctx.role === 'electrician') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
+
+  const rl = checkRateLimit('supplier-account', String(ctx.userId), 10, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+
   const { username, password, supplier = 'lumen' } = await req.json();
   const db = getDb();
   const existing = db.prepare(

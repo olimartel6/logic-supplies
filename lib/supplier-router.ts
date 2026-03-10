@@ -10,10 +10,11 @@ import { NEDCO_BRANCHES, placeNedcoOrder, getNedcoPrice } from './nedco';
 import { FUTECH_BRANCHES, placeFutechOrder, getFutechPrice } from './futech';
 import { DESCHENES_BRANCHES, placeDeschenesOrder, getDeschenesPrice } from './deschenes';
 import { BMR_BRANCHES, placeBmrOrder, getBmrPrice } from './bmr';
+import { RONA_BRANCHES, placeRonaOrder, getRonaPrice } from './rona';
 import { decrypt } from './encrypt';
 import { getDb } from './db';
 
-type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin' | 'jsv' | 'westburne' | 'nedco' | 'futech' | 'deschenes' | 'bmr';
+type SupplierKey = 'lumen' | 'canac' | 'homedepot' | 'guillevin' | 'jsv' | 'westburne' | 'nedco' | 'futech' | 'deschenes' | 'bmr' | 'rona';
 
 interface SupplierAccount {
   supplier: SupplierKey;
@@ -48,6 +49,8 @@ function isTransientError(err: string | undefined): boolean {
     lower.includes('net::') ||
     lower.includes('econnrefused') ||
     lower.includes('econnreset') ||
+    lower.includes('enotfound') ||
+    lower.includes('epipe') ||
     lower.includes('navigation') ||
     lower.includes('session') ||
     lower.includes('browser') ||
@@ -55,8 +58,41 @@ function isTransientError(err: string | undefined): boolean {
     lower.includes('context was destroyed') ||
     lower.includes('page.goto') ||
     lower.includes('connect') ||
-    lower.includes('cloudflare')
+    lower.includes('cloudflare') ||
+    lower.includes('503') ||
+    lower.includes('502') ||
+    lower.includes('429') ||
+    lower.includes('rate limit') ||
+    lower.includes('temporarily unavailable')
   );
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Supplier health tracking — in-memory, 3 consecutive failures = circuit open for 10 min
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+interface HealthState { consecutiveFailures: number; circuitOpenUntil: number; }
+const supplierHealth = new Map<string, HealthState>();
+
+function recordSuccess(supplier: string) {
+  supplierHealth.set(supplier, { consecutiveFailures: 0, circuitOpenUntil: 0 });
+}
+
+function recordFailure(supplier: string) {
+  const state = supplierHealth.get(supplier) || { consecutiveFailures: 0, circuitOpenUntil: 0 };
+  state.consecutiveFailures++;
+  if (state.consecutiveFailures >= 3) {
+    state.circuitOpenUntil = Date.now() + 10 * 60 * 1000; // 10 min cooldown
+    console.log(`[Router][${supplier}] Circuit ouvert — 3 échecs consécutifs, ignoré pendant 10 min`);
+  }
+  supplierHealth.set(supplier, state);
+}
+
+function isSupplierHealthy(supplier: string): boolean {
+  const state = supplierHealth.get(supplier);
+  if (!state) return true;
+  if (state.circuitOpenUntil > Date.now()) return false;
+  return true;
 }
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -134,7 +170,7 @@ function supplierLabel(s: SupplierKey): string {
   const labels: Record<SupplierKey, string> = {
     lumen: 'Lumen', canac: 'Canac', homedepot: 'Home Depot', guillevin: 'Guillevin',
     jsv: 'JSV', westburne: 'Westburne', nedco: 'Nedco', futech: 'Futech',
-    deschenes: 'Deschênes', bmr: 'BMR',
+    deschenes: 'Deschênes', bmr: 'BMR', rona: 'Rona',
   };
   return labels[s] ?? s;
 }
@@ -151,10 +187,11 @@ async function placeOrderRaw(account: SupplierAccount, product: string, quantity
     case 'futech':    return placeFutechOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'deschenes': return placeDeschenesOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'bmr':       return placeBmrOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
+    case 'rona':      return placeRonaOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
   }
 }
 
-/** Place order with timeout wrapper and retry on transient failures */
+/** Place order with timeout wrapper, retry on transient failures, and health tracking */
 async function placeOrder(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo): Promise<LumenOrderResult> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -163,17 +200,20 @@ async function placeOrder(account: SupplierAccount, product: string, quantity: n
         ORDER_TIMEOUT_MS,
         `commande ${supplierLabel(account.supplier)}`,
       );
-      // Success or permanent failure — return immediately
-      if (result.success || result.inCart) return result;
-      // Check if the error is transient and worth retrying
+      if (result.success || result.inCart) {
+        recordSuccess(account.supplier);
+        return result;
+      }
+      recordFailure(account.supplier);
       if (attempt < 2 && isTransientError(result.error)) {
-        console.error(`[Router] ${supplierLabel(account.supplier)} erreur transitoire (tentative ${attempt}/2): ${result.error}`);
+        console.error(`[Router][${account.supplier}] erreur transitoire (tentative ${attempt}/2): ${result.error}`);
         continue;
       }
       return result;
     } catch (err: any) {
       const errMsg = err?.message || String(err);
-      console.error(`[Router] ${supplierLabel(account.supplier)} exception (tentative ${attempt}/2): ${errMsg}`);
+      recordFailure(account.supplier);
+      console.error(`[Router][${account.supplier}] exception (tentative ${attempt}/2): ${errMsg}`);
       if (attempt < 2 && isTransientError(errMsg)) continue;
       return { success: false, error: errMsg };
     }
@@ -225,7 +265,7 @@ async function selectCheapest(
         lumen: getLumenPrice, canac: getCanacPrice, homedepot: getHomeDepotPrice,
         guillevin: getGuillevinPrice, jsv: getJsvPrice, westburne: getWestburnePrice,
         nedco: getNedcoPrice, futech: getFutechPrice, deschenes: getDeschenesPrice,
-        bmr: getBmrPrice,
+        bmr: getBmrPrice, rona: getRonaPrice,
       }[acc.supplier];
       price = await withTimeout(
         getPriceFn(acc.username, acc.password, product),
@@ -280,7 +320,7 @@ async function selectFastest(
     lumen: LUMEN_BRANCHES, canac: CANAC_BRANCHES, homedepot: HOME_DEPOT_BRANCHES,
     guillevin: GUILLEVIN_BRANCHES, jsv: JSV_BRANCHES, westburne: WESTBURNE_BRANCHES,
     nedco: NEDCO_BRANCHES, futech: FUTECH_BRANCHES, deschenes: DESCHENES_BRANCHES,
-    bmr: BMR_BRANCHES,
+    bmr: BMR_BRANCHES, rona: RONA_BRANCHES,
   };
 
   const distances = accounts.map(acc => {
@@ -310,9 +350,11 @@ export async function selectAndOrder(
   const allAccounts = getActiveAccounts(companyId ?? null);
 
   // If the product came from a specific supplier's catalog, only use that supplier
-  const accounts = preferredSupplier
+  // Filter out unhealthy suppliers (circuit breaker: 3 consecutive failures = 10min cooldown)
+  const accounts = (preferredSupplier
     ? allAccounts.filter(a => a.supplier === preferredSupplier)
-    : allAccounts;
+    : allAccounts
+  ).filter(a => isSupplierHealthy(a.supplier));
 
   const fallbackSupplier = preferredSupplier || allAccounts[0]?.supplier || 'lumen';
 

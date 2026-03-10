@@ -831,6 +831,9 @@ function initDb(db: Database.Database) {
   try { db.exec('ALTER TABLE company_settings ADD COLUMN company_logo_url TEXT'); } catch {}
   try { db.exec("ALTER TABLE company_settings ADD COLUMN branding TEXT DEFAULT '{}'"); } catch {}
 
+  // --- Onboarding wizard ---
+  try { db.exec('ALTER TABLE company_settings ADD COLUMN onboarding_dismissed INTEGER DEFAULT 0'); } catch {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS request_photos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -864,7 +867,71 @@ function initDb(db: Database.Database) {
     )
   `);
 
+  // ── Order queue (Task 4) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      request_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','processing','done','failed')),
+      attempts INTEGER DEFAULT 0,
+      max_attempts INTEGER DEFAULT 3,
+      next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_error TEXT,
+      payload TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // ── Order attempts log (Task 5) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_job_id INTEGER,
+      company_id INTEGER NOT NULL,
+      request_id INTEGER,
+      supplier TEXT NOT NULL,
+      attempt_number INTEGER DEFAULT 1,
+      status TEXT CHECK(status IN ('success','failed','timeout')),
+      duration_ms INTEGER,
+      error_message TEXT,
+      attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS price_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier TEXT NOT NULL, sku TEXT NOT NULL,
+      price REAL NOT NULL, recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_price_history_sku ON price_history(supplier, sku, recorded_at);
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      created_by INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      items TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      use_count INTEGER DEFAULT 0
+    )
+  `);
+
   scheduleBackup();
+  // Lazy import to avoid circular dependency (job-runner → db)
+  import('./job-runner').then(m => m.ensureJobRunnerStarted()).catch(() => {});
+}
+
+export function recordPriceHistory(db: any, supplier: string, sku: string, price: number) {
+  const last = db.prepare(
+    'SELECT price FROM price_history WHERE supplier = ? AND sku = ? ORDER BY recorded_at DESC LIMIT 1'
+  ).get(supplier, sku) as { price: number } | undefined;
+  if (!last || last.price !== price) {
+    db.prepare('INSERT INTO price_history (supplier, sku, price) VALUES (?, ?, ?)').run(supplier, sku, price);
+  }
 }
 
 export async function backupDb(): Promise<string> {

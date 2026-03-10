@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 
 import type { ImportProgress } from './westburne-catalog';
 export type { ImportProgress };
@@ -139,7 +139,10 @@ export async function importBmrCatalog(
             const image_url = hit.image_url || hit.thumbnail_url || '';
             const price = hit.price?.CAD?.default ?? null;
 
-            try { upsert.run(sku, name, image_url, price, 'unité', cat.category_name); } catch {}
+            try {
+              upsert.run(sku, name, image_url, price, 'unité', cat.category_name);
+              if (price) recordPriceHistory(db, 'bmr', sku, price);
+            } catch {}
           }
         });
         insertMany(result!.hits);

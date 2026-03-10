@@ -1,5 +1,5 @@
 import { createBrowserbaseBrowser } from './browser';
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 import { decrypt } from './encrypt';
 
 export interface ImportProgress {
@@ -605,6 +605,7 @@ export async function importLumenCatalog(
 
           try {
             upsert.run(sku, p.title, imageUrl, price, 'units', cat.category_name);
+            if (price) recordPriceHistory(db, 'lumen', sku, price);
             categoryCount++;
           } catch {}
         }
@@ -670,12 +671,14 @@ export async function importLumenCatalog(
               db.prepare(
                 "UPDATE products SET price = ?, unit = ?, last_synced = CURRENT_TIMESTAMP WHERE supplier = 'lumen' AND sku = ?"
               ).run(p.price, p.unit, p.code);
+              if (p.price) recordPriceHistory(db, 'lumen', p.code, p.price);
               pricesUpdated++;
             } else {
               // Insert new product from category page
               const cat = categoryMap.get(p.code) || '';
               try {
                 upsert.run(p.code, p.name, p.imageUrl, p.price, p.unit, cat);
+                if (p.price) recordPriceHistory(db, 'lumen', p.code, p.price);
                 newProducts++;
               } catch {}
             }

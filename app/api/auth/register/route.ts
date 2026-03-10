@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rl = checkRateLimit('register', ip, 5, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+
   const { companyName, adminName, adminEmail, adminPassword, verificationToken } = await req.json();
 
   if (!companyName || !adminName || !adminEmail || !adminPassword || !verificationToken) {

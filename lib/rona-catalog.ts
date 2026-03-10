@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 
 import type { ImportProgress } from './westburne-catalog';
 export type { ImportProgress };
@@ -127,7 +127,10 @@ export async function importRonaCatalog(
 
             const image_url = hit.data?.image_url || '';
 
-            try { upsert.run(sku, name, image_url, null, 'unité', cat.category_name); } catch {}
+            try {
+              upsert.run(sku, name, image_url, null, 'unité', cat.category_name);
+              // Rona does not expose prices via Constructor.io API — no price history to record
+            } catch {}
           }
         });
         insertMany(results);

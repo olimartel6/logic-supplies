@@ -1,7 +1,5 @@
 import type Database from 'better-sqlite3';
-import { sendStatusEmail, sendOrderConfirmationEmail, sendCartNotificationEmail, sendBudgetAlertEmail, sendOrderFailureEmail, sendOrderTrackingEmail } from './email';
-import { selectAndOrder } from './supplier-router';
-import { randomUUID } from 'crypto';
+import { sendStatusEmail, sendBudgetAlertEmail } from './email';
 import { decrypt } from './encrypt';
 import type { PaymentInfo } from './lumen';
 
@@ -149,100 +147,25 @@ export async function triggerApproval(
     };
   }
 
-  const ORDER_GLOBAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max for entire ordering process
+  // Enqueue order job instead of executing directly (with retry support)
+  const jobPayload = JSON.stringify({
+    product: request.product,
+    quantity: request.quantity,
+    unit: request.unit,
+    supplier: request.supplier || null,
+    preference,
+    jobSiteAddress: request.job_site_address || '',
+    jobSiteName: request.job_site_name || '',
+    deliveryAddress: deliveryAddress || '',
+    payment,
+    electricianEmail: request.electrician_email || '',
+    electricianName: request.electrician_name || '',
+    electricianLanguage: request.electrician_language || 'fr',
+    officeComment: office_comment,
+  });
 
-  ;(async () => {
-    let orderError: string | null = null;
-    let orderStatus: 'confirmed' | 'pending' | 'failed' = 'failed';
-    let result: any = null;
-    let supplier = request.supplier || 'unknown';
-    let reason = '';
-
-    try {
-      const orderPromise = selectAndOrder(
-        preference,
-        request.job_site_address || '',
-        request.product,
-        request.quantity,
-        request.supplier || undefined,
-        companyId,
-        deliveryAddress || undefined,
-        payment,
-      );
-
-      // Global timeout: ensure we always record a result even if ordering hangs
-      const ordered = await new Promise<Awaited<ReturnType<typeof selectAndOrder>>>((resolve, reject) => {
-        const timer = setTimeout(
-          () => reject(new Error('Timeout global: commande non complétée après 5 minutes')),
-          ORDER_GLOBAL_TIMEOUT_MS,
-        );
-        orderPromise.then(
-          (v) => { clearTimeout(timer); resolve(v); },
-          (e) => { clearTimeout(timer); reject(e); },
-        );
-      });
-
-      result = ordered.result;
-      supplier = ordered.supplier;
-      reason = ordered.reason;
-      orderStatus = result.success ? 'confirmed' : result.inCart ? 'pending' : 'failed';
-      orderError = result.error || null;
-    } catch (err: any) {
-      console.error('Supplier ordering failed:', err);
-      orderError = err?.message || 'Erreur inconnue';
-      orderStatus = 'failed';
-    }
-
-    // Always write supplier_orders row — even on failure
-    const cancelToken = randomUUID();
-    const cancelExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-    db.prepare(`
-      INSERT INTO supplier_orders (company_id, request_id, supplier, supplier_order_id, status, cancel_token, cancel_expires_at, error_message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(companyId, requestId, supplier, result?.orderId || null, orderStatus, cancelToken, cancelExpiresAt, orderError);
-
-    // Set tracking_status when order is confirmed
-    if (orderStatus === 'confirmed') {
-      db.prepare("UPDATE requests SET tracking_status = 'ordered' WHERE id = ? AND company_id = ?")
-        .run(requestId, companyId);
-      // Send tracking email to electrician
-      if (request.electrician_email) {
-        sendOrderTrackingEmail(request.electrician_email, {
-          product: request.product, quantity: request.quantity, unit: request.unit,
-          supplier, orderId: result?.orderId || '', trackingStatus: 'ordered',
-          jobSite: request.job_site_name || '',
-        }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
-      }
-    }
-
-    const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(companyId) as { email: string; language: string }[];
-    const allRecipients = [
-      ...officeUsers,
-      { email: request.electrician_email, language: request.electrician_language },
-    ].filter(u => u.email);
-
-    if (orderStatus === 'confirmed' && result) {
-      for (const u of allRecipients) {
-        sendOrderConfirmationEmail(u.email, {
-          product: request.product, quantity: request.quantity, unit: request.unit,
-          jobSite: request.job_site_name, supplier, reason, orderId: result.orderId!, cancelToken,
-        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
-      }
-    } else if (orderStatus === 'pending' && result) {
-      for (const u of allRecipients) {
-        sendCartNotificationEmail(u.email, {
-          product: request.product, quantity: request.quantity, unit: request.unit,
-          jobSite: request.job_site_name, supplier, reason,
-        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
-      }
-    } else {
-      // Send failure notification to office users
-      for (const u of officeUsers) {
-        sendOrderFailureEmail(u.email, {
-          product: request.product, quantity: request.quantity, unit: request.unit,
-          jobSite: request.job_site_name, errorMessage: orderError || 'Erreur inconnue',
-        }).catch(console.error);
-      }
-    }
-  })();
+  db.prepare(`
+    INSERT INTO order_jobs (company_id, request_id, status, payload)
+    VALUES (?, ?, 'pending', ?)
+  `).run(companyId, requestId, jobPayload);
 }

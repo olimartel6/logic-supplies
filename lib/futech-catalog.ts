@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 
 import type { ImportProgress } from './westburne-catalog';
 export type { ImportProgress };
@@ -153,7 +153,10 @@ export async function importFutechCatalog(
 
         const insertMany = db.transaction((prods: ParsedProduct[]) => {
           for (const p of prods) {
-            try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch {}
+            try {
+              upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name);
+              if (p.price) recordPriceHistory(db, 'futech', p.sku, p.price);
+            } catch {}
           }
         });
         insertMany(products);

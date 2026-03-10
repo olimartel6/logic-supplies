@@ -1,5 +1,5 @@
 import { createBrowserbaseBrowser } from './browser';
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 import { decrypt } from './encrypt';
 import { createCanacPage, loginToCanac } from './canac';
 
@@ -125,7 +125,10 @@ export async function importCanacCatalog(
 
         const insertMany = db.transaction((prods: any[]) => {
           for (const p of prods) {
-            try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch { /* skip */ }
+            try {
+              upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name);
+              if (p.price) recordPriceHistory(db, 'canac', p.sku, p.price);
+            } catch { /* skip */ }
           }
         });
         insertMany(products);

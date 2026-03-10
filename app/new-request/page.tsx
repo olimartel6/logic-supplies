@@ -98,6 +98,20 @@ function NewRequestContent() {
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [favoriteSKUs, setFavoriteSKUs] = useState<Set<string>>(new Set());
 
+  // Templates
+  const [templates, setTemplates] = useState<{ id: number; name: string; use_count: number; creator_name: string }[]>([]);
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+
+  // Price history
+  const [priceHistory, setPriceHistory] = useState<{ price: number; recorded_at: string }[]>([]);
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+
+  // Suggestions (previously ordered products)
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+
   const loadFavorites = useCallback(async () => {
     try {
       const res = await fetch('/api/favorites');
@@ -109,6 +123,52 @@ function NewRequestContent() {
       setFavorites([]);
     }
   }, []);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/templates');
+      if (!res.ok) return;
+      const data = await res.json();
+      setTemplates(data);
+    } catch {
+      setTemplates([]);
+    }
+  }, []);
+
+  async function saveTemplate() {
+    if (cart.length === 0) return;
+    const name = prompt('Nom du modèle :');
+    if (!name || !name.trim()) return;
+    const items = cart.map(c => ({
+      product: c.product,
+      quantity: c.quantity,
+      unit: c.unit,
+    }));
+    const res = await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), items }),
+    });
+    if (res.ok) {
+      loadTemplates();
+      alert('Modèle sauvegardé !');
+    }
+  }
+
+  async function loadTemplate(templateId: number) {
+    const res = await fetch(`/api/templates/${templateId}/use`, { method: 'POST' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const items: CartItem[] = data.items;
+    setCart(prev => [...prev, ...items]);
+    setTemplateDropdownOpen(false);
+  }
+
+  async function deleteTemplate(templateId: number) {
+    if (!confirm('Supprimer ce modèle ?')) return;
+    await fetch(`/api/templates/${templateId}`, { method: 'DELETE' });
+    loadTemplates();
+  }
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
@@ -125,7 +185,8 @@ function NewRequestContent() {
       if (d?.preference) setPreference(d.preference);
     });
     loadFavorites();
-  }, [router, loadFavorites]);
+    loadTemplates();
+  }, [router, loadFavorites, loadTemplates]);
 
   useEffect(() => {
     const goOnline = () => setIsOffline(false);
@@ -147,6 +208,21 @@ function NewRequestContent() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Close suggestions when clicking outside the search area
+  useEffect(() => {
+    function handleClickOutsideSearch(e: MouseEvent | TouchEvent) {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutsideSearch);
+    document.addEventListener('touchstart', handleClickOutsideSearch);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutsideSearch);
+      document.removeEventListener('touchstart', handleClickOutsideSearch);
     };
   }, []);
 
@@ -219,11 +295,26 @@ function NewRequestContent() {
     setQuery(val);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => doSearch(val, jobSiteId || undefined), 300);
+
+    // Fetch suggestions with debounce
+    if (suggestionsTimeout.current) clearTimeout(suggestionsTimeout.current);
+    if (val.trim().length >= 2) {
+      suggestionsTimeout.current = setTimeout(() => {
+        fetch(`/api/products/suggestions?q=${encodeURIComponent(val)}`)
+          .then(r => r.ok ? r.json() : [])
+          .then(data => { setSuggestions(data); setShowSuggestions(data.length > 0); })
+          .catch(() => setSuggestions([]));
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
   }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    setShowSuggestions(false);
     (document.activeElement as HTMLElement)?.blur();
     doSearch(query, jobSiteId || undefined);
   }
@@ -254,7 +345,17 @@ function NewRequestContent() {
     setResults([]);
     setHasSearched(false);
     setNearestBranch(null);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setPriceHistory([]);
+    setPriceHistoryOpen(false);
     fetchNearestBranch(p.supplier, jobSiteId);
+
+    // Fetch price history
+    fetch(`/api/products/price-history?supplier=${encodeURIComponent(p.supplier)}&sku=${encodeURIComponent(p.sku)}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: { price: number; recorded_at: string }[]) => setPriceHistory(data))
+      .catch(() => setPriceHistory([]));
 
     if (p.price != null) {
       const keywords = p.name.split(' ').slice(0, 4).join(' ');
@@ -268,6 +369,19 @@ function NewRequestContent() {
         })
         .catch(() => {});
     }
+  }
+
+  function pickSuggestion(s: any) {
+    const product: Product = {
+      name: s.product,
+      sku: s.sku || '',
+      image_url: s.image_url || '',
+      price: s.price ?? null,
+      unit: 'units',
+      category: '',
+      supplier: s.supplier,
+    };
+    pickProduct(product);
   }
 
   function addToCart() {
@@ -431,12 +545,13 @@ function NewRequestContent() {
               {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}{s.address ? ` — ${s.address}` : ''}</option>)}
             </select>
           )}
-          <div className="flex gap-2">
-            <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-0">
+          <div className="flex gap-2" ref={searchWrapperRef}>
+            <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-0 relative">
               <input
                 type="search"
                 value={query}
                 onChange={handleQueryChange}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                 placeholder={t('search_products')}
                 autoComplete="off"
                 enterKeyHint="search"
@@ -451,6 +566,44 @@ function NewRequestContent() {
                 </svg>
                 <span className="hidden sm:inline">Chercher</span>
               </button>
+
+              {/* Suggestions dropdown - previously ordered products */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-30 max-h-80 overflow-y-auto">
+                  <p className="px-3 pt-2.5 pb-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Commandés récemment</p>
+                  {suggestions.map((s, i) => {
+                    const b = supplierBadge(s.supplier);
+                    return (
+                      <button
+                        key={`${s.supplier}:${s.product}:${i}`}
+                        type="button"
+                        onClick={() => pickSuggestion(s)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-gray-50 active:bg-gray-100 transition flex items-center gap-3 border-t border-gray-100"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100">
+                          {s.image_url ? (
+                            <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain p-0.5" />
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-5 h-5 text-gray-300">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{s.product}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span>
+                            <span className="text-xs text-gray-400">commandé {s.order_count} fois</span>
+                          </div>
+                        </div>
+                        {s.price != null && (
+                          <span className="text-sm font-bold text-gray-700 flex-shrink-0">{Number(s.price).toFixed(2)} $</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </form>
 
             {/* Bouton Filtrer */}
@@ -583,6 +736,47 @@ function NewRequestContent() {
                 )}
               </div>
             </div>
+            {/* ─── Historique de prix ─── */}
+            {priceHistory.length > 0 && (
+              <div className="border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setPriceHistoryOpen(!priceHistoryOpen)}
+                  className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-medium text-gray-500 hover:bg-gray-50 transition"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                    </svg>
+                    Historique de prix ({priceHistory.length})
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3.5 h-3.5 transition-transform ${priceHistoryOpen ? 'rotate-180' : ''}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {priceHistoryOpen && (
+                  <div className="px-4 pb-3 space-y-1">
+                    {priceHistory.map((h, i) => {
+                      const prev = priceHistory[i + 1];
+                      const diff = prev ? h.price - prev.price : 0;
+                      const date = new Date(h.recorded_at + 'Z');
+                      return (
+                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
+                          <span className="text-gray-500">
+                            {date.toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="font-semibold text-gray-800">{h.price.toFixed(2)} $</span>
+                            {diff > 0 && <span className="text-red-500 font-medium text-[10px]">+{diff.toFixed(2)}</span>}
+                            {diff < 0 && <span className="text-green-600 font-medium text-[10px]">{diff.toFixed(2)}</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {nearestBranch && (
               <div className="px-4 pb-3 flex items-start gap-2 border-t border-gray-100 pt-3">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5">
@@ -705,6 +899,65 @@ function NewRequestContent() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Modèles ─── */}
+        {!pendingProduct && (
+          <div className="flex items-center gap-2">
+            {cart.length > 0 && (
+              <button
+                type="button"
+                onClick={saveTemplate}
+                className="flex-1 text-xs text-gray-600 border border-gray-200 rounded-xl py-2 px-3 hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+                </svg>
+                Sauvegarder comme modèle
+              </button>
+            )}
+            <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => { setTemplateDropdownOpen(!templateDropdownOpen); if (!templateDropdownOpen) loadTemplates(); }}
+                className="w-full text-xs text-gray-600 border border-gray-200 rounded-xl py-2 px-3 hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+                Charger un modèle
+              </button>
+              {templateDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto">
+                  {templates.length === 0 ? (
+                    <p className="text-xs text-gray-400 p-3 text-center">Aucun modèle sauvegardé</p>
+                  ) : (
+                    templates.map(tmpl => (
+                      <div key={tmpl.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                        <button
+                          type="button"
+                          onClick={() => loadTemplate(tmpl.id)}
+                          className="flex-1 text-left text-xs text-gray-800 font-medium truncate"
+                        >
+                          {tmpl.name}
+                          <span className="text-gray-400 font-normal ml-1">({tmpl.use_count}x)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); deleteTemplate(tmpl.id); }}
+                          className="text-gray-300 hover:text-red-500 transition ml-2 p-0.5"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { getDb, recordPriceHistory } from './db';
 
 export interface ImportProgress {
   category: string;
@@ -155,7 +155,10 @@ export async function importNedcoCatalog(
 
         const insertMany = db.transaction((prods: ParsedProduct[]) => {
           for (const p of prods) {
-            try { upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name); } catch {}
+            try {
+              upsert.run(p.sku, p.name, p.image_url, p.price, p.unit, cat.category_name);
+              if (p.price) recordPriceHistory(db, 'nedco', p.sku, p.price);
+            } catch {}
           }
         });
         insertMany(products);

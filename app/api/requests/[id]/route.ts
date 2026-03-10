@@ -3,10 +3,15 @@ import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { triggerApproval } from '@/lib/approval';
 import { sendStatusEmail, sendOrderTrackingEmail } from '@/lib/email';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
+
+  const rl = checkRateLimit('requests-patch', String(ctx.userId), 20, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+
   if (ctx.role === 'electrician') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }

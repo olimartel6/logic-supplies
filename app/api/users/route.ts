@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import bcrypt from 'bcryptjs';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET() {
   const ctx = await getTenantContext();
@@ -18,6 +19,10 @@ export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
   if (ctx.role !== 'admin') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+
+  const rl = checkRateLimit('users-post', String(ctx.userId), 10, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+
   const { name, email, password, role } = await req.json();
   const db = getDb();
   const hash = bcrypt.hashSync(password, 10);

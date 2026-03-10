@@ -70,6 +70,14 @@ function ApprovalsContent() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Failed orders state
+  const [failedOrders, setFailedOrders] = useState<{ job_id: number; request_id: number; product: string; quantity: number; unit: string; last_error: string | null; attempts: number; created_at: string }[]>([]);
+  const [failedDismissed, setFailedDismissed] = useState(false);
+  const [retryingOrder, setRetryingOrder] = useState<number | null>(null);
+
+  // Onboarding wizard state
+  const [onboarding, setOnboarding] = useState<{ dismissed: boolean; steps: { key: string; label: string; done: boolean; link: string }[] } | null>(null);
+
   const { setLang } = useLang();
   const t = useT();
 
@@ -176,6 +184,42 @@ function ApprovalsContent() {
       .then(setSelectedPhotos)
       .catch(() => setSelectedPhotos([]));
   }, [selected]);
+
+  // Fetch onboarding status on mount
+  useEffect(() => {
+    fetch('/api/onboarding-status')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(setOnboarding)
+      .catch(() => {});
+  }, []);
+
+  function dismissOnboarding() {
+    fetch('/api/onboarding-status/dismiss', { method: 'POST' })
+      .then(() => setOnboarding(prev => prev ? { ...prev, dismissed: true } : prev))
+      .catch(() => {});
+  }
+
+  // Fetch failed orders on mount
+  useEffect(() => {
+    fetch('/api/requests/failed-orders')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(setFailedOrders)
+      .catch(() => {});
+  }, []);
+
+  async function handleRetryOrder(requestId: number) {
+    setRetryingOrder(requestId);
+    try {
+      const res = await fetch(`/api/requests/${requestId}/retry-order`, { method: 'POST' });
+      if (res.ok) {
+        setFailedOrders(prev => prev.filter(o => o.request_id !== requestId));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setRetryingOrder(null);
+    }
+  }
 
   function handleLoadMore() {
     const next = page + 1;
@@ -290,6 +334,65 @@ function ApprovalsContent() {
   return (
     <div className={`${selectMode && selectedIds.size > 0 ? 'pb-36' : 'pb-20'} md:pb-6 md:ml-56`}>
       <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
+
+      {/* ── ONBOARDING WIZARD ── */}
+      {onboarding && !onboarding.dismissed && onboarding.steps.length > 0 && (user.role === 'admin' || user.role === 'office') && (() => {
+        const completed = onboarding.steps.filter((s: { done: boolean }) => s.done).length;
+        const stepsTotal = onboarding.steps.length;
+        const pct = Math.round((completed / stepsTotal) * 100);
+        return (
+          <div className="max-w-2xl mx-auto px-4 pt-4">
+            <div className="bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h2 className="text-lg font-bold">Bienvenue! Configurez votre compte</h2>
+                  <p className="text-indigo-100 text-sm mt-0.5">{completed}/{stepsTotal} {completed <= 1 ? 'etape completee' : 'etapes completees'}</p>
+                </div>
+                <button
+                  onClick={dismissOnboarding}
+                  className="text-indigo-200 hover:text-white text-sm font-medium px-3 py-1 rounded-lg hover:bg-white/10 transition"
+                >
+                  Ignorer
+                </button>
+              </div>
+              <div className="w-full bg-white/20 rounded-full h-2 mb-4">
+                <div
+                  className="bg-white rounded-full h-2 transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="space-y-2">
+                {onboarding.steps.map((step: { key: string; label: string; done: boolean; link: string }) => (
+                  <a
+                    key={step.key}
+                    href={step.link}
+                    className="flex items-center gap-3 bg-white/10 hover:bg-white/20 rounded-xl px-4 py-3 transition group"
+                  >
+                    {step.done ? (
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-400 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                    ) : (
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-white/40" />
+                    )}
+                    <span className={`text-sm font-medium ${step.done ? 'line-through text-indigo-200' : 'text-white'}`}>
+                      {step.label}
+                    </span>
+                    {!step.done && (
+                      <svg className="w-4 h-4 ml-auto text-indigo-200 group-hover:text-white transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="md:flex md:h-screen">
         {/* ── LEFT PANEL: filters + request list ── */}
         <div className="max-w-lg mx-auto px-4 py-6 md:max-w-none md:mx-0 md:w-[420px] md:flex-shrink-0 md:overflow-y-auto md:border-r md:border-gray-200">
@@ -311,6 +414,44 @@ function ApprovalsContent() {
             )}
           </div>
         </div>
+
+        {/* Failed orders banner */}
+        {failedOrders.length > 0 && !failedDismissed && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-red-800">
+                Commandes échouées ({failedOrders.length})
+              </p>
+              <button
+                onClick={() => setFailedDismissed(true)}
+                className="text-red-400 hover:text-red-600 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-2">
+              {failedOrders.map(fo => (
+                <div key={fo.job_id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-red-100">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {fo.product} <span className="text-gray-500 font-normal">x{fo.quantity}</span>
+                    </p>
+                    {fo.last_error && (
+                      <p className="text-xs text-red-500 truncate" title={fo.last_error}>{fo.last_error}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRetryOrder(fo.request_id)}
+                    disabled={retryingOrder === fo.request_id}
+                    className="ml-3 flex-shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition"
+                  >
+                    {retryingOrder === fo.request_id ? '...' : 'Relancer'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filter bar */}
         <div className="space-y-3 mb-4">

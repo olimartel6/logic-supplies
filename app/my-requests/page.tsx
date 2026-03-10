@@ -149,10 +149,10 @@ export default function MyRequestsPage() {
               </div>
               {r.status === 'approved' && (
                 <button
-                  onClick={() => router.push(`/new-request?product=${encodeURIComponent(r.product)}&quantity=${r.quantity}&unit=${encodeURIComponent(r.unit)}&job_site_id=${r.job_site_id || ''}`)}
+                  onClick={() => router.push(`/new-request?reorder=1&product=${encodeURIComponent(r.product)}&quantity=${r.quantity}&unit=${encodeURIComponent(r.unit)}&job_site_id=${r.job_site_id || ''}`)}
                   className="mt-2 w-full text-center text-xs text-blue-600 border border-blue-200 rounded-xl py-1.5 hover:bg-blue-50 transition"
                 >
-                  Recommander
+                  Commander à nouveau
                 </button>
               )}
               {r.status === 'approved' && r.tracking_status === 'received' && !r.picked_up_by && (

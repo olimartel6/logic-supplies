@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { sendNewRequestEmail } from '@/lib/email';
 import { triggerApproval } from '@/lib/approval';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   const ctx = await getTenantContext();
@@ -113,6 +114,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
+
+  const rl = checkRateLimit('requests-post', String(ctx.userId), 30, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+
   if (ctx.role !== 'electrician') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
