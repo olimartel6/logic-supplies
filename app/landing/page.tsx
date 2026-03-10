@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'LogicSupplies — Simplifiez vos commandes électriques',
-  description: 'La plateforme qui simplifie l\'approvisionnement pour les entrepreneurs électriciens du Québec.',
+  title: 'LogicSupplies — Simplifiez vos commandes de matériaux',
+  description: 'La plateforme qui simplifie l\'approvisionnement pour les entreprises de construction du Québec.',
 };
 
 const APP_URL = 'https://logic-supplies-production.up.railway.app';
@@ -50,12 +50,12 @@ export default function LandingPage() {
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight mb-6">
                 Gérez vos commandes{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                  électriques
+                  de matériaux
                 </span>{' '}
                 en un clic
               </h1>
               <p className="text-lg text-slate-300 mb-4 leading-relaxed max-w-lg">
-                La plateforme tout-en-un qui simplifie l'approvisionnement pour les entrepreneurs électriciens du Québec.
+                La plateforme tout-en-un qui simplifie l'approvisionnement pour les entreprises de construction du Québec — électriciens, plombiers, charpentiers, ferblantiers et plus.
               </p>
               <ul className="text-slate-400 mb-8 space-y-2 max-w-lg">
                 <li className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export default function LandingPage() {
             {[
               { step: '1', title: 'Créez votre compte', titleEn: 'Create your account', desc: 'Inscrivez votre entreprise et invitez vos employés en quelques clics. Chaque membre reçoit son propre accès.' },
               { step: '2', title: 'Connectez vos fournisseurs', titleEn: 'Connect your suppliers', desc: 'Ajoutez vos comptes fournisseurs (Lumen, Canac, Home Depot, etc.) dans les paramètres. Vos identifiants sont chiffrés AES-256.' },
-              { step: '3', title: 'Vos employés commandent', titleEn: 'Your employees order', desc: 'Les électriciens font leurs demandes de matériel depuis le terrain. Le meilleur prix est trouvé automatiquement.' },
+              { step: '3', title: 'Vos employés commandent', titleEn: 'Your employees order', desc: 'Vos employés font leurs demandes de matériel depuis le terrain. Le meilleur prix est trouvé automatiquement.' },
               { step: '4', title: 'Vous approuvez, on commande', titleEn: 'You approve, we order', desc: 'Approuvez les demandes en un clic. La commande est passée automatiquement chez le fournisseur le moins cher.' },
             ].map((s, i) => (
               <div key={i} className="relative">
@@ -126,7 +126,7 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Fonctionnalités principales</h2>
             <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-              Tout ce dont un entrepreneur électricien a besoin pour gérer ses achats efficacement
+              Tout ce dont une entreprise de construction a besoin pour gérer ses achats efficacement
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
@@ -246,8 +246,8 @@ export default function LandingPage() {
       <section className="py-20 md:py-28 bg-slate-50">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Conçu pour les électriciens</h2>
-            <p className="text-lg text-gray-500">Built for electrical contractors</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Conçu pour la construction</h2>
+            <p className="text-lg text-gray-500">Built for construction companies</p>
           </div>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm">
