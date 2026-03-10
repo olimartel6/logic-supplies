@@ -126,12 +126,23 @@ export async function placeDeschenesOrder(
     }
     log.push('Login successful');
 
-    log.push(`Navigating to search: ${product}`);
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'deschenes' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
+    log.push(`Navigating to search: ${searchQuery}`);
     await page.goto(
-      `https://www.deschenes.qc.ca/s/search?q=${encodeURIComponent(product)}&language=fr`,
+      `https://www.deschenes.qc.ca/s/search?q=${encodeURIComponent(searchQuery)}&language=fr`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    console.error(`[Deschênes] Searching for: ${product}`);
+    console.error(`[Deschênes] Searching for: ${searchQuery}`);
     await page.waitForTimeout(2000);
 
     const firstProduct = page.locator(

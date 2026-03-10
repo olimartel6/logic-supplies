@@ -114,9 +114,20 @@ export async function placeNedcoOrder(
     }
     log.push('[Nedco] Login successful');
 
-    log.push(`[Nedco] Searching for product: ${product}`);
+    // Build search query: try SKU from catalog first (more precise than full name)
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'nedco' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
+    log.push(`[Nedco] Searching for product: ${searchQuery}`);
     await page.goto(
-      `https://www.nedco.ca/cnd/search?q=${encodeURIComponent(product)}&text=${encodeURIComponent(product)}`,
+      `https://www.nedco.ca/cnd/search?q=${encodeURIComponent(searchQuery)}&text=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
     await page.waitForTimeout(2000);

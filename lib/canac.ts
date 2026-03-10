@@ -393,11 +393,22 @@ export async function placeCanacOrder(
     }
     const accessToken = loginResult.accessToken;
 
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'canac' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
     // ── Step 1: Search via UI (Coveo) ─────────────────────────────────────────
     // Cloudflare blocks all direct REST API calls and product page navigation.
     // The Angular SPA uses Coveo for search (works from browser). We search via
     // the UI search bar and extract numeric product codes from result URLs.
-    const products = await searchCanacProducts(page, product);
+    const products = await searchCanacProducts(page, searchQuery);
 
     if (products.length === 0) {
       console.error(`[Canac] Produit "${product}" introuvable`);

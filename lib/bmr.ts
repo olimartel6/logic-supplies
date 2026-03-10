@@ -156,12 +156,23 @@ export async function placeBmrOrder(
     }
     log.push('Login successful');
 
-    log.push(`Searching for product: ${product}`);
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'bmr' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
+    log.push(`Searching for product: ${searchQuery}`);
     await page.goto(
-      `https://www.bmr.ca/fr/catalogsearch/result/?q=${encodeURIComponent(product)}`,
+      `https://www.bmr.ca/fr/catalogsearch/result/?q=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    console.error(`[BMR] Searching for: ${product}`);
+    console.error(`[BMR] Searching for: ${searchQuery}`);
     await page.waitForTimeout(3000);
 
     const firstProduct = page.locator(

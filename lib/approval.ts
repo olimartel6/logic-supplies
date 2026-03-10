@@ -149,6 +149,8 @@ export async function triggerApproval(
     };
   }
 
+  const ORDER_GLOBAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max for entire ordering process
+
   ;(async () => {
     let orderError: string | null = null;
     let orderStatus: 'confirmed' | 'pending' | 'failed' = 'failed';
@@ -157,7 +159,7 @@ export async function triggerApproval(
     let reason = '';
 
     try {
-      const ordered = await selectAndOrder(
+      const orderPromise = selectAndOrder(
         preference,
         request.job_site_address || '',
         request.product,
@@ -167,6 +169,19 @@ export async function triggerApproval(
         deliveryAddress || undefined,
         payment,
       );
+
+      // Global timeout: ensure we always record a result even if ordering hangs
+      const ordered = await new Promise<Awaited<ReturnType<typeof selectAndOrder>>>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('Timeout global: commande non complétée après 5 minutes')),
+          ORDER_GLOBAL_TIMEOUT_MS,
+        );
+        orderPromise.then(
+          (v) => { clearTimeout(timer); resolve(v); },
+          (e) => { clearTimeout(timer); reject(e); },
+        );
+      });
+
       result = ordered.result;
       supplier = ordered.supplier;
       reason = ordered.reason;

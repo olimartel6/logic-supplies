@@ -130,12 +130,23 @@ export async function placeWestburneOrder(
     }
     log.push('Login successful');
 
-    log.push(`Searching for product: ${product}`);
+    // Build search query: try SKU from catalog first (more precise than full name)
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'westburne' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
+    log.push(`Searching for product: ${searchQuery}`);
     await page.goto(
-      `https://www.westburne.ca/cwr/search?q=${encodeURIComponent(product)}&text=${encodeURIComponent(product)}`,
+      `https://www.westburne.ca/cwr/search?q=${encodeURIComponent(searchQuery)}&text=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    console.error(`[Westburne] Searching for: ${product}`);
+    console.error(`[Westburne] Searching for: ${searchQuery}`);
     await page.waitForTimeout(2000);
 
     const firstProduct = page.locator(

@@ -117,12 +117,23 @@ export async function placeFutechOrder(
     const loggedIn = await loginToFutech(page, username, password);
     if (!loggedIn) return { success: false, error: 'Login Futech échoué', log };
 
-    log.push('Logged in, searching for product...');
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'futech' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
+    log.push(`Logged in, searching for product: ${searchQuery}`);
     await page.goto(
-      `https://shop.futech.ca/fr/search?q=${encodeURIComponent(product)}`,
+      `https://shop.futech.ca/fr/search?q=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    console.error(`[Futech] Searching for: ${product}`);
+    console.error(`[Futech] Searching for: ${searchQuery}`);
     await page.waitForTimeout(2000);
 
     const firstProduct = page.locator(

@@ -88,11 +88,22 @@ export async function placeJsvOrder(
   try {
     const page = await createJsvPage(browser);
 
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'jsv' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
     // Step 1: Search for product
-    log.push(`Searching for: ${product}`);
-    console.error(`[JSV] Searching for: ${product}`);
+    log.push(`Searching for: ${searchQuery}`);
+    console.error(`[JSV] Searching for: ${searchQuery}`);
     await page.goto(
-      `https://groupejsv.com/search?type=product&q=${encodeURIComponent(product)}`,
+      `https://groupejsv.com/search?type=product&q=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
     await page.waitForTimeout(3000);

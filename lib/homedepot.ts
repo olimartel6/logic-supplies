@@ -350,12 +350,22 @@ export async function placeHomeDepotOrder(
     await page.goto('https://www.homedepot.ca', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
 
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'homedepot' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
     // Search for the product
-    log.push(`Searching for product: ${product}`);
+    log.push(`Searching for product: ${searchQuery}`);
     const searchBar = page.locator('input[id="headerSearch"], input[name="Ntt"], input[placeholder*="Recherche"], input[placeholder*="Search"]').first();
     await searchBar.waitFor({ timeout: 8000 });
     await searchBar.click();
-    await searchBar.type(product, { delay: 120 });
+    await searchBar.type(searchQuery, { delay: 120 });
     await searchBar.press('Enter');
     await page.waitForTimeout(4000);
     console.error('[HomeDepot] Page résultats:', page.url());

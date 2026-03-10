@@ -182,12 +182,14 @@ export async function placeLumenOrder(
     const loggedIn = await loginToLumen(page, username, password);
     if (!loggedIn) return { success: false, error: 'Login Lumen échoué', log };
 
-    // Build search query: SKU from DB, or model number word, or first 3 words
+    // Build search query: SKU from DB (prefer Lumen catalog), or model number, or first 3 words
     const { getDb } = await import('./db');
     const db = getDb();
-    const localProduct = db.prepare('SELECT sku FROM products WHERE name = ? LIMIT 1').get(product) as
-      | { sku: string }
-      | undefined;
+    // Try Lumen-specific SKU first, then any supplier
+    const localProduct = (
+      db.prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'lumen' LIMIT 1").get(product) ||
+      db.prepare('SELECT sku FROM products WHERE name = ? LIMIT 1').get(product)
+    ) as { sku: string } | undefined;
 
     let searchQuery: string;
     if (localProduct?.sku) {
@@ -211,40 +213,63 @@ export async function placeLumenOrder(
     await page.goto('https://www.lumen.ca/en', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    // Intercept the add-to-cart response to confirm success (HTTP 302 = success)
+    // Intercept the add-to-cart response to confirm success
+    // URL is "additemtoanonymouscart" (not logged in to Lumen commerce) or "additemtocart"
     let addToCartStatus = 0;
     page.on('response', async (res: any) => {
-      if (res.url().includes('additemtocart')) {
+      if (res.url().includes('additem')) {
         addToCartStatus = res.status();
       }
     });
 
     // Type into the header search bar to trigger the HTMX typeahead dropdown
     log.push(`Searching for: ${searchQuery}`);
-    const searchBar = page.locator('input[placeholder*="Search"], input[placeholder*="search"]').first();
+    const searchBar = page.locator('#MenuContent_txtSearchField, input[placeholder*="Search"]').first();
     await searchBar.click();
     await searchBar.type(searchQuery, { delay: 150 });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(4000);
 
     await page.screenshot({ path: process.cwd() + '/public/debug-order-search.png' }).catch(() => {});
 
-    // Check if the typeahead returned any product add-to-cart forms
-    const formCount = await page.locator('form[action*="additemtocart"]').count();
-    log.push(`Found ${formCount} add-to-cart forms`);
-    if (formCount === 0) {
-      return { success: false, error: `Produit "${product}" introuvable sur Lumen`, log };
+    // Check if the typeahead returned any product add-to-cart buttons
+    // Forms use action="additemtoanonymouscart" — match broadly
+    const addCartCount = await page.locator('.add-cart').count();
+    log.push(`Found ${addCartCount} add-to-cart buttons`);
+    if (addCartCount === 0) {
+      // Retry with shorter query (first word only) if no results
+      if (searchQuery.includes(' ')) {
+        const shortQuery = searchQuery.split(/\s+/)[0];
+        log.push(`No results, retrying with: ${shortQuery}`);
+        await searchBar.click({ clickCount: 3 });
+        await searchBar.type(shortQuery, { delay: 150 });
+        await page.waitForTimeout(4000);
+        const retryCount = await page.locator('.add-cart').count();
+        log.push(`Retry found ${retryCount} buttons`);
+        if (retryCount === 0) {
+          return { success: false, error: `Produit "${product}" introuvable sur Lumen`, log };
+        }
+      } else {
+        return { success: false, error: `Produit "${product}" introuvable sur Lumen`, log };
+      }
     }
 
     // Click the first add-to-cart button in the typeahead dropdown
     log.push('Clicking add-to-cart button');
     await page.locator('.add-cart').first().click({ force: true });
-    await page.waitForTimeout(3000);
+
+    // Wait for the add-to-cart response (up to 10 seconds instead of fixed 3s)
+    for (let w = 0; w < 20 && addToCartStatus === 0; w++) {
+      await page.waitForTimeout(500);
+    }
 
     await page.screenshot({ path: process.cwd() + '/public/debug-order-cart.png' }).catch(() => {});
 
-    // HTTP 302 redirect to homepage = success; any other status = failure
     log.push(`Add-to-cart response status: ${addToCartStatus}`);
-    if (addToCartStatus !== 0 && addToCartStatus !== 302) {
+    // Status 0 = no response captured = failure (was incorrectly treated as success before)
+    if (addToCartStatus === 0) {
+      return { success: false, error: 'Ajout au panier: aucune réponse du serveur', log };
+    }
+    if (addToCartStatus !== 302) {
       return { success: false, error: `Erreur ajout au panier (HTTP ${addToCartStatus})`, log };
     }
 

@@ -95,7 +95,9 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   const url = page.url();
   console.log('[Guillevin] Final URL:', url);
   // Success if redirected to guillevin.com or Shopify account (shop 60111716441)
-  return (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !url.includes('login');
+  // Check for /login or /u/login path — but NOT new_login query param
+  const isLoginPage = url.includes('/u/login') || url.includes('/account/login') || url.match(/\/login(?:\?|$)/);
+  return (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !isLoginPage;
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
@@ -165,20 +167,32 @@ export async function placeGuillevinOrder(
     }
     log.push('Login successful');
 
+    // Build search query: try SKU from catalog first
+    let searchQuery = product;
+    try {
+      const { getDb } = await import('./db');
+      const row = (
+        getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'guillevin' LIMIT 1").get(product) ||
+        getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
+      ) as { sku: string } | undefined;
+      if (row?.sku) searchQuery = row.sku.split('/')[0];
+    } catch {}
+
     // Search for product
-    log.push(`Searching for product: ${product}`);
+    log.push(`Searching for product: ${searchQuery}`);
     await page.goto(
-      `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(product)}`,
+      `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(searchQuery)}`,
       { waitUntil: 'domcontentloaded', timeout: 30000 }
     );
-    console.error(`[Guillevin] Searching for: ${product}`);
-    await page.waitForTimeout(2000);
+    console.error(`[Guillevin] Searching for: ${searchQuery}`);
+    // Guillevin is a Shopify SPA — wait for product results to render
+    await page.waitForTimeout(5000);
 
-    // Click first product result
+    // Click first product result — Shopify themes use various product link patterns
     const firstProduct = page.locator(
-      'a[href*="/products/"], .product-card a, .card__heading a, h3 a'
+      'a[href*="/products/"], .product-card a, .card__heading a, h3 a, [class*="product"] a[href*="/"]'
     ).first();
-    if (await firstProduct.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (await firstProduct.isVisible({ timeout: 8000 }).catch(() => false)) {
       log.push('Product found in search results, navigating to product page');
       await firstProduct.click();
       console.error(`[Guillevin] Navigating to product page`);
