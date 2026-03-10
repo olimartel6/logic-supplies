@@ -27,6 +27,9 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a href="#contact" className="text-sm text-slate-300 hover:text-white transition hidden sm:block">
+              Nous contacter
+            </a>
             <a href={`${APP_URL}/`} className="text-sm text-slate-300 hover:text-white transition hidden sm:block">
               Se connecter
             </a>
@@ -194,6 +197,55 @@ export default function LandingPage() {
                 <p className="text-gray-500 leading-relaxed">{f.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Personnalisable ── */}
+      <section className="py-20 md:py-28 bg-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-full px-4 py-1.5 mb-6">
+                <span className="text-sm text-purple-600 font-medium">Sur mesure</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">Personnalisable pour chaque compagnie</h2>
+              <p className="text-lg text-gray-600 mb-6 leading-relaxed">
+                Chaque entreprise est différente. LogicSupplies s'adapte à vos besoins spécifiques — que vous soyez électricien, plombier, charpentier ou ferblantier.
+              </p>
+              <ul className="space-y-4 text-gray-600">
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-purple-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span><strong>Vos fournisseurs</strong> — Connectez uniquement les fournisseurs que vous utilisez</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-purple-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span><strong>Vos rôles</strong> — Configurez les permissions par employé (qui peut commander, qui approuve)</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-purple-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span><strong>Vos chantiers</strong> — Organisez vos projets et budgets selon votre structure</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-purple-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span><strong>Vos besoins</strong> — Besoin d'une fonctionnalité spécifique? Contactez-nous pour une solution adaptée</span>
+                </li>
+              </ul>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { icon: '⚡', title: 'Électricien', desc: 'Fil, disjoncteurs, panneaux, luminaires' },
+                { icon: '🔧', title: 'Plombier', desc: 'Tuyaux, raccords, robinets, chauffe-eau' },
+                { icon: '🪵', title: 'Charpentier', desc: 'Bois, clous, vis, quincaillerie' },
+                { icon: '🏠', title: 'Ferblantier', desc: 'Tôle, gouttières, ventilation, solin' },
+              ].map((t, i) => (
+                <div key={i} className="bg-gray-50 rounded-2xl p-6 border border-gray-100 text-center hover:shadow-md transition">
+                  <span className="text-3xl mb-3 block">{t.icon}</span>
+                  <h3 className="font-bold mb-1">{t.title}</h3>
+                  <p className="text-sm text-gray-500">{t.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -384,6 +436,52 @@ export default function LandingPage() {
               <div className="text-left">
                 <p className="text-[10px] uppercase tracking-wider opacity-80">Disponible</p>
                 <p className="text-sm font-semibold -mt-0.5">Web App</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Contact ── */}
+      <section id="contact" className="py-20 md:py-28 bg-white">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Nous contacter</h2>
+            <p className="text-lg text-gray-500">
+              Une question? Besoin d'une démo? Envie de personnaliser l'app pour votre compagnie? Écrivez-nous.
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-8 md:p-12">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="font-bold text-lg mb-4">Contactez-nous par courriel</h3>
+                <a href="mailto:info@logicsupplies.ca" className="text-blue-600 hover:text-blue-700 text-lg font-semibold transition">
+                  info@logicsupplies.ca
+                </a>
+                <p className="text-gray-500 mt-4 leading-relaxed">
+                  Nous répondons généralement en moins de 24 heures. Décrivez vos besoins et nous vous proposerons une solution adaptée.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg mb-4">Ce qu'on peut faire pour vous</h3>
+                <ul className="space-y-3 text-gray-600">
+                  <li className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Démo personnalisée de la plateforme
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Configuration sur mesure pour votre entreprise
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Ajout de fournisseurs spécifiques à votre métier
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Support à l'intégration et formation
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
