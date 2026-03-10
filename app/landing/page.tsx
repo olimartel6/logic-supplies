@@ -232,19 +232,8 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { icon: '⚡', title: 'Électricien', desc: 'Fil, disjoncteurs, panneaux, luminaires' },
-                { icon: '🔧', title: 'Plombier', desc: 'Tuyaux, raccords, robinets, chauffe-eau' },
-                { icon: '🪵', title: 'Charpentier', desc: 'Bois, clous, vis, quincaillerie' },
-                { icon: '🏠', title: 'Ferblantier', desc: 'Tôle, gouttières, ventilation, solin' },
-              ].map((t, i) => (
-                <div key={i} className="bg-gray-50 rounded-2xl p-6 border border-gray-100 text-center hover:shadow-md transition">
-                  <span className="text-3xl mb-3 block">{t.icon}</span>
-                  <h3 className="font-bold mb-1">{t.title}</h3>
-                  <p className="text-sm text-gray-500">{t.desc}</p>
-                </div>
-              ))}
+            <div className="bg-gray-50 rounded-2xl border border-gray-100 p-8 flex items-center justify-center">
+              <img src="/landing/screenshot-settings.png" alt="Paramètres personnalisables" className="rounded-xl w-full" />
             </div>
           </div>
         </div>
