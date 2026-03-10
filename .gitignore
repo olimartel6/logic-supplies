@@ -53,3 +53,8 @@ public/debug-*.html
 # ad-hoc test scripts
 test-*.mjs
 test-*.js
+
+# Capacitor build artifacts
+ios/App/Pods/
+android/.gradle/
+android/app/build/

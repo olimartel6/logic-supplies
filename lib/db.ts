@@ -557,6 +557,18 @@ function initDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(company_id, recipient_id);
     CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(company_id, sender_id);
 
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      platform TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_push_tokens_company ON push_tokens(company_id);
+
     CREATE TABLE IF NOT EXISTS company_payment_methods (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,

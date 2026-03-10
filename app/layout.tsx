@@ -4,6 +4,7 @@ import "./globals.css";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { BrandingProvider } from "@/lib/BrandingContext";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import CapacitorInit from "@/components/CapacitorInit";
 
 const inter = localFont({
   src: "./fonts/InterVariable.woff2",
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="fr">
       <body className={`${inter.className} bg-slate-200 min-h-screen`}>
         <ServiceWorkerRegistrar />
+        <CapacitorInit />
         <LanguageProvider>
           <BrandingProvider>
             {children}
