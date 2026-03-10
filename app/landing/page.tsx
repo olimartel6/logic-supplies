@@ -27,7 +27,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <a href={`${APP_URL}/login`} className="text-sm text-slate-300 hover:text-white transition hidden sm:block">
+            <a href={`${APP_URL}/`} className="text-sm text-slate-300 hover:text-white transition hidden sm:block">
               Se connecter
             </a>
             <a href={`${APP_URL}/?mode=signup`} className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
@@ -75,7 +75,7 @@ export default function LandingPage() {
                 <a href={`${APP_URL}/?mode=signup`} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-8 py-4 rounded-xl text-center transition shadow-lg shadow-blue-500/25">
                   Créer un compte gratuit
                 </a>
-                <a href={`${APP_URL}/login`} className="border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-center transition">
+                <a href={`${APP_URL}/`} className="border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-center transition">
                   Se connecter
                 </a>
               </div>
@@ -407,7 +407,7 @@ export default function LandingPage() {
             <a href={`${APP_URL}/?mode=signup`} className="inline-block bg-blue-500 hover:bg-blue-600 text-white font-semibold px-10 py-4 rounded-xl text-lg transition shadow-lg shadow-blue-500/25">
               Commencer maintenant — C'est gratuit
             </a>
-            <a href={`${APP_URL}/login`} className="inline-block border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-10 py-4 rounded-xl text-lg transition">
+            <a href={`${APP_URL}/`} className="inline-block border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-10 py-4 rounded-xl text-lg transition">
               Se connecter
             </a>
           </div>
