@@ -45,7 +45,12 @@ export async function POST(req: NextRequest) {
   const requestId = Number(result.lastInsertRowid);
 
   // Trigger approval with dryRun=true
-  await triggerApproval(requestId, ctx.companyId, db, undefined, 'Test automatique dry-run', true);
+  try {
+    await triggerApproval(requestId, ctx.companyId, db, undefined, 'Test automatique dry-run', true);
+  } catch (err: any) {
+    console.error('[test-order] triggerApproval error:', err);
+    return NextResponse.json({ ok: true, requestId, warning: err?.message || 'Erreur lors du déclenchement' });
+  }
 
   return NextResponse.json({ ok: true, requestId });
 }
