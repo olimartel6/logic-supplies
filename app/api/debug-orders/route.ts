@@ -44,10 +44,22 @@ export async function GET() {
     LIMIT 10
   `).all(cid);
 
+  // Recent requests
+  const requests = db.prepare(`
+    SELECT id, product, quantity, unit, supplier, status, tracking_status, note, created_at
+    FROM requests WHERE company_id = ?
+    ORDER BY created_at DESC LIMIT 10
+  `).all(cid);
+
   // Check if guillevin account exists
   const guillevinAccount = db.prepare(
     "SELECT supplier, username, active FROM supplier_accounts WHERE company_id = ? AND supplier = 'guillevin'"
   ).get(cid);
 
-  return NextResponse.json({ jobs, attempts, supplierOrders, guillevinAccount });
+  // Check payment method
+  const hasPayment = !!db.prepare(
+    "SELECT 1 FROM company_payment_methods WHERE company_id = ?"
+  ).get(cid);
+
+  return NextResponse.json({ requests, jobs, attempts, supplierOrders, guillevinAccount, hasPayment });
 }
