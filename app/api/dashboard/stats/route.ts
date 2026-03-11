@@ -40,7 +40,7 @@ export async function GET() {
     FROM requests r
     LEFT JOIN supplier_orders so ON so.request_id = r.id
     WHERE r.company_id = ? AND r.status = 'approved'
-    GROUP BY supplier
+    GROUP BY 1
     ORDER BY order_count DESC
   `).all(cid);
 
