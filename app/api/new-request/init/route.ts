@@ -25,9 +25,9 @@ export async function GET() {
     SELECT p.name, p.sku, p.image_url, p.price, p.unit, p.category, p.supplier
     FROM product_favorites f
     JOIN products p ON f.supplier = p.supplier AND f.sku = p.sku
-    WHERE f.company_id = ?
+    WHERE f.user_id = ?
     ORDER BY f.created_at DESC
-  `).all(cid);
+  `).all(session.userId);
 
   // Templates
   const templates = db.prepare(
