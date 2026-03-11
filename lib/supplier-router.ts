@@ -359,6 +359,13 @@ export async function selectAndOrder(
   payment?: PaymentInfo,
   dryRun?: boolean,
 ): Promise<{ result: LumenOrderResult; supplier: string; reason: string }> {
+  // In dry-run mode, skip real accounts entirely and use mock
+  if (dryRun) {
+    const mockSupplier = preferredSupplier || 'lumen';
+    const result = await placeOrderDryRun(mockSupplier, product, quantity);
+    return { result, supplier: mockSupplier, reason: 'Mode test (dry-run)' };
+  }
+
   const allAccounts = getActiveAccounts(companyId ?? null);
 
   // If the product came from a specific supplier's catalog, only use that supplier
