@@ -296,6 +296,9 @@ export async function placeDeschenesOrder(
               log.push(`Page body snippet: ${bodySnippet}`);
               console.error('[Deschênes] Page body snippet:', bodySnippet);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (checkoutErr: any) {
             const errMsg = checkoutErr?.message || String(checkoutErr);

@@ -369,6 +369,13 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoSaved, setLogoSaved] = useState(false);
 
+  // Test orders
+  const [testProduct, setTestProduct] = useState('Fil 14/2 NMD90 150m');
+  const [testSupplier, setTestSupplier] = useState('');
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResults, setTestResults] = useState<any[]>([]);
+  const [testPolling, setTestPolling] = useState(false);
+
   // Accordion open/close state
   const [openSection, setOpenSection] = useState<string | null>(null);
 
@@ -580,6 +587,54 @@ export default function SettingsPage() {
     setLogoSaved(true);
     setTimeout(() => setLogoSaved(false), 3000);
     e.target.value = '';
+  }
+
+  async function handleRunTest() {
+    setTestRunning(true);
+    setTestResults([]);
+    try {
+      const res = await fetch('/api/test-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: testProduct,
+          supplier: testSupplier || undefined,
+          quantity: 1,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur' }));
+        setTestResults([{ error: err.error }]);
+        setTestRunning(false);
+        return;
+      }
+      // Poll for results
+      setTestPolling(true);
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch('/api/test-order');
+          const data = await r.json();
+          if (data.results?.length > 0) {
+            setTestResults(data.results);
+            const latest = data.results[0];
+            if (latest.job?.status === 'done' || latest.job?.status === 'failed' || latest.supplierOrder) {
+              clearInterval(poll);
+              setTestPolling(false);
+              setTestRunning(false);
+            }
+          }
+        } catch { /* ignore */ }
+      }, 2000);
+      // Safety timeout: stop polling after 2 minutes
+      setTimeout(() => { clearInterval(poll); setTestPolling(false); setTestRunning(false); }, 120000);
+    } catch {
+      setTestRunning(false);
+    }
+  }
+
+  async function handleCleanTests() {
+    await fetch('/api/test-order', { method: 'DELETE' });
+    setTestResults([]);
   }
 
   async function handleManageSubscription() {
@@ -1181,6 +1236,131 @@ export default function SettingsPage() {
             </form>
           </div>
         </AccordionSection>
+
+        {/* ─── TESTER LES COMMANDES (admin only) ─── */}
+        {user.role === 'admin' && (
+          <AccordionSection
+            title="Tester les commandes"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg>}
+            isOpen={openSection === 'test-commandes'}
+            onToggle={() => toggleSection('test-commandes')}
+          >
+            <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 space-y-4">
+              <p className="text-sm text-purple-700">
+                Lance une commande simulée (dry-run) pour tester le flow complet sans acheter.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-purple-900 mb-1">Produit</label>
+                <input
+                  type="text"
+                  value={testProduct}
+                  onChange={e => setTestProduct(e.target.value)}
+                  className="w-full rounded-lg border border-purple-200 px-3 py-2 text-sm"
+                  placeholder="Fil 14/2 NMD90 150m"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-purple-900 mb-1">Fournisseur</label>
+                <select
+                  value={testSupplier}
+                  onChange={e => setTestSupplier(e.target.value)}
+                  className="w-full rounded-lg border border-purple-200 px-3 py-2 text-sm bg-white"
+                >
+                  <option value="">Automatique (le moins cher)</option>
+                  <option value="lumen">Lumen</option>
+                  <option value="canac">Canac</option>
+                  <option value="homedepot">Home Depot</option>
+                  <option value="guillevin">Guillevin</option>
+                  <option value="jsv">JSV</option>
+                  <option value="westburne">Westburne</option>
+                  <option value="nedco">Nedco</option>
+                  <option value="futech">Futech</option>
+                  <option value="deschenes">Deschênes</option>
+                  <option value="bmr">BMR</option>
+                  <option value="rona">Rona</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleRunTest}
+                  disabled={testRunning || !testProduct.trim()}
+                  className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition text-sm"
+                >
+                  {testRunning ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Test en cours...
+                    </span>
+                  ) : 'Lancer le test'}
+                </button>
+                {testResults.length > 0 && (
+                  <button
+                    onClick={handleCleanTests}
+                    className="px-4 py-2.5 rounded-xl border border-purple-200 text-purple-700 text-sm hover:bg-purple-100 transition"
+                  >
+                    Nettoyer
+                  </button>
+                )}
+              </div>
+
+              {/* Résultats */}
+              {testResults.length > 0 && (
+                <div className="space-y-3 mt-2">
+                  {testResults.map((r: any, i: number) => (
+                    <div key={i} className="bg-white rounded-lg border border-purple-100 p-3 text-sm space-y-1">
+                      {r.error && !r.requestId ? (
+                        <p className="text-red-600 font-medium">{r.error}</p>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-purple-900">{r.product} x{r.quantity}</span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              r.supplierOrder?.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                              r.supplierOrder?.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              r.job?.status === 'failed' ? 'bg-red-100 text-red-800' :
+                              r.job?.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {r.supplierOrder?.status === 'confirmed' ? 'Confirmé' :
+                               r.supplierOrder?.status === 'pending' ? 'En panier' :
+                               r.job?.status === 'failed' ? 'Échoué' :
+                               r.job?.status === 'processing' ? 'En cours...' :
+                               r.job?.status === 'done' ? 'Terminé' :
+                               'En attente'}
+                            </span>
+                          </div>
+                          {r.supplierOrder && (
+                            <p className="text-gray-600">
+                              Fournisseur: <span className="font-medium">{r.supplierOrder.supplier}</span>
+                              {r.supplierOrder.orderId && <> — #{r.supplierOrder.orderId}</>}
+                            </p>
+                          )}
+                          {r.attempts?.length > 0 && (
+                            <div className="text-xs text-gray-500 space-y-0.5 mt-1">
+                              {r.attempts.map((a: any, j: number) => (
+                                <p key={j}>
+                                  Tentative {a.attempt_number}: {a.supplier} — {a.status}
+                                  {a.duration_ms ? ` (${(a.duration_ms / 1000).toFixed(1)}s)` : ''}
+                                  {a.error_message && <span className="text-red-500"> — {a.error_message}</span>}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {r.job?.lastError && (
+                            <p className="text-xs text-red-500 mt-1">{r.job.lastError}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </AccordionSection>
+        )}
 
         {/* ─── FACTURATION ─── */}
         <AccordionSection

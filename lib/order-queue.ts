@@ -18,6 +18,7 @@ interface JobPayload {
   workerName: string;
   workerLanguage: string;
   officeComment?: string;
+  dryRun?: boolean;
 }
 
 const ORDER_GLOBAL_TIMEOUT_MS = 5 * 60 * 1000;
@@ -47,6 +48,7 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
       job.company_id,
       payload.deliveryAddress || undefined,
       payload.payment,
+      payload.dryRun,
     );
 
     const ordered = await new Promise<Awaited<ReturnType<typeof selectAndOrder>>>((resolve, reject) => {
@@ -104,7 +106,7 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           supplier, orderId: result?.orderId || '', trackingStatus: 'ordered',
           jobSite: payload.jobSiteName || '',
-        }, (payload.workerLanguage as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+        }, (payload.workerLanguage as 'fr' | 'en' | 'es') || 'fr', payload.dryRun).catch(console.error);
       }
     }
 
@@ -120,14 +122,14 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
         sendOrderConfirmationEmail(u.email, {
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           jobSite: payload.jobSiteName, supplier, reason, orderId: result.orderId!, cancelToken,
-        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+        }, (u.language as 'fr' | 'en' | 'es') || 'fr', payload.dryRun).catch(console.error);
       }
     } else if (orderStatus === 'pending' && result) {
       for (const u of allRecipients) {
         sendCartNotificationEmail(u.email, {
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           jobSite: payload.jobSiteName, supplier, reason,
-        }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+        }, (u.language as 'fr' | 'en' | 'es') || 'fr', payload.dryRun).catch(console.error);
       }
     }
   } else {
@@ -148,7 +150,7 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
         sendOrderFailureEmail(u.email, {
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           jobSite: payload.jobSiteName, errorMessage: orderError || 'Erreur inconnue',
-        }).catch(console.error);
+        }, payload.dryRun).catch(console.error);
       }
     } else {
       // Exponential backoff: 5min, 15min, 45min

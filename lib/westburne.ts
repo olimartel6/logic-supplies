@@ -319,6 +319,9 @@ export async function placeWestburneOrder(
             } else {
               log.push(`Order ID: ${orderId}`);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (checkoutErr: any) {
             const errMsg = checkoutErr?.message || String(checkoutErr);

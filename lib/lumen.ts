@@ -431,7 +431,7 @@ export async function placeLumenOrder(
         const bodySnippet = confirmationText?.slice(0, 500).replace(/\s+/g, ' ') || '';
         log.push(`Page body snippet: ${bodySnippet.slice(0, 200)}`);
         console.error('[Lumen] Page body snippet:', bodySnippet);
-        return { success: true, orderId: undefined, log };
+        return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
       } catch (checkoutErr: any) {
         const errMsg = checkoutErr?.message || String(checkoutErr);
         log.push(`Checkout error: ${errMsg}`);

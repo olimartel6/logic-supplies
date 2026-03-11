@@ -13,6 +13,7 @@ export async function triggerApproval(
   db: Database.Database,
   delivery_override?: 'office' | 'jobsite',
   office_comment?: string,
+  dryRun?: boolean,
 ) {
   db.prepare(`
     UPDATE requests SET status = 'approved', office_comment = ?, decision_date = CURRENT_TIMESTAMP
@@ -124,7 +125,7 @@ export async function triggerApproval(
       unit: request.unit,
       status: 'approved',
       officeComment: office_comment,
-    }, (request.worker_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+    }, (request.worker_language as 'fr' | 'en' | 'es') || 'fr', dryRun).catch(console.error);
   }
 
   // Trigger auto-order async
@@ -162,6 +163,7 @@ export async function triggerApproval(
     workerName: request.worker_name || '',
     workerLanguage: request.worker_language || 'fr',
     officeComment: office_comment,
+    ...(dryRun ? { dryRun: true } : {}),
   });
 
   db.prepare(`

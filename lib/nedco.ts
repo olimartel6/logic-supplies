@@ -300,12 +300,15 @@ export async function placeNedcoOrder(
               log.push(`[Nedco] Page body snippet: ${bodySnippet}`);
               console.error('[Nedco] Page body snippet:', bodySnippet);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (checkoutErr: any) {
             log.push(`[Nedco] Checkout error: ${checkoutErr.message}`);
             console.error('[Nedco] Checkout error:', checkoutErr.message);
             await page.screenshot({ path: process.cwd() + '/public/debug-nedco-error.png' }).catch(() => {});
-            return { success: false, error: `Checkout: ${checkoutErr.message}`, log };
+            return { success: false, inCart: true, error: `Checkout: ${checkoutErr.message}`, log };
           }
         }
 

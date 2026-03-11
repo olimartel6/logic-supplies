@@ -1,5 +1,6 @@
 import type { LumenOrderResult, PaymentInfo } from './lumen';
 import type { Branch } from './canac';
+import { placeOrderDryRun, getPriceDryRun } from './supplier-mock';
 import { CANAC_BRANCHES, placeCanacOrder, getCanacPrice } from './canac';
 import { HOME_DEPOT_BRANCHES, placeHomeDepotOrder, getHomeDepotPrice } from './homedepot';
 import { LUMEN_BRANCHES, placeLumenOrder, getLumenPrice } from './lumen';
@@ -175,7 +176,8 @@ function supplierLabel(s: SupplierKey): string {
   return labels[s] ?? s;
 }
 
-async function placeOrderRaw(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo): Promise<LumenOrderResult> {
+async function placeOrderRaw(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo, dryRun?: boolean): Promise<LumenOrderResult> {
+  if (dryRun) return placeOrderDryRun(account.supplier, product, quantity);
   switch (account.supplier) {
     case 'lumen':     return placeLumenOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
     case 'canac':     return placeCanacOrder(account.username, account.password, product, quantity, deliveryAddress, payment);
@@ -192,11 +194,11 @@ async function placeOrderRaw(account: SupplierAccount, product: string, quantity
 }
 
 /** Place order with timeout wrapper, retry on transient failures, and health tracking */
-async function placeOrder(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo): Promise<LumenOrderResult> {
+async function placeOrder(account: SupplierAccount, product: string, quantity: number, deliveryAddress?: string, payment?: PaymentInfo, dryRun?: boolean): Promise<LumenOrderResult> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const result = await withTimeout(
-        placeOrderRaw(account, product, quantity, deliveryAddress, payment),
+        placeOrderRaw(account, product, quantity, deliveryAddress, payment, dryRun),
         ORDER_TIMEOUT_MS,
         `commande ${supplierLabel(account.supplier)}`,
       );
@@ -224,8 +226,17 @@ async function placeOrder(account: SupplierAccount, product: string, quantity: n
 async function selectCheapest(
   accounts: SupplierAccount[],
   product: string,
+  dryRun?: boolean,
 ): Promise<{ account: SupplierAccount; reason: string } | null> {
   if (accounts.length === 0) return null;
+
+  if (dryRun) {
+    const prices = accounts.map(a => ({ account: a, price: getPriceDryRun(product) + accounts.indexOf(a) * 0.01 }));
+    prices.sort((a, b) => a.price - b.price);
+    const cheapest = prices[0];
+    const pricesList = prices.map(p => `${supplierLabel(p.account.supplier)}: ${p.price.toFixed(2)}$`).join(' · ');
+    return { account: cheapest.account, reason: `[DRY-RUN] Prix simulé: ${cheapest.price.toFixed(2)}$ (${pricesList})` };
+  }
 
   // First: check if the product exists in our catalog with a price — skip expensive browser calls
   try {
@@ -346,6 +357,7 @@ export async function selectAndOrder(
   companyId?: number | null,
   deliveryAddress?: string,
   payment?: PaymentInfo,
+  dryRun?: boolean,
 ): Promise<{ result: LumenOrderResult; supplier: string; reason: string }> {
   const allAccounts = getActiveAccounts(companyId ?? null);
 
@@ -374,7 +386,7 @@ export async function selectAndOrder(
   const selected = accounts.length === 1
     ? { account: accounts[0], reason: `${supplierLabel(accounts[0].supplier)} sélectionné` }
     : preference === 'cheapest'
-      ? await selectCheapest(accounts, product)
+      ? await selectCheapest(accounts, product, dryRun)
       : await selectFastest(accounts, jobSiteAddress);
 
   if (!selected) {
@@ -394,7 +406,7 @@ export async function selectAndOrder(
   const errors: string[] = [];
   for (let i = 0; i < orderedAccounts.length; i++) {
     const acc = orderedAccounts[i];
-    const result = await placeOrder(acc, product, quantity, deliveryAddress, payment);
+    const result = await placeOrder(acc, product, quantity, deliveryAddress, payment, dryRun);
     if (result.success || result.inCart) {
       const reason =
         i === 0

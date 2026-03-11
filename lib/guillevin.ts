@@ -361,6 +361,9 @@ export async function placeGuillevinOrder(
             } else {
               log.push(`Order confirmed: ${orderId}`);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (err: any) {
             const errorMsg = err.message || String(err);

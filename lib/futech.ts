@@ -280,6 +280,9 @@ export async function placeFutechOrder(
               log.push(`Order ID not found. Page snippet: ${bodySnippet.slice(0, 200)}`);
               console.error('[Futech] Page body snippet:', bodySnippet);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (checkoutErr: any) {
             const errMsg = checkoutErr?.message || String(checkoutErr);

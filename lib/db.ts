@@ -932,7 +932,26 @@ function initDb(db: Database.Database) {
   // Rename electrician_id column to worker_id in requests table
   const reqColsMigration = db.pragma('table_info(requests)') as { name: string }[];
   if (reqColsMigration.find(c => c.name === 'electrician_id')) {
-    db.exec('ALTER TABLE requests RENAME COLUMN electrician_id TO worker_id');
+    try {
+      db.exec('ALTER TABLE requests RENAME COLUMN electrician_id TO worker_id');
+    } catch {
+      // SQLite < 3.25 doesn't support RENAME COLUMN — recreate the table
+      console.log('[DB] RENAME COLUMN not supported, recreating requests table...');
+      db.exec(`
+        CREATE TABLE requests_new AS SELECT
+          id, company_id, product, quantity, unit, job_site_id,
+          electrician_id AS worker_id,
+          urgency, note, status, office_comment, supplier, decision_date, created_at
+        FROM requests
+      `);
+      db.exec('DROP TABLE requests');
+      db.exec('ALTER TABLE requests_new RENAME TO requests');
+    }
+  }
+  // Ensure worker_id column exists (fresh DB created with old schema)
+  const reqColsCheck = db.pragma('table_info(requests)') as { name: string }[];
+  if (!reqColsCheck.find(c => c.name === 'worker_id') && !reqColsCheck.find(c => c.name === 'electrician_id')) {
+    db.exec('ALTER TABLE requests ADD COLUMN worker_id INTEGER REFERENCES users(id)');
   }
 
   scheduleBackup();

@@ -92,13 +92,14 @@ export async function sendStatusEmail(to: string, data: {
   unit: string;
   status: string;
   officeComment?: string;
-}, lang: Lang = 'fr') {
+}, lang: Lang = 'fr', testMode?: boolean) {
   if (!process.env.RESEND_API_KEY) return;
   const approved = data.status === 'approved';
+  const testPrefix = testMode ? '[TEST] ' : '';
   const subjects: Record<Lang, string> = {
-    fr: `${approved ? '✅' : '❌'} Demande ${approved ? 'approuvée' : 'rejetée'} — ${data.product}`,
-    en: `${approved ? '✅' : '❌'} Request ${approved ? 'approved' : 'rejected'} — ${data.product}`,
-    es: `${approved ? '✅' : '❌'} Solicitud ${approved ? 'aprobada' : 'rechazada'} — ${data.product}`,
+    fr: `${testPrefix}${approved ? '✅' : '❌'} Demande ${approved ? 'approuvée' : 'rejetée'} — ${data.product}`,
+    en: `${testPrefix}${approved ? '✅' : '❌'} Request ${approved ? 'approved' : 'rejected'} — ${data.product}`,
+    es: `${testPrefix}${approved ? '✅' : '❌'} Solicitud ${approved ? 'aprobada' : 'rechazada'} — ${data.product}`,
   };
   const headings: Record<Lang, string> = {
     fr: `Ta demande a été ${approved ? 'approuvée ✅' : 'rejetée ❌'}`,
@@ -134,14 +135,15 @@ export async function sendCartNotificationEmail(to: string, data: {
   jobSite: string;
   supplier: string;
   reason: string;
-}, lang: Lang = 'fr') {
+}, lang: Lang = 'fr', testMode?: boolean) {
   if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cartUrl = supplierCartUrl(data.supplier);
+  const testPrefix = testMode ? '[TEST] ' : '';
   const subjects: Record<Lang, string> = {
-    fr: `🛒 Produit ajouté au panier ${label} — ${data.product}`,
-    en: `🛒 Product added to ${label} cart — ${data.product}`,
-    es: `🛒 Producto añadido al carrito ${label} — ${data.product}`,
+    fr: `${testPrefix}🛒 Produit ajouté au panier ${label} — ${data.product}`,
+    en: `${testPrefix}🛒 Product added to ${label} cart — ${data.product}`,
+    es: `${testPrefix}🛒 Producto añadido al carrito ${label} — ${data.product}`,
   };
   const headings: Record<Lang, string> = {
     fr: `Produit ajouté au panier ${label} 🛒`,
@@ -199,14 +201,15 @@ export async function sendOrderConfirmationEmail(to: string, data: {
   reason: string;
   orderId: string;
   cancelToken: string;
-}, lang: Lang = 'fr') {
+}, lang: Lang = 'fr', testMode?: boolean) {
   if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
   const cancelUrl = `${APP_URL}/cancel-order/${data.cancelToken}`;
+  const testPrefix = testMode ? '[TEST] ' : '';
   const subjects: Record<Lang, string> = {
-    fr: `✅ Commande envoyée à ${label} — ${data.product}`,
-    en: `✅ Order sent to ${label} — ${data.product}`,
-    es: `✅ Pedido enviado a ${label} — ${data.product}`,
+    fr: `${testPrefix}✅ Commande envoyée à ${label} — ${data.product}`,
+    en: `${testPrefix}✅ Order sent to ${label} — ${data.product}`,
+    es: `${testPrefix}✅ Pedido enviado a ${label} — ${data.product}`,
   };
   const headings: Record<Lang, string> = {
     fr: 'Commande envoyée automatiquement ✅',
@@ -260,13 +263,13 @@ export async function sendOrderConfirmationEmail(to: string, data: {
 
 export async function sendOrderFailureEmail(to: string, data: {
   product: string; quantity: number; unit: string; jobSite: string; errorMessage: string;
-}) {
+}, testMode?: boolean) {
   if (!process.env.RESEND_API_KEY) return;
   const resend = getResend();
   await resend.emails.send({
     from: getFrom(),
     to,
-    subject: `Erreur de commande — ${data.product}`,
+    subject: `${testMode ? '[TEST] ' : ''}Erreur de commande — ${data.product}`,
     html: `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
         <h2 style="color:#dc2626">Erreur de commande automatique</h2>
@@ -438,9 +441,10 @@ export async function sendOrderTrackingEmail(to: string, data: {
   orderId: string;
   trackingStatus: 'ordered' | 'shipped' | 'received';
   jobSite: string;
-}, lang: Lang = 'fr') {
+}, lang: Lang = 'fr', testMode?: boolean) {
   if (!process.env.RESEND_API_KEY) return;
   const label = supplierLabel(data.supplier);
+  const testPrefix = testMode ? '[TEST] ' : '';
 
   const statusLabels: Record<string, Record<Lang, string>> = {
     ordered:  { fr: 'Commandé',  en: 'Ordered',  es: 'Pedido' },
@@ -460,9 +464,9 @@ export async function sendOrderTrackingEmail(to: string, data: {
 
   const statusText = statusLabels[data.trackingStatus][lang];
   const subjects: Record<Lang, string> = {
-    fr: `Mise à jour de votre commande — ${data.product}`,
-    en: `Order update — ${data.product}`,
-    es: `Actualización del pedido — ${data.product}`,
+    fr: `${testPrefix}Mise à jour de votre commande — ${data.product}`,
+    en: `${testPrefix}Order update — ${data.product}`,
+    es: `${testPrefix}Actualización del pedido — ${data.product}`,
   };
   const headings: Record<Lang, string> = {
     fr: 'Mise à jour de commande',

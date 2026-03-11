@@ -345,6 +345,9 @@ export async function placeBmrOrder(
               log.push(`Order ID not found. Page snippet: ${bodySnippet}`);
               console.error('[BMR] Page body snippet:', bodySnippet);
             }
+            if (!orderId) {
+              return { success: false, inCart: true, error: 'Commande soumise mais pas de numéro de confirmation', log };
+            }
             return { success: true, orderId, log };
           } catch (checkoutErr: any) {
             const errMsg = checkoutErr?.message || String(checkoutErr);
