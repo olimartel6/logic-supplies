@@ -148,6 +148,14 @@ function ApprovalsContent() {
     setPage(data.page);
   }, [search, statusFilter, dateFrom, dateTo]);
 
+  // Keep a stable ref to loadRequests for the polling interval
+  const loadRequestsRef = useRef(loadRequests);
+
+  // Keep ref in sync with latest loadRequests
+  useEffect(() => {
+    loadRequestsRef.current = loadRequests;
+  }, [loadRequests]);
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
@@ -165,7 +173,7 @@ function ApprovalsContent() {
       setLang((u.language as Lang) || 'fr');
     });
     loadRequests(1, false);
-    const interval = setInterval(() => loadRequests(1, false), 10000);
+    const interval = setInterval(() => loadRequestsRef.current(1, false), 10000);
     fetch('/api/supplier/preference').then(r => r.json()).then((d: { largeOrderThreshold?: number; defaultDelivery?: string }) => {
       if (d.largeOrderThreshold != null) setLargeOrderThreshold(d.largeOrderThreshold);
       if (d.defaultDelivery) {
