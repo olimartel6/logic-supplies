@@ -921,13 +921,24 @@ function initDb(db: Database.Database) {
   `);
 
   // ── Migration: electrician → worker ──
-  // Rename role value in users table (update CHECK constraint for existing DBs)
-  const usersSchema = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as any)?.sql;
-  if (usersSchema?.includes("'electrician'")) {
-    db.pragma('writable_schema = ON');
-    db.prepare("UPDATE sqlite_master SET sql = REPLACE(sql, '''electrician''', '''worker''') WHERE type='table' AND name='users'").run();
-    db.pragma('writable_schema = OFF');
-    db.exec("UPDATE users SET role = 'worker' WHERE role = 'electrician'");
+  // Update role values and CHECK constraint for existing DBs
+  try {
+    const hasElectricians = db.prepare("SELECT COUNT(*) as cnt FROM users WHERE role = 'electrician'").get() as any;
+    if (hasElectricians?.cnt > 0) {
+      // Try to update the CHECK constraint in schema (may fail on some SQLite builds)
+      try {
+        db.pragma('writable_schema = ON');
+        db.prepare("UPDATE sqlite_master SET sql = REPLACE(sql, '''electrician''', '''worker''') WHERE type='table' AND name='users'").run();
+        db.pragma('writable_schema = OFF');
+      } catch {
+        console.log('[DB] writable_schema not supported, skipping CHECK constraint update');
+      }
+      db.pragma('ignore_check_constraints = ON');
+      db.exec("UPDATE users SET role = 'worker' WHERE role = 'electrician'");
+      db.pragma('ignore_check_constraints = OFF');
+    }
+  } catch (err) {
+    console.error('[DB] electrician→worker migration error:', err);
   }
   // Rename electrician_id column to worker_id in requests table
   const reqColsMigration = db.pragma('table_info(requests)') as { name: string }[];
