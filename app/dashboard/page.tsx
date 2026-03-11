@@ -80,14 +80,16 @@ export default function DashboardPage() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   const loadBudget = useCallback(async () => {
-    const [budgetRes, alertsRes] = await Promise.all([
-      fetch('/api/budget'),
-      fetch('/api/budget/alerts'),
-    ]);
-    const budgetData = await budgetRes.json();
-    const alertsData = await alertsRes.json();
-    setSites(budgetData.sites || []);
-    setAlerts(Array.isArray(alertsData) ? alertsData : []);
+    try {
+      const [budgetRes, alertsRes] = await Promise.all([
+        fetch('/api/budget'),
+        fetch('/api/budget/alerts'),
+      ]);
+      const budgetData = await budgetRes.json();
+      const alertsData = await alertsRes.json();
+      setSites(budgetData.sites || []);
+      setAlerts(Array.isArray(alertsData) ? alertsData : []);
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -107,11 +109,13 @@ export default function DashboardPage() {
 
   async function handleSaveBudget(id: number) {
     setSaving(true);
-    await fetch(`/api/budget/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ budget_total: editValue === '' ? null : parseFloat(editValue) }),
-    });
+    try {
+      await fetch(`/api/budget/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ budget_total: editValue === '' ? null : parseFloat(editValue) }),
+      });
+    } catch {}
     setEditingId(null);
     setEditValue('');
     setSaving(false);
