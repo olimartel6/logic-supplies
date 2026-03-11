@@ -86,22 +86,12 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
   const router = useRouter();
   const pathname = usePathname();
   const { branding } = useBranding();
-  const [unseenAlerts, setUnseenAlerts] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [messagingFeatureEnabled, setMessagingFeatureEnabled] = useState(messagingEnabled);
   const t = useT();
 
   const isWorker = role === 'worker';
   const isOfficeOrAdmin = role === 'office' || role === 'admin';
-
-  useEffect(() => {
-    if (isOfficeOrAdmin) {
-      fetch('/api/budget')
-        .then(r => r.json())
-        .then(d => setUnseenAlerts(d.totalUnseen || 0))
-        .catch(() => {});
-    }
-  }, [isOfficeOrAdmin]);
 
   // Poll unread messages count
   useEffect(() => {
@@ -176,17 +166,6 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
           <Link href="/approvals" prefetch className={linkClass('/approvals')}>
             <IconCheckBadge />
             <span>{t('nav_approvals')}</span>
-          </Link>
-          <Link href="/budget" prefetch className={`${linkClass('/budget')} relative`}>
-            <span className="relative">
-              <IconChartBar />
-              {unseenAlerts > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unseenAlerts > 9 ? '9+' : unseenAlerts}
-                </span>
-              )}
-            </span>
-            <span>{t('nav_budget')}</span>
           </Link>
           {marketingEnabled && (
           <Link href="/projects" prefetch className={linkClass('/projects')}>
@@ -274,17 +253,6 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
           <Link href="/approvals" prefetch className={sidebarLinkClass('/approvals')}>
             <IconCheckBadge /><span>{t('nav_approvals')}</span>
           </Link>
-          <Link href="/budget" prefetch className={`${sidebarLinkClass('/budget')} relative`}>
-            <span className="relative">
-              <IconChartBar />
-              {unseenAlerts > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unseenAlerts > 9 ? '9+' : unseenAlerts}
-                </span>
-              )}
-            </span>
-            <span>{t('nav_budget')}</span>
-          </Link>
           {marketingEnabled && (
             <Link href="/projects" prefetch className={sidebarLinkClass('/projects')}>
               <IconMegaphone /><span>Marketing</span>
@@ -334,15 +302,18 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       <aside className="hidden md:flex fixed left-0 top-0 h-screen w-56 border-r border-white/10 flex-col z-30" style={{ backgroundColor: branding.sidebarBg }}>
         <div className="px-4 py-5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <img src={branding.logoUrl || '/logo-shield.svg'} className="h-9 w-auto flex-shrink-0" alt={branding.appName} />
-            {!branding.logoUrl && (
+            <img src="/logo-shield.svg" className="h-9 w-auto flex-shrink-0" alt="LogicSupplies" />
             <div className="flex flex-col leading-none gap-0.5">
               <span className="font-extrabold text-white text-base tracking-wide">Logic</span>
               <span className="font-extrabold text-base tracking-wide" style={{ color: branding.primaryColor }}>Supplies</span>
             </div>
-            )}
           </div>
         </div>
+        {branding.logoUrl && (
+          <div className="px-4 py-4 border-b border-white/10 flex justify-center">
+            <img src={branding.logoUrl} className="h-12 w-auto max-w-[80%] object-contain" alt={branding.appName} />
+          </div>
+        )}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           <div className="flex flex-col gap-1">
             {sidebarItems}
@@ -359,12 +330,13 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       {/* Top bar */}
       <div className={`px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md md:hidden ${hideTopOnMobile ? 'hidden sm:flex' : ''}`} style={{ backgroundColor: branding.sidebarBg }}>
         <div className="flex items-center gap-2.5 md:hidden">
-          <img src={branding.logoUrl || '/logo-shield.svg'} className="h-8 w-auto flex-shrink-0" alt={branding.appName} />
-          {!branding.logoUrl && (
+          <img src="/logo-shield.svg" className="h-8 w-auto flex-shrink-0" alt="LogicSupplies" />
           <div className="flex flex-col leading-none gap-0.5">
             <span className="font-extrabold text-white text-sm tracking-wide">Logic</span>
             <span className="font-extrabold text-sm tracking-wide" style={{ color: branding.primaryColor }}>Supplies</span>
           </div>
+          {branding.logoUrl && (
+            <img src={branding.logoUrl} className="h-7 w-auto ml-2 object-contain" alt={branding.appName} />
           )}
         </div>
         <div className="flex items-center gap-3 md:ml-auto">
