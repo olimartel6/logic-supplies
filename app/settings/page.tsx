@@ -374,7 +374,7 @@ export default function SettingsPage() {
   const [testSupplier, setTestSupplier] = useState('');
   const [testRunning, setTestRunning] = useState(false);
   const [testResults, setTestResults] = useState<any[]>([]);
-  const [testPolling, setTestPolling] = useState(false);
+  const [_testPolling, _setTestPolling] = useState(false); // unused, kept for compat
 
   // Accordion open/close state
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -602,38 +602,21 @@ export default function SettingsPage() {
           quantity: 1,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Erreur' }));
-        setTestResults([{ error: err.error }]);
-        setTestRunning(false);
-        return;
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setTestResults([{ error: data.error || 'Erreur' }]);
+      } else {
+        setTestResults([data.result]);
       }
-      // Poll for results
-      setTestPolling(true);
-      const poll = setInterval(async () => {
-        try {
-          const r = await fetch('/api/test-order');
-          const data = await r.json();
-          if (data.results?.length > 0) {
-            setTestResults(data.results);
-            const latest = data.results[0];
-            if (latest.job?.status === 'done' || latest.job?.status === 'failed' || latest.supplierOrder) {
-              clearInterval(poll);
-              setTestPolling(false);
-              setTestRunning(false);
-            }
-          }
-        } catch { /* ignore */ }
-      }, 2000);
-      // Safety timeout: stop polling after 2 minutes
-      setTimeout(() => { clearInterval(poll); setTestPolling(false); setTestRunning(false); }, 120000);
     } catch {
+      setTestResults([{ error: 'Erreur réseau' }]);
+    } finally {
       setTestRunning(false);
     }
   }
 
   async function handleCleanTests() {
-    await fetch('/api/test-order', { method: 'DELETE' });
+    await fetch('/api/test-order', { method: 'DELETE' }).catch(() => {});
     setTestResults([]);
   }
 
@@ -1325,46 +1308,28 @@ export default function SettingsPage() {
                 <div className="space-y-3 mt-2">
                   {testResults.map((r: any, i: number) => (
                     <div key={i} className="bg-white rounded-lg border border-purple-100 p-3 text-sm space-y-1">
-                      {r.error && !r.requestId ? (
+                      {r.error ? (
                         <p className="text-red-600 font-medium">{r.error}</p>
                       ) : (
                         <>
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-purple-900">{r.product} x{r.quantity}</span>
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              r.supplierOrder?.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                              r.supplierOrder?.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              r.job?.status === 'failed' ? 'bg-red-100 text-red-800' :
-                              r.job?.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                              'bg-gray-100 text-gray-600'
+                              r.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                             }`}>
-                              {r.supplierOrder?.status === 'confirmed' ? 'Confirmé' :
-                               r.supplierOrder?.status === 'pending' ? 'En panier' :
-                               r.job?.status === 'failed' ? 'Échoué' :
-                               r.job?.status === 'processing' ? 'En cours...' :
-                               r.job?.status === 'done' ? 'Terminé' :
-                               'En attente'}
+                              {r.success ? 'Succès' : 'Échoué'}
                             </span>
                           </div>
-                          {r.supplierOrder && (
-                            <p className="text-gray-600">
-                              Fournisseur: <span className="font-medium">{r.supplierOrder.supplier}</span>
-                              {r.supplierOrder.orderId && <> — #{r.supplierOrder.orderId}</>}
-                            </p>
-                          )}
-                          {r.attempts?.length > 0 && (
-                            <div className="text-xs text-gray-500 space-y-0.5 mt-1">
-                              {r.attempts.map((a: any, j: number) => (
-                                <p key={j}>
-                                  Tentative {a.attempt_number}: {a.supplier} — {a.status}
-                                  {a.duration_ms ? ` (${(a.duration_ms / 1000).toFixed(1)}s)` : ''}
-                                  {a.error_message && <span className="text-red-500"> — {a.error_message}</span>}
-                                </p>
+                          <p className="text-gray-600">
+                            Fournisseur: <span className="font-medium capitalize">{r.supplier}</span>
+                            {r.orderId && <> — #{r.orderId}</>}
+                          </p>
+                          {r.log?.length > 0 && (
+                            <div className="text-xs text-gray-500 space-y-0.5 mt-1 bg-gray-50 rounded p-2">
+                              {r.log.map((line: string, j: number) => (
+                                <p key={j}>{line}</p>
                               ))}
                             </div>
-                          )}
-                          {r.job?.lastError && (
-                            <p className="text-xs text-red-500 mt-1">{r.job.lastError}</p>
                           )}
                         </>
                       )}
