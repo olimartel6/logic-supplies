@@ -115,7 +115,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
   }
 
   const linkClass = (path: string) =>
-    `flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium transition-colors ${
+    `flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
       pathname === path ? 'text-yellow-400' : 'text-slate-400 hover:text-white active:text-yellow-300'
     }`;
 
@@ -348,8 +348,8 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       </div>
 
       {/* Bottom nav (mobile only) */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu transition-transform duration-200 ${hideBottomNav ? 'translate-y-full' : ''}`} style={{ backgroundColor: branding.sidebarBg }}>
-        <div className="flex justify-around max-w-lg mx-auto">
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-30 shadow-[0_-2px_8px_rgba(0,0,0,0.3)] transform-gpu transition-transform duration-200 ${hideBottomNav ? 'translate-y-full' : ''}`} style={{ backgroundColor: branding.sidebarBg }}>
+        <div className="flex justify-around max-w-lg mx-auto overflow-x-auto scrollbar-hide gap-1">
           {navItems}
         </div>
       </nav>
