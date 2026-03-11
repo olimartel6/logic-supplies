@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { triggerApproval } from '@/lib/approval';
+import { processOrderJob } from '@/lib/order-queue';
 
 const TEST_NOTE = '[TEST-DRY-RUN]';
 
@@ -44,12 +45,25 @@ export async function POST(req: NextRequest) {
 
   const requestId = Number(result.lastInsertRowid);
 
-  // Trigger approval with dryRun=true
+  // Trigger approval with dryRun=true (creates the order_job)
   try {
     await triggerApproval(requestId, ctx.companyId, db, undefined, 'Test automatique dry-run', true);
   } catch (err: any) {
     console.error('[test-order] triggerApproval error:', err);
     return NextResponse.json({ ok: true, requestId, warning: err?.message || 'Erreur lors du déclenchement' });
+  }
+
+  // Process the job immediately instead of waiting for the 30s poll
+  try {
+    const job = db.prepare(
+      "SELECT * FROM order_jobs WHERE request_id = ? AND company_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(requestId, ctx.companyId);
+    if (job) {
+      await processOrderJob(db, job);
+    }
+  } catch (err: any) {
+    console.error('[test-order] processOrderJob error:', err);
+    return NextResponse.json({ ok: true, requestId, warning: err?.message || 'Erreur traitement' });
   }
 
   return NextResponse.json({ ok: true, requestId });
