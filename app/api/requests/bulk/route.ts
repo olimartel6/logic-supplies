@@ -6,7 +6,7 @@ import { triggerApproval } from '@/lib/approval';
 export async function PATCH(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+  if (ctx.role === 'worker') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
 
   const { ids, status, office_comment } = await req.json();
   if (!Array.isArray(ids) || ids.length === 0) return NextResponse.json({ error: 'ids requis' }, { status: 400 });

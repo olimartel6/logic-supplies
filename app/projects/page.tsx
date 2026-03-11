@@ -43,7 +43,7 @@ export default function ProjectsPage() {
       return r.json();
     }).then(u => {
       if (!u) return;
-      if (u.role === 'electrician') { router.push('/my-requests'); return; }
+      if (u.role === 'worker') { router.push('/my-requests'); return; }
       setUser(u);
     });
     loadSites();

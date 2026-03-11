@@ -32,17 +32,15 @@ export default function ProfilePage() {
   const [langSaved, setLangSaved] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => {
+    fetch('/api/profile/init').then(r => {
       if (!r.ok) { router.push('/'); return; }
       return r.json();
-    }).then(u => {
-      if (!u) return;
-      setCurrentUser(u);
-      setEmail(u.email);
-      setLang((u.language as Lang) || 'fr');
-    });
-    fetch('/api/supplier/preference').then(r => r.json()).then((d: { preference: 'cheapest' | 'fastest' }) => {
-      if (d?.preference) setPreference(d.preference);
+    }).then(data => {
+      if (!data) return;
+      setCurrentUser(data.user);
+      setEmail(data.user.email);
+      setLang((data.user.language as Lang) || 'fr');
+      if (data.preference) setPreference(data.preference);
     });
   }, [router]);
 
@@ -114,8 +112,8 @@ export default function ProfilePage() {
         <h1 className="text-xl font-bold text-gray-900 mb-1">{t('profile_title')}</h1>
         <p className="text-sm text-gray-500 mb-6">{currentUser.name}</p>
 
-        {/* Préférence fournisseur — visible pour les électriciens */}
-        {currentUser.role === 'electrician' && (
+        {/* Préférence fournisseur — visible pour les travailleurs */}
+        {currentUser.role === 'worker' && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
             <h2 className="font-semibold text-gray-900 mb-1">{t('search_preference')}</h2>
             <p className="text-xs text-gray-500 mb-4">{t('search_preference_desc')}</p>

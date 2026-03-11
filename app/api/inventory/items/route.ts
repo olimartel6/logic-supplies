@@ -21,7 +21,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+  if (ctx.role === 'worker') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   const { barcode: rawBarcode, name, unit, description, min_stock } = await req.json();
   if (!name) return NextResponse.json({ error: 'name requis' }, { status: 400 });
   const barcode = rawBarcode?.trim() || `INT-${ctx.companyId}-${Date.now()}`;

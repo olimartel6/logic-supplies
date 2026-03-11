@@ -5,7 +5,7 @@ import { getTenantContext } from '@/lib/tenant';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+  if (ctx.role === 'worker') return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   const { id } = await params;
   const { barcode } = await req.json();
   if (!barcode) return NextResponse.json({ error: 'barcode requis' }, { status: 400 });

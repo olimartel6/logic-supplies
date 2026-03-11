@@ -14,9 +14,9 @@ interface JobPayload {
   jobSiteName: string;
   deliveryAddress: string;
   payment?: PaymentInfo;
-  electricianEmail: string;
-  electricianName: string;
-  electricianLanguage: string;
+  workerEmail: string;
+  workerName: string;
+  workerLanguage: string;
   officeComment?: string;
 }
 
@@ -99,12 +99,12 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
       db.prepare("UPDATE requests SET tracking_status = 'ordered' WHERE id = ? AND company_id = ?")
         .run(job.request_id, job.company_id);
 
-      if (payload.electricianEmail) {
-        sendOrderTrackingEmail(payload.electricianEmail, {
+      if (payload.workerEmail) {
+        sendOrderTrackingEmail(payload.workerEmail, {
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           supplier, orderId: result?.orderId || '', trackingStatus: 'ordered',
           jobSite: payload.jobSiteName || '',
-        }, (payload.electricianLanguage as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+        }, (payload.workerLanguage as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
       }
     }
 
@@ -112,7 +112,7 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
     const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(job.company_id) as { email: string; language: string }[];
     const allRecipients = [
       ...officeUsers,
-      { email: payload.electricianEmail, language: payload.electricianLanguage },
+      { email: payload.workerEmail, language: payload.workerLanguage },
     ].filter(u => u.email);
 
     if (orderStatus === 'confirmed' && result) {

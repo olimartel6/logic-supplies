@@ -29,7 +29,7 @@ export default function DashboardPage() {
   }, []);
 
   if (!user) return null;
-  if (user.role === 'electrician') return <p className="p-8 text-white">Non autorisé</p>;
+  if (user.role === 'worker') return <p className="p-8 text-white">Non autorisé</p>;
 
   return (
     <div className="min-h-screen bg-slate-900 text-white md:ml-56">

@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
@@ -47,7 +47,7 @@ export async function POST(
 ) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 

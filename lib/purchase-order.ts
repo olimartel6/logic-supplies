@@ -21,7 +21,7 @@ export interface PORequest {
   unit: string;
   job_site_name: string;
   job_site_address: string | null;
-  electrician_name: string;
+  worker_name: string;
   supplier: string | null;
 }
 
@@ -89,7 +89,7 @@ function buildHtml(req: PORequest, sku: string | null, unitPrice: number | null)
       </div>
       <div class="meta-block">
         <label>Demandé par</label>
-        <div class="val">${esc(req.electrician_name)}</div>
+        <div class="val">${esc(req.worker_name)}</div>
       </div>
       <div class="meta-block">
         <label>Fournisseur</label>
@@ -151,12 +151,12 @@ export async function generatePurchaseOrderPdf(requestId: number): Promise<Buffe
 
   const req = db.prepare(`
     SELECT r.id, r.product, r.quantity, r.unit,
-           u.name as electrician_name,
+           u.name as worker_name,
            j.name as job_site_name,
            j.address as job_site_address,
            so.supplier
     FROM requests r
-    LEFT JOIN users u ON r.electrician_id = u.id
+    LEFT JOIN users u ON r.worker_id = u.id
     LEFT JOIN job_sites j ON r.job_site_id = j.id
     LEFT JOIN supplier_orders so ON so.request_id = r.id
     WHERE r.id = ?

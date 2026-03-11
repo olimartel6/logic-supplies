@@ -58,7 +58,7 @@ export default function LandingPage() {
                 en un clic
               </h1>
               <p className="text-lg text-slate-300 mb-4 leading-relaxed max-w-lg">
-                La plateforme tout-en-un qui simplifie l'approvisionnement pour les entreprises de construction du Québec — électriciens, plombiers, charpentiers, ferblantiers et plus.
+                La plateforme tout-en-un qui simplifie l'approvisionnement pour les entreprises de construction du Québec — plombiers, charpentiers, ferblantiers et plus.
               </p>
               <ul className="text-slate-400 mb-8 space-y-2 max-w-lg">
                 <li className="flex items-center gap-2">
@@ -211,7 +211,7 @@ export default function LandingPage() {
               </div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6">Personnalisable pour chaque compagnie</h2>
               <p className="text-lg text-gray-600 mb-6 leading-relaxed">
-                Chaque entreprise est différente. LogicSupplies s'adapte à vos besoins spécifiques — que vous soyez électricien, plombier, charpentier ou ferblantier.
+                Chaque entreprise est différente. LogicSupplies s'adapte à vos besoins spécifiques — peu importe votre métier de la construction.
               </p>
               <ul className="space-y-4 text-gray-600">
                 <li className="flex items-start gap-3">

@@ -44,7 +44,7 @@ export async function sendNewRequestEmail(to: string, data: {
   quantity: number;
   unit: string;
   jobSite: string;
-  electrician: string;
+  worker: string;
   urgency: boolean;
   note: string;
 }, lang: Lang = 'fr') {
@@ -60,9 +60,9 @@ export async function sendNewRequestEmail(to: string, data: {
     es: 'Nueva solicitud de material',
   };
   const labels: Record<Lang, Record<string, string>> = {
-    fr: { electrician: 'Électricien', product: 'Produit', qty: 'Quantité', site: 'Chantier', urgent: 'Urgent', note: 'Note' },
-    en: { electrician: 'Electrician', product: 'Product', qty: 'Quantity', site: 'Job site', urgent: 'Urgent', note: 'Note' },
-    es: { electrician: 'Electricista', product: 'Producto', qty: 'Cantidad', site: 'Obra', urgent: 'Urgente', note: 'Nota' },
+    fr: { worker: 'Travailleur', product: 'Produit', qty: 'Quantité', site: 'Chantier', urgent: 'Urgent', note: 'Note' },
+    en: { worker: 'Worker', product: 'Product', qty: 'Quantity', site: 'Job site', urgent: 'Urgent', note: 'Note' },
+    es: { worker: 'Trabajador', product: 'Producto', qty: 'Cantidad', site: 'Obra', urgent: 'Urgente', note: 'Nota' },
   };
   const l = labels[lang];
   const { error } = await getResend().emails.send({
@@ -71,7 +71,7 @@ export async function sendNewRequestEmail(to: string, data: {
     subject: subjects[lang],
     html: `
       <h2>${headings[lang]}</h2>
-      <p><b>${l.electrician}:</b> ${data.electrician}</p>
+      <p><b>${l.worker}:</b> ${data.worker}</p>
       <p><b>${l.product}:</b> ${data.product}</p>
       <p><b>${l.qty}:</b> ${data.quantity} ${data.unit}</p>
       <p><b>${l.site}:</b> ${data.jobSite}</p>

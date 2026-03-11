@@ -77,7 +77,7 @@ async function layout4(photos: Buffer[]): Promise<Buffer> {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 

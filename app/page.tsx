@@ -52,7 +52,7 @@ function LoginPageInner() {
     }
     if (data.role === 'superadmin') {
       router.push('/superadmin');
-    } else if (data.role === 'electrician') {
+    } else if (data.role === 'worker') {
       router.push('/my-requests');
     } else {
       router.push('/approvals');

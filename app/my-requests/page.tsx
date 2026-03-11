@@ -62,16 +62,16 @@ export default function MyRequestsPage() {
   }
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => {
+    fetch('/api/my-requests/init').then(r => {
       if (!r.ok) { router.push('/'); return; }
       return r.json();
-    }).then(u => {
-      if (!u) return;
-      if (u.role !== 'electrician') { router.push('/approvals'); return; }
-      setUser(u);
-      setLang((u.language as Lang) || 'fr');
+    }).then(data => {
+      if (!data) return;
+      if (data.user.role !== 'worker') { router.push('/approvals'); return; }
+      setUser(data.user);
+      setLang((data.user.language as Lang) || 'fr');
+      setRequests(data.requests || []);
     });
-    loadRequests();
   }, [router]);
 
   if (!user) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;

@@ -30,7 +30,7 @@ describe('Approval Flow', () => {
 
     // Create a pending request
     const result = db.prepare(`
-      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, status, supplier)
+      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, status, supplier)
       VALUES (1, 'Fil 14/2 NMD90', 5, 'rouleau', 1, 1, 'pending', 'lumen')
     `).run();
 
@@ -53,7 +53,7 @@ describe('Approval Flow', () => {
     `).run();
 
     const result = db.prepare(`
-      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, status, supplier)
+      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, status, supplier)
       VALUES (1, 'Disjoncteur 20A', 3, 'unité', 1, 1, 'pending', 'lumen')
     `).run();
 
@@ -75,7 +75,7 @@ describe('Approval Flow', () => {
     `).run();
 
     const result = db.prepare(`
-      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, status, supplier)
+      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, status, supplier)
       VALUES (1, 'Câble 12/2', 10, 'rouleau', 1, 1, 'pending', 'lumen')
     `).run();
 

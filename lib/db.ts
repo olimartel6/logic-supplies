@@ -322,7 +322,7 @@ function initDb(db: Database.Database) {
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       password TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('electrician', 'office', 'admin', 'superadmin')),
+      role TEXT NOT NULL CHECK(role IN ('worker', 'office', 'admin', 'superadmin')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(email, company_id)
     );
@@ -345,7 +345,7 @@ function initDb(db: Database.Database) {
       quantity INTEGER NOT NULL,
       unit TEXT NOT NULL,
       job_site_id INTEGER REFERENCES job_sites(id),
-      electrician_id INTEGER REFERENCES users(id),
+      worker_id INTEGER REFERENCES users(id),
       urgency INTEGER DEFAULT 0,
       note TEXT,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
@@ -919,6 +919,21 @@ function initDb(db: Database.Database) {
       use_count INTEGER DEFAULT 0
     )
   `);
+
+  // ── Migration: electrician → worker ──
+  // Rename role value in users table (update CHECK constraint for existing DBs)
+  const usersSchema = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as any)?.sql;
+  if (usersSchema?.includes("'electrician'")) {
+    db.pragma('writable_schema = ON');
+    db.prepare("UPDATE sqlite_master SET sql = REPLACE(sql, '''electrician''', '''worker''') WHERE type='table' AND name='users'").run();
+    db.pragma('writable_schema = OFF');
+    db.exec("UPDATE users SET role = 'worker' WHERE role = 'electrician'");
+  }
+  // Rename electrician_id column to worker_id in requests table
+  const reqColsMigration = db.pragma('table_info(requests)') as { name: string }[];
+  if (reqColsMigration.find(c => c.name === 'electrician_id')) {
+    db.exec('ALTER TABLE requests RENAME COLUMN electrician_id TO worker_id');
+  }
 
   scheduleBackup();
   // Lazy import to avoid circular dependency (job-runner → db)

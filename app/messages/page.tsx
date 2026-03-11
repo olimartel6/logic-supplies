@@ -58,7 +58,7 @@ function roleBadge(role: string) {
 function roleLabel(role: string) {
   if (role === 'admin') return 'Admin';
   if (role === 'office') return 'Bureau';
-  return 'Électricien';
+  return 'Travailleur';
 }
 
 export default function MessagesPage() {
@@ -77,16 +77,7 @@ export default function MessagesPage() {
   const router = useRouter();
   const t = useT();
 
-  // Load user
-  useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(u => {
-      if (!u || u.error) { router.push('/'); return; }
-      setUser(u);
-      setUserId(u.id);
-    }).catch(() => router.push('/'));
-  }, [router]);
-
-  // Load conversation list
+  // Load user + conversation list in one call
   const loadConversations = useCallback(() => {
     fetch('/api/messages').then(r => r.json()).then(data => {
       if (!data.error) setConvList(data);
@@ -94,8 +85,17 @@ export default function MessagesPage() {
   }, []);
 
   useEffect(() => {
+    fetch('/api/messages/init').then(r => r.json()).then(data => {
+      if (!data || data.error) { router.push('/'); return; }
+      setUser(data.user);
+      setUserId(data.user.id);
+      setConvList(data.convList);
+    }).catch(() => router.push('/'));
+  }, [router]);
+
+  // Poll for new conversations after initial load
+  useEffect(() => {
     if (!user) return;
-    loadConversations();
     const interval = setInterval(loadConversations, 10000);
     return () => clearInterval(interval);
   }, [user, loadConversations]);

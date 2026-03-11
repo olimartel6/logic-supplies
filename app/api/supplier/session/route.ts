@@ -134,7 +134,7 @@ async function readHDCookies(): Promise<ChromeCookie[]> {
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 

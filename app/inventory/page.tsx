@@ -80,9 +80,18 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => { if (!r.ok) { router.push('/'); return; } return r.json(); })
-      .then(u => { if (u) setUser(u); });
-    loadData();
+    fetch('/api/inventory/init').then(r => {
+      if (!r.ok) { router.push('/'); return; }
+      return r.json();
+    }).then(data => {
+      if (!data) return;
+      setUser(data.user);
+      setItems(data.items);
+      setLocations(data.locations);
+      setStock(data.stock);
+      setTrackedOrders(data.trackedOrders);
+      setReceivedOrders(data.receivedOrders);
+    });
   }, [router]);
 
   const receivedProductNames = new Set(receivedOrders.map(o => o.product.toLowerCase()));

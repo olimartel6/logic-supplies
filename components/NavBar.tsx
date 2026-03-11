@@ -91,7 +91,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
   const [messagingFeatureEnabled, setMessagingFeatureEnabled] = useState(messagingEnabled);
   const t = useT();
 
-  const isElectrician = role === 'electrician';
+  const isWorker = role === 'worker';
   const isOfficeOrAdmin = role === 'office' || role === 'admin';
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
 
   const navItems = (
     <>
-      {isElectrician && (
+      {isWorker && (
         <>
           <Link href="/new-request" prefetch className={linkClass('/new-request')}>
             <IconPlus />
@@ -236,7 +236,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
 
   const sidebarItems = (
     <>
-      {isElectrician && (
+      {isWorker && (
         <>
           <Link href="/new-request" prefetch className={sidebarLinkClass('/new-request')}>
             <IconPlus /><span>{t('nav_new')}</span>

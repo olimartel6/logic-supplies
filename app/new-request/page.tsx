@@ -176,7 +176,7 @@ function NewRequestContent() {
       return r.json();
     }).then(data => {
       if (!data) return;
-      if (data.user.role !== 'electrician') { router.push('/approvals'); return; }
+      if (data.user.role !== 'worker') { router.push('/approvals'); return; }
       setUser(data.user);
       setLang((data.user.language as Lang) || 'fr');
       setJobSites(data.jobSites);

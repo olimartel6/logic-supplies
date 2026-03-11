@@ -194,7 +194,7 @@ function totalRow(ws: ExcelJS.Worksheet, rowNum: number, values: (string | numbe
 export async function GET(req: NextRequest) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
       j.name as job_site_name,
       j.budget_total,
       j.budget_committed,
-      u.name as electrician_name,
+      u.name as worker_name,
       COALESCE(so.status, 'pending') as order_status,
       so.supplier_order_id,
       r.urgency,
@@ -235,7 +235,7 @@ export async function GET(req: NextRequest) {
        ORDER BY price ASC LIMIT 1) as unit_price
     FROM requests r
     LEFT JOIN job_sites j ON r.job_site_id = j.id
-    LEFT JOIN users u ON r.electrician_id = u.id
+    LEFT JOIN users u ON r.worker_id = u.id
     LEFT JOIN supplier_orders so ON so.request_id = r.id
     WHERE r.status = 'approved'
       AND r.company_id = ?
@@ -376,7 +376,7 @@ export async function GET(req: NextRequest) {
     { key: 'unit',      header: 'Unité',           width: 10 },
     { key: 'supplier',  header: 'Fournisseur',     width: 16 },
     { key: 'site',      header: 'Chantier',        width: 22 },
-    { key: 'electrician', header: 'Électricien',   width: 20 },
+    { key: 'worker', header: 'Travailleur',   width: 20 },
     { key: 'unit_price', header: 'Prix unitaire',  width: 16 },
     { key: 'total',     header: 'Total estimé',    width: 16 },
     { key: 'status',    header: 'Statut commande', width: 18 },
@@ -401,7 +401,7 @@ export async function GET(req: NextRequest) {
       o.unit,
       SUPPLIER_LABEL[sup] || sup,
       o.job_site_name || '—',
-      o.electrician_name || '—',
+      o.worker_name || '—',
       o.unit_price ?? null,
       amount > 0 ? amount : null,
       statusLabel[o.order_status] || o.order_status,
@@ -577,7 +577,7 @@ export async function GET(req: NextRequest) {
 
     // Headers row 4
     ws.getRow(3).height = 10;
-    headerRow(ws, 4, ['Date', 'Produit', 'Qté', 'Unité', 'Fournisseur', 'Chantier', 'Prix unit.', 'Électricien', 'N° commande']);
+    headerRow(ws, 4, ['Date', 'Produit', 'Qté', 'Unité', 'Fournisseur', 'Chantier', 'Prix unit.', 'Travailleur', 'N° commande']);
     ws.autoFilter = { from: 'A4', to: 'I4' };
 
     // Data rows
@@ -603,7 +603,7 @@ export async function GET(req: NextRequest) {
         SUPPLIER_LABEL[sup] || sup,
         o.job_site_name || '—',
         o.unit_price ?? null,
-        o.electrician_name || '—',
+        o.worker_name || '—',
         o.supplier_order_id || '—',
       ], SUPPLIER_FILL[sup], { 6: '#,##0.00" $"' });
       rSite++;

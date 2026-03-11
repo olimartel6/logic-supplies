@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  if (ctx.role === 'electrician') {
-    // Electricians update their own personal preference only
+  if (ctx.role === 'worker') {
+    // Workers update their own personal preference only
     if (preference !== undefined) {
       db.prepare('UPDATE users SET supplier_preference = ? WHERE id = ?').run(preference, ctx.userId);
     }

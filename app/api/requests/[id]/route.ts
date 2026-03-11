@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const rl = checkRateLimit('requests-patch', String(ctx.userId), 20, 60_000);
   if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
 
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
@@ -43,16 +43,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     `).run(status, office_comment || '', id, ctx.companyId);
 
     const request = db.prepare(`
-      SELECT r.*, u.email as electrician_email, u.language as electrician_language FROM requests r
-      LEFT JOIN users u ON r.electrician_id = u.id
+      SELECT r.*, u.email as worker_email, u.language as worker_language FROM requests r
+      LEFT JOIN users u ON r.worker_id = u.id
       WHERE r.id = ? AND r.company_id = ?
     `).get(id, ctx.companyId) as any;
 
-    if (request?.electrician_email) {
-      sendStatusEmail(request.electrician_email, {
+    if (request?.worker_email) {
+      sendStatusEmail(request.worker_email, {
         product: request.product, quantity: request.quantity, unit: request.unit,
         status, officeComment: office_comment,
-      }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+      }, (request.worker_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
     }
   }
 
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
@@ -84,7 +84,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getTenantContext();
   if ('error' in ctx) return ctx.error;
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
@@ -102,12 +102,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   };
 
   const request = db.prepare(`
-    SELECT r.*, u.email as electrician_email, u.name as electrician_name,
-           u.language as electrician_language,
+    SELECT r.*, u.email as worker_email, u.name as worker_name,
+           u.language as worker_language,
            j.name as job_site_name,
            so.supplier as order_supplier, so.supplier_order_id as order_id
     FROM requests r
-    LEFT JOIN users u ON r.electrician_id = u.id
+    LEFT JOIN users u ON r.worker_id = u.id
     LEFT JOIN job_sites j ON r.job_site_id = j.id
     LEFT JOIN supplier_orders so ON so.request_id = r.id
     WHERE r.id = ? AND r.company_id = ? AND r.status = 'approved'
@@ -170,13 +170,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Send tracking email
-  if (request.electrician_email) {
-    sendOrderTrackingEmail(request.electrician_email, {
+  if (request.worker_email) {
+    sendOrderTrackingEmail(request.worker_email, {
       product: request.product, quantity: request.quantity, unit: request.unit,
       supplier: request.order_supplier || request.supplier || '',
       orderId: request.order_id || '', trackingStatus: tracking_status,
       jobSite: request.job_site_name || '',
-    }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+    }, (request.worker_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
   }
 
   return NextResponse.json({ ok: true });

@@ -12,7 +12,7 @@ interface Request {
   quantity: number;
   unit: string;
   job_site_name: string;
-  electrician_name: string;
+  worker_name: string;
   urgency: number;
   note: string;
   status: string;
@@ -160,7 +160,7 @@ function ApprovalsContent() {
       return r.json();
     }).then(u => {
       if (!u) return;
-      if (u.role === 'electrician') { router.push('/my-requests'); return; }
+      if (u.role === 'worker') { router.push('/my-requests'); return; }
       setUser(u);
       setLang((u.language as Lang) || 'fr');
     });
@@ -545,7 +545,7 @@ function ApprovalsContent() {
                   </div>
                   <p className="text-sm text-gray-500 mt-0.5">{r.quantity} {r.unit} · {r.job_site_name}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 0 0-11.215 0c-.22.578.254 1.139.872 1.139h9.47Z" /></svg>{r.electrician_name}</span>
+                    <span className="text-xs bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 0 0-11.215 0c-.22.578.254 1.139.872 1.139h9.47Z" /></svg>{r.worker_name}</span>
                     <span className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('fr-CA')}</span>
                   </div>
                 </div>
@@ -691,7 +691,7 @@ function ApprovalsContent() {
               {/* ── Détails (scrollables) ── */}
               <div className="overflow-y-auto px-6 pb-6 border-t border-gray-100">
                 <div className="space-y-3 text-sm mt-4 mb-4">
-                  <div className="flex justify-between"><span className="text-gray-500">{t('electrician')}</span><span className="font-medium">{selected.electrician_name}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t('worker')}</span><span className="font-medium">{selected.worker_name}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
                   {selected.unit_price != null && (
                     <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2 -mx-1">
@@ -1042,7 +1042,7 @@ function ApprovalsContent() {
             {/* ── Détails (scrollables) ── */}
             <div className="overflow-y-auto px-6 pb-6 border-t border-gray-100">
               <div className="space-y-3 text-sm mt-4 mb-4">
-                <div className="flex justify-between"><span className="text-gray-500">{t('electrician')}</span><span className="font-medium">{selected.electrician_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{t('worker')}</span><span className="font-medium">{selected.worker_name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Quantité</span><span>{selected.quantity} {selected.unit}</span></div>
                 {selected.unit_price != null && (
                   <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2 -mx-1">

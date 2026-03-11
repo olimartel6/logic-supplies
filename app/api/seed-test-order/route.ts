@@ -11,15 +11,15 @@ export async function POST() {
 
   const db = getDb();
 
-  const elec = db.prepare("SELECT id FROM users WHERE company_id = ? AND role = 'electrician' LIMIT 1").get(ctx.companyId) as { id: number } | undefined;
+  const elec = db.prepare("SELECT id FROM users WHERE company_id = ? AND role = 'worker' LIMIT 1").get(ctx.companyId) as { id: number } | undefined;
   const jobSite = db.prepare("SELECT id FROM job_sites WHERE company_id = ? LIMIT 1").get(ctx.companyId) as { id: number } | undefined;
 
   if (!elec || !jobSite) {
-    return NextResponse.json({ error: 'Need at least 1 electrician and 1 job site' }, { status: 400 });
+    return NextResponse.json({ error: 'Need at least 1 worker and 1 job site' }, { status: 400 });
   }
 
   const result = db.prepare(`
-    INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, urgency, note, status, tracking_status, supplier)
+    INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, urgency, note, status, tracking_status, supplier)
     VALUES (?, 'Fil 14/2 NMD90 150m', 3, 'rouleau', ?, ?, 0, 'Commande test pour suivi', 'approved', 'ordered', 'Lumen')
   `).run(ctx.companyId, jobSite.id, elec.id);
 

@@ -13,7 +13,7 @@ describe('Requests CRUD', () => {
 
     // Insert a request
     const result = db.prepare(`
-      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, status)
+      INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, status)
       VALUES (1, 'Fil 14/2 NMD90', 10, 'rouleau', 1, 1, 'pending')
     `).run();
 

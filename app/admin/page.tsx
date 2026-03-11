@@ -19,7 +19,7 @@ export default function AdminPage() {
   // Users state
   const [users, setUsers] = useState<User[]>([]);
   const [showUserForm, setShowUserForm] = useState(false);
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'electrician' });
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'worker' });
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState('');
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
@@ -83,7 +83,7 @@ export default function AdminPage() {
     const data = await res.json();
     if (!res.ok) { setUserError(data.error); setUserLoading(false); return; }
     setShowUserForm(false);
-    setUserForm({ name: '', email: '', password: '', role: 'electrician' });
+    setUserForm({ name: '', email: '', password: '', role: 'worker' });
     loadUsers();
     setUserLoading(false);
   }
@@ -108,8 +108,8 @@ export default function AdminPage() {
     loadSites();
   }
 
-  const roleLabel: Record<string, string> = { electrician: t('role_electrician'), office: t('role_office'), admin: t('role_admin') };
-  const roleColor: Record<string, string> = { electrician: 'bg-blue-100 text-blue-800', office: 'bg-purple-100 text-purple-800', admin: 'bg-gray-100 text-gray-800' };
+  const roleLabel: Record<string, string> = { worker: t('role_worker'), office: t('role_office'), admin: t('role_admin') };
+  const roleColor: Record<string, string> = { worker: 'bg-blue-100 text-blue-800', office: 'bg-purple-100 text-purple-800', admin: 'bg-gray-100 text-gray-800' };
 
   if (!currentUser) return <div className="flex items-center justify-center min-h-screen"><p>{t('loading')}</p></div>;
 
@@ -166,7 +166,7 @@ export default function AdminPage() {
                 <input type="email" placeholder="Email" required value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <input type="password" placeholder="Mot de passe" required value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
 <select value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="electrician">{t('role_electrician')}</option>
+                  <option value="worker">{t('role_worker')}</option>
                   <option value="office">{t('role_office')}</option>
                   <option value="admin">{t('role_admin')}</option>
                 </select>
@@ -192,7 +192,7 @@ export default function AdminPage() {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColor[u.role]}`}>
                         {roleLabel[u.role]}
                       </span>
-                      {u.role === 'electrician' && (
+                      {u.role === 'worker' && (
                         <button
                           onClick={() => handleToggleAutoApprove(u.id, u.auto_approve)}
                           title={u.auto_approve ? 'Auto-approuvé — cliquer pour désactiver' : 'Cliquer pour activer auto-approbation'}

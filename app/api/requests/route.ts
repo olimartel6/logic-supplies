@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
   const conditions: string[] = [];
   const params: (string | number | null)[] = [];
 
-  if (ctx.role === 'electrician') {
-    conditions.push('r.electrician_id = ?', 'r.company_id = ?');
+  if (ctx.role === 'worker') {
+    conditions.push('r.worker_id = ?', 'r.company_id = ?');
     params.push(ctx.userId, ctx.companyId);
   } else {
     conditions.push('r.company_id = ?');
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   let requests;
   let total: number;
 
-  if (ctx.role === 'electrician') {
+  if (ctx.role === 'worker') {
     const countRow = db.prepare(`
       SELECT COUNT(*) as cnt
       FROM requests r
@@ -69,12 +69,12 @@ export async function GET(req: NextRequest) {
     total = countRow.cnt;
 
     requests = db.prepare(`
-      SELECT r.*, j.name as job_site_name, u.name as electrician_name,
+      SELECT r.*, j.name as job_site_name, u.name as worker_name,
              pu.name as picked_up_by_name, pj.name as picked_up_job_site_name,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
-      LEFT JOIN users u ON r.electrician_id = u.id
+      LEFT JOIN users u ON r.worker_id = u.id
       LEFT JOIN users pu ON r.picked_up_by = pu.id
       LEFT JOIN job_sites pj ON r.picked_up_job_site_id = pj.id
       ${whereClause}
@@ -91,13 +91,13 @@ export async function GET(req: NextRequest) {
     total = countRow.cnt;
 
     requests = db.prepare(`
-      SELECT r.*, j.name as job_site_name, u.name as electrician_name, u.email as electrician_email,
+      SELECT r.*, j.name as job_site_name, u.name as worker_name, u.email as worker_email,
              so.status as lumen_order_status, so.supplier_order_id as lumen_order_id, so.supplier as order_supplier, so.error_message as order_error,
              pu.name as picked_up_by_name, pj.name as picked_up_job_site_name,
              (SELECT p.price FROM products p WHERE LOWER(p.name) LIKE '%' || LOWER(r.product) || '%' ORDER BY p.price ASC LIMIT 1) as unit_price
       FROM requests r
       LEFT JOIN job_sites j ON r.job_site_id = j.id
-      LEFT JOIN users u ON r.electrician_id = u.id
+      LEFT JOIN users u ON r.worker_id = u.id
       LEFT JOIN supplier_orders so ON so.request_id = r.id
       LEFT JOIN users pu ON r.picked_up_by = pu.id
       LEFT JOIN job_sites pj ON r.picked_up_job_site_id = pj.id
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
   const rl = checkRateLimit('requests-post', String(ctx.userId), 30, 60_000);
   if (!rl.allowed) return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
 
-  if (ctx.role !== 'electrician') {
+  if (ctx.role !== 'worker') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
   if (!ctx.companyId) {
@@ -130,13 +130,13 @@ export async function POST(req: NextRequest) {
   const db = getDb();
 
   const result = db.prepare(`
-    INSERT INTO requests (company_id, product, quantity, unit, job_site_id, electrician_id, urgency, note, status, supplier)
+    INSERT INTO requests (company_id, product, quantity, unit, job_site_id, worker_id, urgency, note, status, supplier)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).run(companyId, product, quantity, unit, job_site_id, ctx.userId, urgency ? 1 : 0, note || '', supplier || null);
 
   const requestId = result.lastInsertRowid;
 
-  // Check if this electrician has auto_approve enabled
+  // Check if this worker has auto_approve enabled
   const userRow = db.prepare('SELECT auto_approve FROM users WHERE id = ? AND company_id = ?').get(ctx.userId, companyId) as any;
 
   if (userRow?.auto_approve) {
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
       sendNewRequestEmail(u.email, {
         product, quantity, unit,
         jobSite: jobSite?.name || '',
-        electrician: '',
+        worker: '',
         urgency: !!urgency,
         note: note || '',
       }, (u.language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);

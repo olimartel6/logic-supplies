@@ -20,11 +20,11 @@ export async function triggerApproval(
   `).run(office_comment || '', requestId, companyId);
 
   const request = db.prepare(`
-    SELECT r.*, u.email as electrician_email, u.name as electrician_name,
-           u.language as electrician_language,
+    SELECT r.*, u.email as worker_email, u.name as worker_name,
+           u.language as worker_language,
            j.name as job_site_name, j.address as job_site_address
     FROM requests r
-    LEFT JOIN users u ON r.electrician_id = u.id
+    LEFT JOIN users u ON r.worker_id = u.id
     LEFT JOIN job_sites j ON r.job_site_id = j.id
     WHERE r.id = ? AND r.company_id = ?
   `).get(requestId, companyId) as any;
@@ -116,15 +116,15 @@ export async function triggerApproval(
     }
   }
 
-  // Send status email to electrician
-  if (request.electrician_email) {
-    sendStatusEmail(request.electrician_email, {
+  // Send status email to worker
+  if (request.worker_email) {
+    sendStatusEmail(request.worker_email, {
       product: request.product,
       quantity: request.quantity,
       unit: request.unit,
       status: 'approved',
       officeComment: office_comment,
-    }, (request.electrician_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
+    }, (request.worker_language as 'fr' | 'en' | 'es') || 'fr').catch(console.error);
   }
 
   // Trigger auto-order async
@@ -158,9 +158,9 @@ export async function triggerApproval(
     jobSiteName: request.job_site_name || '',
     deliveryAddress: deliveryAddress || '',
     payment,
-    electricianEmail: request.electrician_email || '',
-    electricianName: request.electrician_name || '',
-    electricianLanguage: request.electrician_language || 'fr',
+    workerEmail: request.worker_email || '',
+    workerName: request.worker_name || '',
+    workerLanguage: request.worker_language || 'fr',
     officeComment: office_comment,
   });
 

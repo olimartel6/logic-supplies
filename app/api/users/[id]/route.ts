@@ -34,8 +34,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const db = getDb();
   const user = db.prepare('SELECT id, role FROM users WHERE id = ? AND company_id = ?').get(userId, ctx.companyId) as { id: number; role: string } | undefined;
   if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 });
-  if (user.role !== 'electrician') {
-    return NextResponse.json({ error: "auto_approve ne s'applique qu'aux électriciens" }, { status: 400 });
+  if (user.role !== 'worker') {
+    return NextResponse.json({ error: "auto_approve ne s'applique qu'aux travailleurs" }, { status: 400 });
   }
 
   if (typeof body.auto_approve !== 'boolean') {

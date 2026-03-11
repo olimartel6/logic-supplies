@@ -385,7 +385,7 @@ export default function SettingsPage() {
       return r.json();
     }).then(u => {
       if (!u) return;
-      if (u.role === 'electrician') { router.push('/my-requests'); return; }
+      if (u.role === 'worker') { router.push('/my-requests'); return; }
       setLang((u.language as Lang) || 'fr');
       setUser(u);
       setInventoryEnabled(!!u.inventoryEnabled);
