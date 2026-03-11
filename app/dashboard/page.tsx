@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white md:ml-56">
-      <NavBar role={user.role} name={user.name} />
+      <NavBar role={user.role} name={user.name} inventoryEnabled={user.inventoryEnabled} marketingEnabled={user.marketingEnabled} />
       <main className="p-4 md:p-8 max-w-6xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Tableau de bord</h1>
 

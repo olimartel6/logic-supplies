@@ -173,10 +173,6 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       )}
       {isOfficeOrAdmin && (
         <>
-          <Link href="/dashboard" prefetch className={linkClass('/dashboard')}>
-            <IconChartBar />
-            <span>Tableau de bord</span>
-          </Link>
           <Link href="/approvals" prefetch className={linkClass('/approvals')}>
             <IconCheckBadge />
             <span>{t('nav_approvals')}</span>
@@ -226,6 +222,12 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
         </Link>
       )}
       {isOfficeOrAdmin && (
+        <Link href="/dashboard" prefetch className={linkClass('/dashboard')}>
+          <IconChartBar />
+          <span>Tableau de bord</span>
+        </Link>
+      )}
+      {isOfficeOrAdmin && (
         <Link href="/settings" prefetch className={linkClass('/settings')}>
           <IconGear />
           <span>{t('nav_settings')}</span>
@@ -269,9 +271,6 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       )}
       {isOfficeOrAdmin && (
         <>
-          <Link href="/dashboard" prefetch className={sidebarLinkClass('/dashboard')}>
-            <IconChartBar /><span>Tableau de bord</span>
-          </Link>
           <Link href="/approvals" prefetch className={sidebarLinkClass('/approvals')}>
             <IconCheckBadge /><span>{t('nav_approvals')}</span>
           </Link>
@@ -314,6 +313,11 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
       {role === 'admin' && (
         <Link href="/admin" prefetch className={sidebarLinkClass('/admin')}>
           <IconUsers /><span>{t('nav_admin')}</span>
+        </Link>
+      )}
+      {isOfficeOrAdmin && (
+        <Link href="/dashboard" prefetch className={sidebarLinkClass('/dashboard')}>
+          <IconChartBar /><span>Tableau de bord</span>
         </Link>
       )}
       {isOfficeOrAdmin && (
