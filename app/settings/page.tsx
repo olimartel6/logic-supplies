@@ -1110,6 +1110,20 @@ export default function SettingsPage() {
               <div className="mb-3 flex items-center gap-3">
                 <img src={companyLogoUrl} alt="Logo" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white" />
                 <span className="text-xs text-green-600 font-medium">Logo configuré</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await fetch('/api/supplier/preference', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ companyLogoUrl: '' }),
+                    });
+                    setCompanyLogoUrl('');
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium ml-auto"
+                >
+                  Supprimer
+                </button>
               </div>
             )}
             <label className="block">
