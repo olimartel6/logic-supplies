@@ -115,7 +115,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
   }
 
   const linkClass = (path: string) =>
-    `flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+    `flex flex-col items-center gap-1 px-1.5 py-1 rounded-xl text-[10px] font-medium transition-colors min-w-0 ${
       pathname === path ? 'text-yellow-400' : 'text-slate-400 hover:text-white active:text-yellow-300'
     }`;
 
@@ -130,16 +130,16 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
         <>
           <Link href="/new-request" prefetch className={linkClass('/new-request')}>
             <IconPlus />
-            <span>{t('nav_new')}</span>
+            <span className="truncate max-w-full">{t('nav_new')}</span>
           </Link>
           <Link href="/my-requests" prefetch className={linkClass('/my-requests')}>
             <IconClipboard />
-            <span>{t('nav_my_requests')}</span>
+            <span className="truncate max-w-full">{t('nav_my_requests')}</span>
           </Link>
           {inventoryEnabled && (
             <Link href="/inventory" prefetch className={linkClass('/inventory')}>
               <IconBox />
-              <span>{t('nav_inventory')}</span>
+              <span className="truncate max-w-full">{t('nav_inventory')}</span>
             </Link>
           )}
           {messagingFeatureEnabled && (
@@ -152,12 +152,12 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
                 </span>
               )}
             </span>
-            <span>{t('nav_messages')}</span>
+            <span className="truncate max-w-full">{t('nav_messages')}</span>
           </Link>
           )}
           <Link href="/profile" prefetch className={linkClass('/profile')}>
             <IconGear />
-            <span>{t('nav_profile')}</span>
+            <span className="truncate max-w-full">{t('nav_profile')}</span>
           </Link>
         </>
       )}
@@ -165,18 +165,18 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
         <>
           <Link href="/approvals" prefetch className={linkClass('/approvals')}>
             <IconCheckBadge />
-            <span>{t('nav_approvals')}</span>
+            <span className="truncate max-w-full">{t('nav_approvals')}</span>
           </Link>
           {marketingEnabled && (
           <Link href="/projects" prefetch className={linkClass('/projects')}>
             <IconMegaphone />
-            <span>Marketing</span>
+            <span className="truncate max-w-full">Marketing</span>
           </Link>
           )}
           {inventoryEnabled && (
             <Link href="/inventory" prefetch className={linkClass('/inventory')}>
               <IconBox />
-              <span>{t('nav_inventory')}</span>
+              <span className="truncate max-w-full">{t('nav_inventory')}</span>
             </Link>
           )}
         </>
@@ -191,25 +191,25 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
               </span>
             )}
           </span>
-          <span>{t('nav_messages')}</span>
+          <span className="truncate max-w-full">{t('nav_messages')}</span>
         </Link>
       )}
       {role === 'admin' && (
         <Link href="/admin" prefetch className={linkClass('/admin')}>
           <IconUsers />
-          <span>{t('nav_admin')}</span>
+          <span className="truncate max-w-full">{t('nav_admin')}</span>
         </Link>
       )}
       {isOfficeOrAdmin && (
         <Link href="/dashboard" prefetch className={linkClass('/dashboard')}>
           <IconChartBar />
-          <span>Tableau de bord</span>
+          <span className="truncate max-w-full">Tableau de bord</span>
         </Link>
       )}
       {isOfficeOrAdmin && (
         <Link href="/settings" prefetch className={linkClass('/settings')}>
           <IconGear />
-          <span>{t('nav_settings')}</span>
+          <span className="truncate max-w-full">{t('nav_settings')}</span>
         </Link>
       )}
     </>
@@ -240,7 +240,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
                 </span>
               )}
             </span>
-            <span>{t('nav_messages')}</span>
+            <span className="truncate max-w-full">{t('nav_messages')}</span>
           </Link>
           )}
           <Link href="/profile" prefetch className={sidebarLinkClass('/profile')}>
@@ -273,7 +273,7 @@ export default function NavBar({ role, name, inventoryEnabled, marketingEnabled,
                 </span>
               )}
             </span>
-            <span>{t('nav_messages')}</span>
+            <span className="truncate max-w-full">{t('nav_messages')}</span>
           </Link>
           )}
         </>
