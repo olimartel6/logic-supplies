@@ -171,22 +171,21 @@ function NewRequestContent() {
   }
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => {
-      if (!r.ok) { router.push('/'); return; }
+    fetch('/api/new-request/init').then(r => {
+      if (!r.ok) { router.push('/'); return null; }
       return r.json();
-    }).then(u => {
-      if (!u) return;
-      if (u.role !== 'electrician') { router.push('/approvals'); return; }
-      setUser(u);
-      setLang((u.language as Lang) || 'fr');
+    }).then(data => {
+      if (!data) return;
+      if (data.user.role !== 'electrician') { router.push('/approvals'); return; }
+      setUser(data.user);
+      setLang((data.user.language as Lang) || 'fr');
+      setJobSites(data.jobSites);
+      if (data.preference) setPreference(data.preference);
+      setFavorites(data.favorites);
+      setFavoriteSKUs(new Set(data.favorites.map((p: Product) => `${p.supplier}:${p.sku}`)));
+      setTemplates(data.templates);
     });
-    fetch('/api/job-sites').then(r => r.json()).then(setJobSites);
-    fetch('/api/supplier/preference').then(r => r.json()).then((d: { preference: 'cheapest' | 'fastest' }) => {
-      if (d?.preference) setPreference(d.preference);
-    });
-    loadFavorites();
-    loadTemplates();
-  }, [router, loadFavorites, loadTemplates]);
+  }, [router]);
 
   useEffect(() => {
     const goOnline = () => setIsOffline(false);
