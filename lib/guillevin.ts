@@ -50,6 +50,112 @@ async function createGuillevinPage(browser: any) {
   return context.newPage();
 }
 
+// Handle the "Select your region" popup that appears on guillevin.com pages after login.
+// The popup has: title "Select your region", a <select> dropdown, and an orange "Start Shopping" button.
+async function handleRegionPopup(page: any): Promise<void> {
+  try {
+    // Check if the region popup is visible (look for the title or the "Start Shopping" button)
+    const popupVisible = await page.locator('text="Select your region"').first()
+      .isVisible({ timeout: 5000 }).catch(() => false)
+      || await page.locator('button:has-text("Start Shopping")').first()
+        .isVisible({ timeout: 2000 }).catch(() => false);
+
+    if (!popupVisible) {
+      console.error('[Guillevin] No region popup detected');
+      return;
+    }
+    console.error('[Guillevin] Region popup detected');
+    await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-region-before.png' }).catch(() => {});
+    await page.waitForTimeout(1000);
+
+    // Strategy 1: Use page.evaluate to directly set the <select> value via JS
+    // This is the most reliable approach since it bypasses any custom styling issues
+    const jsResult = await page.evaluate(() => {
+      // Find all <select> elements and look for one with region options
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        const options = Array.from(sel.options).map(o => ({ value: o.value, text: o.text }));
+        const qcOption = options.find(o =>
+          o.text.toLowerCase().includes('québec') || o.text.toLowerCase().includes('quebec')
+          || o.value.toLowerCase().includes('québec') || o.value.toLowerCase().includes('quebec')
+        );
+        if (qcOption) {
+          sel.value = qcOption.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          return { found: true, value: qcOption.value, text: qcOption.text, allOptions: options };
+        }
+      }
+      // Dump info for debugging
+      const allSelects = Array.from(selects).map(s => ({
+        id: s.id, name: s.name, className: s.className,
+        options: Array.from(s.options).map(o => o.text)
+      }));
+      return { found: false, selects: allSelects };
+    }).catch(() => ({ found: false, error: 'evaluate failed' }));
+
+    console.error('[Guillevin] JS select result:', JSON.stringify(jsResult));
+
+    if (!jsResult.found) {
+      // Strategy 2: Try Playwright's selectOption on any visible <select>
+      const allSelects = page.locator('select');
+      const count = await allSelects.count().catch(() => 0);
+      console.error(`[Guillevin] Found ${count} <select> elements`);
+      for (let i = 0; i < count; i++) {
+        try {
+          const sel = allSelects.nth(i);
+          if (await sel.isVisible().catch(() => false)) {
+            // Log this select's options
+            const opts = await sel.locator('option').allTextContents().catch(() => []);
+            console.error(`[Guillevin] Select[${i}] options:`, opts);
+            const hasQc = opts.some((o: string) => o.toLowerCase().includes('québec') || o.toLowerCase().includes('quebec'));
+            if (hasQc) {
+              const qcLabel = opts.find((o: string) => o.toLowerCase().includes('québec') || o.toLowerCase().includes('quebec'));
+              await sel.selectOption({ label: qcLabel! });
+              console.error(`[Guillevin] Selected "${qcLabel}" via Playwright selectOption`);
+              break;
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Guillevin] Select[${i}] error:`, err.message);
+        }
+      }
+
+      // Strategy 3: If no <select> found, dump modal HTML for debugging
+      if (count === 0) {
+        const html = await page.evaluate(() => {
+          const el = document.querySelector('[class*="modal"], [class*="popup"], [role="dialog"]')
+            || document.querySelector('[class*="region"]');
+          return el ? el.outerHTML.slice(0, 3000) : 'No modal found';
+        }).catch(() => 'evaluate failed');
+        console.error('[Guillevin] Modal HTML for debugging:', html);
+      }
+    }
+
+    await page.waitForTimeout(500);
+
+    // Click "Start Shopping" button
+    const startBtn = page.locator('button:has-text("Start Shopping")').first();
+    if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await startBtn.click();
+      console.error('[Guillevin] Clicked Start Shopping');
+      await page.waitForTimeout(2000);
+    } else {
+      // Fallback: any nearby submit/confirm button
+      const fallbackBtn = page.locator('button[type="submit"], input[type="submit"], button:has-text("Confirm"), button:has-text("Continuer")').first();
+      if (await fallbackBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await fallbackBtn.click();
+        console.error('[Guillevin] Clicked fallback confirm button');
+        await page.waitForTimeout(2000);
+      }
+    }
+
+    await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-region-after.png' }).catch(() => {});
+    console.error('[Guillevin] Region popup handled');
+  } catch (err: any) {
+    console.error('[Guillevin] Region popup handling error:', err.message);
+  }
+}
+
 // Guillevin login redirects to Auth0 (gic.ca.auth0.com).
 // Single-page form with email + password fields both visible.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
@@ -145,50 +251,9 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     } catch {}
   }
 
-  // Step 4: Choose region from dropdown (Atlantique, Ontario, Québec, Prairies, Rocheuses, Pacifique)
-  await page.waitForTimeout(3000);
-  try {
-    // Find and click "Québec" anywhere on the page — works for any dropdown type
-    const quebecEl = page.getByText('Québec', { exact: true }).first();
-    if (await quebecEl.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await quebecEl.click();
-      console.error('[Guillevin] Clicked Québec');
-      await page.waitForTimeout(2000);
-    } else {
-      // Maybe the dropdown needs to be opened first — click any dropdown trigger
-      const dropdownTrigger = page.locator('select, [class*="dropdown"], [class*="select"], [role="combobox"], [role="listbox"], button:has-text("Région"), button:has-text("Region"), button:has-text("Choisir")').first();
-      if (await dropdownTrigger.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await dropdownTrigger.click();
-        console.error('[Guillevin] Dropdown opened');
-        await page.waitForTimeout(1000);
-        // Now click Québec
-        const qcOption = page.getByText('Québec', { exact: true }).first();
-        if (await qcOption.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await qcOption.click();
-          console.error('[Guillevin] Clicked Québec after opening dropdown');
-        }
-      } else {
-        // Last resort: try native select
-        const selectEl = page.locator('select').first();
-        if (await selectEl.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await selectEl.selectOption({ label: 'Québec' });
-          console.error('[Guillevin] Selected Québec via native select');
-        } else {
-          console.error('[Guillevin] No region selector found');
-        }
-      }
-      await page.waitForTimeout(2000);
-    }
-    // Click confirm/submit button if present
-    const confirmBtn = page.locator('button[type="submit"], button:has-text("Confirmer"), button:has-text("OK"), button:has-text("Continuer"), button:has-text("Enregistrer"), input[type="submit"]').first();
-    if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await confirmBtn.click();
-      console.error('[Guillevin] Region confirmed');
-      await page.waitForTimeout(2000);
-    }
-  } catch (err: any) {
-    console.error('[Guillevin] Region selection error:', err.message);
-  }
+  // Step 4: Handle region popup (if it appears here)
+  await page.waitForTimeout(2000);
+  await handleRegionPopup(page);
 
   return true;
 }
@@ -335,6 +400,10 @@ export async function placeGuillevinOrder(
       });
       console.error(`[Guillevin] Navigating to: ${productUrl}`);
       await page.waitForTimeout(3000);
+
+      // Handle region popup (appears on product pages)
+      await handleRegionPopup(page);
+      await page.waitForTimeout(1000);
 
       // Set quantity if input is present
       const qtyInput = page.locator(
