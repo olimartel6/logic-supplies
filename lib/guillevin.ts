@@ -534,26 +534,38 @@ export async function placeGuillevinOrder(
             }
 
             // Now fill the address form fields (visible after clicking "Use a different address" or in multi-step layout)
-            // Helper to fill a field
+            // Wait extra time for the form to fully render
+            await page.waitForTimeout(2000);
+
+            // Helper to fill a field using keyboard typing (more reliable than fill() for autocomplete fields)
             const fillField = async (selector: string, value: string, fieldName: string): Promise<boolean> => {
               if (!value) return false;
               const field = page.locator(selector).first();
-              if (await field.isVisible({ timeout: 2000 }).catch(() => false)) {
+              if (await field.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await field.click({ clickCount: 3 });
-                await page.waitForTimeout(200);
-                await field.fill(value);
                 await page.waitForTimeout(300);
-                // Press Escape to close any autocomplete dropdown
-                await page.keyboard.press('Escape');
+                // Clear existing value first
+                await page.keyboard.press('Backspace');
                 await page.waitForTimeout(200);
+                // Use keyboard.type() instead of fill() — works better with combobox/autocomplete fields
+                await page.keyboard.type(value, { delay: 30 });
+                await page.waitForTimeout(500);
+                // Press Escape to dismiss any autocomplete dropdown
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(300);
+                // Click somewhere neutral to confirm the value and close dropdowns
+                await page.locator('body').click({ position: { x: 10, y: 10 } }).catch(() => {});
+                await page.waitForTimeout(300);
                 console.error(`[Guillevin] Filled ${fieldName}: "${value}"`);
                 log.push(`Filled ${fieldName}: "${value}"`);
                 return true;
               }
+              console.error(`[Guillevin] Field not visible: ${selector}`);
+              log.push(`Field not visible: ${selector}`);
               return false;
             };
 
-            // Fill address line 1
+            // Fill address line 1 (has role="combobox" — autocomplete field)
             const streetFilled = await fillField('#shipping-address1, input[name="address1"], input[autocomplete="shipping address-line1"]', addrStreet, 'address1');
 
             // Fill city
@@ -563,7 +575,7 @@ export async function placeGuillevinOrder(
               // Select province
               if (addrProvince) {
                 const zoneSelect = page.locator('select[name="zone"], select[autocomplete="shipping address-level1"]').first();
-                if (await zoneSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
+                if (await zoneSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
                   await zoneSelect.selectOption({ value: addrProvince });
                   console.error(`[Guillevin] Selected province: ${addrProvince}`);
                   log.push(`Selected province: ${addrProvince}`);
@@ -573,6 +585,19 @@ export async function placeGuillevinOrder(
 
               // Fill postal code
               await fillField('input[name="postalCode"], input[autocomplete="shipping postal-code"]', addrPostal, 'postalCode');
+
+              // Click "Save address" button to confirm the new address
+              await page.waitForTimeout(500);
+              const saveAddrBtn = page.locator('button:has-text("Save address"), button:has-text("Enregistrer"), button:has-text("Use this address"), button:has-text("Utiliser cette adresse")').first();
+              if (await saveAddrBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await saveAddrBtn.click();
+                console.error('[Guillevin] Clicked "Save address"');
+                log.push('Clicked "Save address"');
+                await page.waitForTimeout(3000);
+              } else {
+                console.error('[Guillevin] "Save address" button not found');
+                log.push('WARNING: "Save address" button not found');
+              }
 
               addressHandled = true;
             }
