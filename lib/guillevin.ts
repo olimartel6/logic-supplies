@@ -468,44 +468,102 @@ export async function placeGuillevinOrder(
             }).catch(() => ({}));
             console.error('[Guillevin] Checkout page info:', JSON.stringify(checkoutInfo));
 
-            // B2B Shopify: address may be pre-filled. Look for "Change" or "Edit" button first
-            const changeBtn = page.locator('a:has-text("Change"), button:has-text("Change"), a:has-text("Modifier"), button:has-text("Modifier"), a:has-text("Edit")').first();
-            if (await changeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-              await changeBtn.click();
-              console.error('[Guillevin] Clicked Change/Edit address button');
-              log.push('Clicked Change address button');
-              await page.waitForTimeout(2000);
-            }
+            // B2B Shopify: address is usually a dropdown of saved addresses (arrow/chevron to open)
+            // Look for: select element, dropdown trigger with arrow, or "Change"/"Edit" link
+            let addressHandled = false;
 
-            // Try to fill address fields
-            const addressSelectors = [
-              '#checkout_shipping_address_address1',
-              'input[name="checkout[shipping_address][address1]"]',
-              'input[name*="address1"]',
-              'input[placeholder*="Address"]',
-              'input[placeholder*="Adresse"]',
-              'input[autocomplete="shipping address-line1"]',
-              'input[autocomplete="address-line1"]',
-            ];
-            let addressFilled = false;
-            for (const sel of addressSelectors) {
-              const field = page.locator(sel).first();
-              if (await field.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await field.click({ clickCount: 3 });
-                await page.waitForTimeout(200);
-                await field.fill(deliveryAddress);
-                // Dismiss any autocomplete dropdown
-                await page.keyboard.press('Escape');
-                await page.waitForTimeout(500);
-                console.error(`[Guillevin] Address filled via: ${sel}`);
-                log.push(`Address filled: ${deliveryAddress}`);
-                addressFilled = true;
-                break;
+            // Strategy 1: Native <select> for saved addresses
+            const addressSelect = page.locator('select[name*="address"], select[id*="address"], select[name*="shipping"], select[id*="shipping"]').first();
+            if (await addressSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
+              // Log all options
+              const options = await addressSelect.locator('option').allTextContents().catch(() => [] as string[]);
+              console.error('[Guillevin] Address dropdown options:', options);
+              log.push(`Address dropdown options: ${options.join(' | ')}`);
+              // Look for "new address" or similar option to enter a custom one
+              const newAddrOption = options.find((o: string) =>
+                o.toLowerCase().includes('new') || o.toLowerCase().includes('nouv') ||
+                o.toLowerCase().includes('autre') || o.toLowerCase().includes('other') ||
+                o.toLowerCase().includes('add')
+              );
+              if (newAddrOption) {
+                await addressSelect.selectOption({ label: newAddrOption });
+                console.error(`[Guillevin] Selected new address option: ${newAddrOption}`);
+                log.push(`Selected: ${newAddrOption}`);
+                await page.waitForTimeout(2000);
+              } else if (options.length > 0) {
+                // Just use the first saved address if no "new" option
+                console.error('[Guillevin] No "new address" option — using first saved address');
+                log.push('Using first saved address from dropdown');
+                addressHandled = true;
               }
             }
-            if (!addressFilled) {
-              console.error('[Guillevin] No address field found — may be pre-filled or different layout');
-              log.push('No address field found — trying to continue with existing address');
+
+            // Strategy 2: Clickable dropdown trigger (div/button with arrow)
+            if (!addressHandled) {
+              const dropdownTriggers = [
+                page.locator('[class*="address"] [class*="dropdown"], [class*="address"] [class*="select"]').first(),
+                page.locator('[data-address-selector], [data-shipping-address]').first(),
+                page.locator('[class*="address"] svg, [class*="address"] [class*="arrow"], [class*="address"] [class*="chevron"]').first(),
+              ];
+              for (const trigger of dropdownTriggers) {
+                if (await trigger.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await trigger.click();
+                  console.error('[Guillevin] Clicked address dropdown trigger');
+                  log.push('Clicked address dropdown trigger');
+                  await page.waitForTimeout(1500);
+                  // Look for "Use a new address" or type in the delivery address
+                  const newAddrLink = page.locator('text="Use a new address", text="Nouvelle adresse", text="Ajouter une adresse", text="Add a new address"').first();
+                  if (await newAddrLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await newAddrLink.click();
+                    console.error('[Guillevin] Clicked "new address" option');
+                    await page.waitForTimeout(2000);
+                  }
+                  break;
+                }
+              }
+            }
+
+            // Strategy 3: "Change" / "Edit" / "Modifier" link
+            if (!addressHandled) {
+              const changeBtn = page.locator('a:has-text("Change"), button:has-text("Change"), a:has-text("Modifier"), button:has-text("Modifier"), a:has-text("Edit")').first();
+              if (await changeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await changeBtn.click();
+                console.error('[Guillevin] Clicked Change/Edit address button');
+                log.push('Clicked Change address button');
+                await page.waitForTimeout(2000);
+              }
+            }
+
+            // Try to fill address fields (if form is now visible)
+            if (!addressHandled) {
+              const addressSelectors = [
+                '#checkout_shipping_address_address1',
+                'input[name="checkout[shipping_address][address1]"]',
+                'input[name*="address1"]',
+                'input[placeholder*="Address"]',
+                'input[placeholder*="Adresse"]',
+                'input[autocomplete="shipping address-line1"]',
+                'input[autocomplete="address-line1"]',
+              ];
+              for (const sel of addressSelectors) {
+                const field = page.locator(sel).first();
+                if (await field.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await field.click({ clickCount: 3 });
+                  await page.waitForTimeout(200);
+                  await field.fill(deliveryAddress);
+                  await page.keyboard.press('Escape');
+                  await page.waitForTimeout(500);
+                  console.error(`[Guillevin] Address filled via: ${sel}`);
+                  log.push(`Address filled: ${deliveryAddress}`);
+                  addressHandled = true;
+                  break;
+                }
+              }
+            }
+
+            if (!addressHandled) {
+              console.error('[Guillevin] Could not change address — continuing with default');
+              log.push('Could not change address — continuing with default');
             }
 
             // Step 4: Continue to shipping
@@ -622,12 +680,51 @@ export async function placeGuillevinOrder(
               log.push('CVV typed');
               console.error('[Guillevin] CVV typed');
 
-              // Tab to name field (if present) and type
-              await page.keyboard.press('Tab');
-              await page.waitForTimeout(300);
-              await page.keyboard.type(payment.cardHolder, { delay: 30 });
-              log.push('Card holder typed');
-              console.error('[Guillevin] Card holder typed');
+              // Card holder name — target it directly (separate iframe or page input, Tab doesn't reliably reach it)
+              let nameFilled = false;
+              // Try iframe with "name" in ID
+              try {
+                const nameFrame = page.frameLocator('iframe[id*="card-fields-name"]').first();
+                const nameInput = nameFrame.locator('input').first();
+                if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await nameInput.click();
+                  await page.waitForTimeout(200);
+                  await page.keyboard.type(payment.cardHolder, { delay: 30 });
+                  nameFilled = true;
+                  console.error('[Guillevin] Card holder typed (name iframe)');
+                }
+              } catch {}
+              // Try direct input on page
+              if (!nameFilled) {
+                const nameSelectors = [
+                  'input[autocomplete="cc-name"]',
+                  'input[name*="card_name"]',
+                  'input[name*="cardholder"]',
+                  'input[name*="card-name"]',
+                  'input[id*="card-name"]',
+                  'input[placeholder*="Name on card"]',
+                  'input[placeholder*="Nom sur la carte"]',
+                  'input[placeholder*="Cardholder"]',
+                  'input[placeholder*="name"]',
+                ];
+                for (const sel of nameSelectors) {
+                  const input = page.locator(sel).first();
+                  if (await input.isVisible({ timeout: 1500 }).catch(() => false)) {
+                    await input.click();
+                    await page.waitForTimeout(200);
+                    await input.fill(payment.cardHolder);
+                    nameFilled = true;
+                    console.error(`[Guillevin] Card holder filled via: ${sel}`);
+                    break;
+                  }
+                }
+              }
+              if (nameFilled) {
+                log.push('Card holder name filled');
+              } else {
+                console.error('[Guillevin] Card holder name field not found');
+                log.push('Card holder name field not found');
+              }
             } else {
               log.push('No card input found at all');
               console.error('[Guillevin] No card input found — dumping page HTML');
