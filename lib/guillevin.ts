@@ -666,73 +666,119 @@ export async function placeGuillevinOrder(
               await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-expanded.png' }).catch(() => {});
             }
 
-            // Now fill the address form fields (visible after clicking "Use a different address" or in multi-step layout)
-            // Wait extra time for the form to fully render
+            // Now fill the "Add address" modal form
+            // Modal fields (from screenshot):
+            //   Country/Region (dropdown, pre-selected Canada)
+            //   First name / Last name (optional)
+            //   Company/Attention (optional)
+            //   Address (Google Places autocomplete with 🔍 icon)
+            //   Apartment, suite, etc. (optional)
+            //   City / Province (dropdown) / Postal code
+            //   Phone (optional)
+            //   [Cancel] [Save address]
             await page.waitForTimeout(2000);
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-modal-before.png' }).catch(() => {});
 
-            // Helper to fill a field using keyboard typing (more reliable than fill() for autocomplete fields)
-            const fillField = async (selector: string, value: string, fieldName: string): Promise<boolean> => {
-              if (!value) return false;
-              const field = page.locator(selector).first();
-              if (await field.isVisible({ timeout: 3000 }).catch(() => false)) {
-                await field.click({ clickCount: 3 });
-                await page.waitForTimeout(300);
-                // Clear existing value first
-                await page.keyboard.press('Backspace');
-                await page.waitForTimeout(200);
-                // Use keyboard.type() instead of fill() — works better with combobox/autocomplete fields
-                await page.keyboard.type(value, { delay: 30 });
-                await page.waitForTimeout(500);
-                // Press Escape to dismiss any autocomplete dropdown
-                await page.keyboard.press('Escape');
-                await page.waitForTimeout(300);
-                // Click somewhere neutral to confirm the value and close dropdowns
-                await page.locator('body').click({ position: { x: 10, y: 10 } }).catch(() => {});
-                await page.waitForTimeout(300);
-                console.error(`[Guillevin] Filled ${fieldName}: "${value}"`);
-                log.push(`Filled ${fieldName}: "${value}"`);
-                return true;
+            // Check if the modal is visible
+            const modalVisible = await page.locator('text="Add address"').first()
+              .isVisible({ timeout: 3000 }).catch(() => false)
+              || await page.locator('text="Ajouter une adresse"').first()
+                .isVisible({ timeout: 1000 }).catch(() => false);
+            console.error(`[Guillevin] Add address modal visible: ${modalVisible}`);
+            log.push(`Add address modal visible: ${modalVisible}`);
+
+            // Fill the address field (Google Places autocomplete)
+            // Strategy: use page.evaluate to set value directly via JS, bypassing autocomplete
+            const addrField = page.locator('#shipping-address1, input[name="address1"], input[autocomplete*="address"]').first();
+            if (await addrField.isVisible({ timeout: 5000 }).catch(() => false)) {
+              // Use evaluate to set value directly and dispatch events — avoids Google autocomplete interference
+              await addrField.evaluate((el: HTMLInputElement, val: string) => {
+                el.focus();
+                el.value = '';
+                // Use native input setter to trigger React/Shopify state update
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+                if (nativeInputValueSetter) nativeInputValueSetter.call(el, val);
+                else el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }, addrStreet);
+              await page.waitForTimeout(1000);
+              // Press Escape to dismiss Google Places dropdown (don't click body — that closes the modal!)
+              await page.keyboard.press('Escape');
+              await page.waitForTimeout(500);
+              console.error(`[Guillevin] Address filled: "${addrStreet}"`);
+              log.push(`Address filled: "${addrStreet}"`);
+
+              // Fill City field
+              if (addrCity) {
+                const cityField = page.locator('input[name="city"], input[placeholder="City"], input[placeholder="Ville"]').first();
+                if (await cityField.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await cityField.evaluate((el: HTMLInputElement, val: string) => {
+                    el.focus();
+                    const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+                    if (nativeSet) nativeSet.call(el, val);
+                    else el.value = val;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                  }, addrCity);
+                  await page.waitForTimeout(300);
+                  console.error(`[Guillevin] City filled: "${addrCity}"`);
+                  log.push(`City filled: "${addrCity}"`);
+                }
               }
-              console.error(`[Guillevin] Field not visible: ${selector}`);
-              log.push(`Field not visible: ${selector}`);
-              return false;
-            };
 
-            // Fill address line 1 (has role="combobox" — autocomplete field)
-            const streetFilled = await fillField('#shipping-address1, input[name="address1"], input[autocomplete="shipping address-line1"]', addrStreet, 'address1');
-
-            // Fill city
-            if (streetFilled) {
-              await fillField('input[name="city"], input[autocomplete="shipping address-level2"]', addrCity, 'city');
-
-              // Select province
+              // Select Province from dropdown
               if (addrProvince) {
-                const zoneSelect = page.locator('select[name="zone"], select[autocomplete="shipping address-level1"]').first();
-                if (await zoneSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
-                  await zoneSelect.selectOption({ value: addrProvince });
-                  console.error(`[Guillevin] Selected province: ${addrProvince}`);
-                  log.push(`Selected province: ${addrProvince}`);
+                const provSelect = page.locator('select[name="zone"], select[name="province"], select[autocomplete*="address-level1"]').first();
+                if (await provSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  // Try selecting by value (e.g. "QC"), then by label
+                  await provSelect.selectOption({ value: addrProvince }).catch(async () => {
+                    await provSelect.selectOption({ label: new RegExp(addrProvince, 'i') }).catch(() => {});
+                  });
+                  console.error(`[Guillevin] Province selected: ${addrProvince}`);
+                  log.push(`Province selected: ${addrProvince}`);
                   await page.waitForTimeout(300);
                 }
               }
 
-              // Fill postal code
-              await fillField('input[name="postalCode"], input[autocomplete="shipping postal-code"]', addrPostal, 'postalCode');
+              // Fill Postal code
+              if (addrPostal) {
+                const postalField = page.locator('input[name="postalCode"], input[placeholder="Postal code"], input[placeholder="Code postal"]').first();
+                if (await postalField.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await postalField.evaluate((el: HTMLInputElement, val: string) => {
+                    el.focus();
+                    const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+                    if (nativeSet) nativeSet.call(el, val);
+                    else el.value = val;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                  }, addrPostal);
+                  await page.waitForTimeout(300);
+                  console.error(`[Guillevin] Postal code filled: "${addrPostal}"`);
+                  log.push(`Postal code filled: "${addrPostal}"`);
+                }
+              }
 
-              // Click "Save address" button to confirm the new address
+              await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-modal-filled.png' }).catch(() => {});
+
+              // Click "Save address" button (orange button in the modal)
               await page.waitForTimeout(500);
-              const saveAddrBtn = page.locator('button:has-text("Save address"), button:has-text("Enregistrer"), button:has-text("Use this address"), button:has-text("Utiliser cette adresse")').first();
+              const saveAddrBtn = page.locator('button:has-text("Save address"), button:has-text("Enregistrer l\'adresse"), button:has-text("Sauvegarder")').first();
               if (await saveAddrBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await saveAddrBtn.click();
                 console.error('[Guillevin] Clicked "Save address"');
                 log.push('Clicked "Save address"');
-                await page.waitForTimeout(3000);
+                await page.waitForTimeout(5000);
               } else {
                 console.error('[Guillevin] "Save address" button not found');
                 log.push('WARNING: "Save address" button not found');
               }
 
+              await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-saved.png' }).catch(() => {});
               addressHandled = true;
+            } else {
+              console.error('[Guillevin] Address field not found in modal');
+              log.push('Address field not found in modal');
             }
 
             if (!addressHandled) {
