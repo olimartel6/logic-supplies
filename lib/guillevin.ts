@@ -392,6 +392,39 @@ export async function placeGuillevinOrder(
       }
     }
 
+    // Fallback: if server-side API found nothing, search via the browser (uses Browserbase proxy)
+    if (!productUrl) {
+      for (const searchQuery of uniqueQueries) {
+        log.push(`Browser search fallback: ${searchQuery}`);
+        console.error(`[Guillevin] Browser search fallback: ${searchQuery}`);
+        try {
+          await page.goto(`https://www.guillevin.com/search?type=product&q=${encodeURIComponent(searchQuery)}`, {
+            waitUntil: 'domcontentloaded', timeout: 30000,
+          });
+          await page.waitForTimeout(5000);
+          await handleRegionPopup(page);
+          await page.waitForTimeout(2000);
+
+          // Look for product links in search results
+          const firstProduct = page.locator('a[href*="/products/"]').first();
+          if (await firstProduct.isVisible({ timeout: 5000 }).catch(() => false)) {
+            const href = await firstProduct.getAttribute('href').catch(() => null);
+            if (href) {
+              productUrl = href.startsWith('http') ? new URL(href).pathname : href;
+              const title = await firstProduct.textContent().catch(() => '');
+              log.push(`Browser found: "${title?.trim().slice(0, 60)}" → ${productUrl}`);
+              console.error(`[Guillevin] Browser found: ${productUrl}`);
+              break;
+            }
+          }
+          log.push(`No browser results for: ${searchQuery}`);
+        } catch (err: any) {
+          log.push(`Browser search error: ${err.message}`);
+          console.error(`[Guillevin] Browser search error:`, err.message);
+        }
+      }
+    }
+
     if (productUrl) {
       // Navigate directly to product page
       log.push(`Navigating to product page: ${productUrl}`);
