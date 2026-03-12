@@ -454,21 +454,65 @@ export async function placeGuillevinOrder(
             log.push('Step 3: Filling shipping address');
             console.error('[Guillevin] Step 3: Filling shipping address');
             await page.waitForTimeout(2000);
-            const addressField = page.locator('#checkout_shipping_address_address1, input[name*="address1"], input[placeholder*="Address"]').first();
-            if (await addressField.isVisible({ timeout: 8000 })) {
-              await addressField.fill(deliveryAddress);
-              console.error('[Guillevin] Address filled');
-              log.push(`Address filled: ${deliveryAddress}`);
-            } else {
-              console.error('[Guillevin] No address field — may already be saved');
-              log.push('No address field visible — may already be saved');
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-before.png' }).catch(() => {});
+
+            // Dump checkout page structure for debugging
+            const checkoutInfo = await page.evaluate(() => {
+              const inputs = Array.from(document.querySelectorAll('input')).map(i => ({
+                id: i.id, name: i.name, type: i.type, placeholder: i.placeholder, value: i.value?.slice(0, 30),
+              }));
+              const links = Array.from(document.querySelectorAll('a, button')).slice(0, 20).map(el => ({
+                tag: el.tagName, text: el.textContent?.trim()?.slice(0, 50), href: (el as HTMLAnchorElement).href?.slice(0, 80),
+              }));
+              return { url: location.href, inputs, links };
+            }).catch(() => ({}));
+            console.error('[Guillevin] Checkout page info:', JSON.stringify(checkoutInfo));
+
+            // B2B Shopify: address may be pre-filled. Look for "Change" or "Edit" button first
+            const changeBtn = page.locator('a:has-text("Change"), button:has-text("Change"), a:has-text("Modifier"), button:has-text("Modifier"), a:has-text("Edit")').first();
+            if (await changeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+              await changeBtn.click();
+              console.error('[Guillevin] Clicked Change/Edit address button');
+              log.push('Clicked Change address button');
+              await page.waitForTimeout(2000);
+            }
+
+            // Try to fill address fields
+            const addressSelectors = [
+              '#checkout_shipping_address_address1',
+              'input[name="checkout[shipping_address][address1]"]',
+              'input[name*="address1"]',
+              'input[placeholder*="Address"]',
+              'input[placeholder*="Adresse"]',
+              'input[autocomplete="shipping address-line1"]',
+              'input[autocomplete="address-line1"]',
+            ];
+            let addressFilled = false;
+            for (const sel of addressSelectors) {
+              const field = page.locator(sel).first();
+              if (await field.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await field.click({ clickCount: 3 });
+                await page.waitForTimeout(200);
+                await field.fill(deliveryAddress);
+                // Dismiss any autocomplete dropdown
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(500);
+                console.error(`[Guillevin] Address filled via: ${sel}`);
+                log.push(`Address filled: ${deliveryAddress}`);
+                addressFilled = true;
+                break;
+              }
+            }
+            if (!addressFilled) {
+              console.error('[Guillevin] No address field found — may be pre-filled or different layout');
+              log.push('No address field found — trying to continue with existing address');
             }
 
             // Step 4: Continue to shipping
             log.push('Step 4: Continue to shipping');
             console.error('[Guillevin] Step 4: Continue to shipping');
             await page.waitForTimeout(2000);
-            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping"), button:has-text("Continuer")').first();
+            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping"), button:has-text("Continue"), button:has-text("Continuer")').first();
             if (await continueBtn.isVisible({ timeout: 5000 })) {
               await continueBtn.click();
               await page.waitForTimeout(5000);
@@ -494,141 +538,104 @@ export async function placeGuillevinOrder(
             log.push(`Payment URL: ${page.url()}`);
             console.error('[Guillevin] Payment URL:', page.url());
 
-            // Step 6: Fill card details
-            // Shopify checkout can use: (A) separate iframes per field, (B) one iframe with all fields, (C) a single Stripe-style combined field
+            // Step 6: Fill card details using keyboard approach (most reliable across all Shopify layouts)
             log.push('Step 6: Filling card details');
             console.error('[Guillevin] Step 6: Filling card details');
             await page.waitForTimeout(2000);
 
-            // Detect which iframes exist
-            const allCardIframes = page.locator('iframe[id*="card-fields"]');
-            const iframeCount = await allCardIframes.count().catch(() => 0);
-            console.error(`[Guillevin] Found ${iframeCount} card iframes`);
-            // Log iframe IDs for debugging
-            for (let fi = 0; fi < Math.min(iframeCount, 6); fi++) {
-              const fid = await allCardIframes.nth(fi).getAttribute('id').catch(() => '?');
-              console.error(`[Guillevin]   iframe[${fi}]: id="${fid}"`);
+            // Debug: log all iframes and their IDs
+            const allIframes = page.locator('iframe');
+            const totalIframes = await allIframes.count().catch(() => 0);
+            for (let fi = 0; fi < Math.min(totalIframes, 10); fi++) {
+              const fid = await allIframes.nth(fi).getAttribute('id').catch(() => '?');
+              const fsrc = await allIframes.nth(fi).getAttribute('src').catch(() => '?');
+              console.error(`[Guillevin]   iframe[${fi}]: id="${fid}" src="${fsrc?.slice(0, 80)}"`);
             }
 
-            if (iframeCount >= 3) {
-              // (A) Separate iframes: number, expiry, CVV (+ optional name)
-              log.push(`Mode A: ${iframeCount} separate iframes`);
-              const numberFrame = page.frameLocator('iframe[id*="card-fields-number"]').first();
-              const numberInput = numberFrame.locator('input').first();
-              await numberInput.waitFor({ state: 'visible', timeout: 8000 });
-              await numberInput.fill(payment.cardNumber);
-              log.push('Card number filled (iframe)');
-              console.error('[Guillevin] Card number filled (iframe)');
+            // Find the card number iframe/input — try multiple approaches
+            let cardNumberClicked = false;
 
-              await page.waitForTimeout(500);
-              const expiryFrame = page.frameLocator('iframe[id*="card-fields-expiry"]').first();
-              await expiryFrame.locator('input').first().fill(payment.cardExpiry);
-              log.push('Expiry filled (iframe)');
-              console.error('[Guillevin] Expiry filled (iframe)');
+            // Approach 1: Click into the card number iframe input
+            const cardIframeSelectors = [
+              'iframe[id*="card-fields-number"]',
+              'iframe[id*="card-number"]',
+              'iframe[id*="cardNumber"]',
+              'iframe[src*="card"]',
+            ];
+            for (const sel of cardIframeSelectors) {
+              try {
+                const frame = page.frameLocator(sel).first();
+                const input = frame.locator('input').first();
+                if (await input.isVisible({ timeout: 3000 }).catch(() => false)) {
+                  await input.click();
+                  cardNumberClicked = true;
+                  console.error(`[Guillevin] Clicked card input in iframe: ${sel}`);
+                  log.push(`Card input found in iframe: ${sel}`);
+                  break;
+                }
+              } catch {}
+            }
 
-              await page.waitForTimeout(500);
-              const cvvFrame = page.frameLocator('iframe[id*="card-fields-verification"]').first();
-              await cvvFrame.locator('input').first().fill(payment.cardCvv);
-              log.push('CVV filled (iframe)');
-              console.error('[Guillevin] CVV filled (iframe)');
-
-              const nameFrame = page.frameLocator('iframe[id*="card-fields-name"]').first();
-              const nameInput = nameFrame.locator('input').first();
-              if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await nameInput.fill(payment.cardHolder);
-                log.push('Card holder filled (iframe)');
+            // Approach 2: Direct input on page (no iframe)
+            if (!cardNumberClicked) {
+              const directSelectors = [
+                'input[autocomplete="cc-number"]',
+                'input[name*="card_number"]',
+                'input[id*="card-number"]',
+                'input[placeholder*="Card number"]',
+                'input[placeholder*="Numéro de carte"]',
+              ];
+              for (const sel of directSelectors) {
+                const input = page.locator(sel).first();
+                if (await input.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await input.click();
+                  cardNumberClicked = true;
+                  console.error(`[Guillevin] Clicked card input directly: ${sel}`);
+                  log.push(`Card input found directly: ${sel}`);
+                  break;
+                }
               }
-            } else if (iframeCount >= 1) {
-              // (B) Single iframe containing multiple inputs OR a single combined field
-              log.push(`Mode B: ${iframeCount} iframe(s) — checking for multiple inputs inside`);
-              const singleFrame = page.frameLocator('iframe[id*="card-fields"]').first();
-              const inputs = singleFrame.locator('input');
-              const inputCount = await inputs.count().catch(() => 0);
-              console.error(`[Guillevin] Inputs inside iframe: ${inputCount}`);
+            }
 
-              if (inputCount >= 3) {
-                // Multiple inputs inside one iframe — fill by index or autocomplete attribute
-                const numberInput = singleFrame.locator('input[autocomplete="cc-number"], input[name*="number"], input[placeholder*="Card"], input[placeholder*="card"]').first();
-                if (await numberInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-                  await numberInput.fill(payment.cardNumber);
-                } else {
-                  await inputs.nth(0).fill(payment.cardNumber);
-                }
-                log.push('Card number filled (single iframe, multi-input)');
-                console.error('[Guillevin] Card number filled');
+            if (cardNumberClicked) {
+              // Clear any existing value and type card number
+              await page.keyboard.press('Control+a');
+              await page.waitForTimeout(100);
+              await page.keyboard.type(payment.cardNumber, { delay: 40 });
+              await page.waitForTimeout(800);
+              log.push('Card number typed');
+              console.error('[Guillevin] Card number typed');
 
-                await page.waitForTimeout(300);
-                const expiryInput = singleFrame.locator('input[autocomplete="cc-exp"], input[name*="expiry"], input[placeholder*="MM"]').first();
-                if (await expiryInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await expiryInput.fill(payment.cardExpiry);
-                } else {
-                  await inputs.nth(1).fill(payment.cardExpiry);
-                }
-                log.push('Expiry filled');
-                console.error('[Guillevin] Expiry filled');
+              // Tab to expiry field and type
+              await page.keyboard.press('Tab');
+              await page.waitForTimeout(500);
+              await page.keyboard.type(payment.cardExpiry, { delay: 40 });
+              await page.waitForTimeout(800);
+              log.push('Expiry typed');
+              console.error('[Guillevin] Expiry typed');
 
-                await page.waitForTimeout(300);
-                const cvvInput = singleFrame.locator('input[autocomplete="cc-csc"], input[name*="verification"], input[name*="cvv"], input[placeholder*="CVV"], input[placeholder*="CVC"]').first();
-                if (await cvvInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await cvvInput.fill(payment.cardCvv);
-                } else {
-                  await inputs.nth(2).fill(payment.cardCvv);
-                }
-                log.push('CVV filled');
-                console.error('[Guillevin] CVV filled');
+              // Tab to CVV field and type
+              await page.keyboard.press('Tab');
+              await page.waitForTimeout(500);
+              await page.keyboard.type(payment.cardCvv, { delay: 40 });
+              await page.waitForTimeout(800);
+              log.push('CVV typed');
+              console.error('[Guillevin] CVV typed');
 
-                if (inputCount >= 4) {
-                  const nameInput = singleFrame.locator('input[autocomplete="cc-name"], input[name*="name"]').first();
-                  if (await nameInput.isVisible({ timeout: 1000 }).catch(() => false)) {
-                    await nameInput.fill(payment.cardHolder);
-                    log.push('Card holder filled');
-                  }
-                }
-              } else {
-                // Single combined field (Stripe Elements style) — type number, Tab, expiry, Tab, CVV
-                log.push('Mode B-single: combined card field — using keyboard');
-                console.error('[Guillevin] Combined card field detected, using keyboard input');
-                const cardInput = singleFrame.locator('input').first();
-                await cardInput.waitFor({ state: 'visible', timeout: 5000 });
-                await cardInput.click();
-                await page.waitForTimeout(300);
-                // Type card number digit by digit
-                await page.keyboard.type(payment.cardNumber, { delay: 50 });
-                await page.waitForTimeout(500);
-                // Tab to expiry
-                await page.keyboard.press('Tab');
-                await page.waitForTimeout(300);
-                await page.keyboard.type(payment.cardExpiry, { delay: 50 });
-                await page.waitForTimeout(500);
-                // Tab to CVV
-                await page.keyboard.press('Tab');
-                await page.waitForTimeout(300);
-                await page.keyboard.type(payment.cardCvv, { delay: 50 });
-                log.push('Card details typed via keyboard (combined field)');
-                console.error('[Guillevin] Card details typed via keyboard');
-              }
+              // Tab to name field (if present) and type
+              await page.keyboard.press('Tab');
+              await page.waitForTimeout(300);
+              await page.keyboard.type(payment.cardHolder, { delay: 30 });
+              log.push('Card holder typed');
+              console.error('[Guillevin] Card holder typed');
             } else {
-              // (C) No iframes — look for direct inputs on the page
-              log.push('Mode C: no card iframes — trying direct inputs');
-              console.error('[Guillevin] No card iframes found — trying direct page inputs');
-              const directCard = page.locator('input[autocomplete="cc-number"], input[name*="card_number"], input[id*="card-number"], input[name*="cardNumber"]').first();
-              if (await directCard.isVisible({ timeout: 5000 }).catch(() => false)) {
-                await directCard.fill(payment.cardNumber);
-                log.push('Card number filled (direct)');
-                const directExpiry = page.locator('input[autocomplete="cc-exp"], input[name*="expiry"], input[name*="card_expiry"]').first();
-                if (await directExpiry.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await directExpiry.fill(payment.cardExpiry);
-                  log.push('Expiry filled (direct)');
-                }
-                const directCvv = page.locator('input[autocomplete="cc-csc"], input[name*="cvv"], input[name*="verification"]').first();
-                if (await directCvv.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await directCvv.fill(payment.cardCvv);
-                  log.push('CVV filled (direct)');
-                }
-              } else {
-                log.push('No card input found at all');
-                console.error('[Guillevin] No card input found');
-              }
+              log.push('No card input found at all');
+              console.error('[Guillevin] No card input found — dumping page HTML');
+              const paymentHtml = await page.evaluate(() => {
+                const main = document.querySelector('[class*="payment"], [data-payment], main, #content');
+                return (main || document.body).innerHTML.slice(0, 3000);
+              }).catch(() => 'evaluate failed');
+              console.error('[Guillevin] Payment HTML:', paymentHtml);
             }
             await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-card-filled.png' }).catch(() => {});
 
