@@ -145,20 +145,36 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     } catch {}
   }
 
-  // Step 4: Choose region (appears after cookies)
+  // Step 4: Choose region from dropdown (Atlantique, Ontario, Québec, Prairies, Rocheuses, Pacifique)
   await page.waitForTimeout(2000);
-  await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-after-cookies.png' }).catch(() => {});
   try {
-    const regionOption = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), [data-province="QC"], [data-value="QC"]').first();
-    if (await regionOption.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await regionOption.click();
-      console.error('[Guillevin] Region selected: Québec');
+    // Try selecting "Québec" from a <select> dropdown
+    const selectEl = page.locator('select').filter({ has: page.locator('option:has-text("Québec")') }).first();
+    if (await selectEl.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await selectEl.selectOption({ label: 'Québec' });
+      console.error('[Guillevin] Region selected via dropdown: Québec');
+      await page.waitForTimeout(1000);
+      // Click submit/confirm button if present
+      const confirmBtn = page.locator('button[type="submit"], button:has-text("Confirmer"), button:has-text("OK"), button:has-text("Soumettre"), button:has-text("Continuer"), input[type="submit"]').first();
+      if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await confirmBtn.click();
+        console.error('[Guillevin] Region confirmed');
+      }
       await page.waitForTimeout(2000);
     } else {
-      console.error('[Guillevin] No region popup found, taking screenshot');
-      await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-no-region.png' }).catch(() => {});
+      // Try clicking "Québec" as a link/button/option directly
+      const regionLink = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), option:has-text("Québec"), [data-region="Québec"]').first();
+      if (await regionLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await regionLink.click();
+        console.error('[Guillevin] Region clicked: Québec');
+        await page.waitForTimeout(2000);
+      } else {
+        console.error('[Guillevin] No region selector found');
+      }
     }
-  } catch {}
+  } catch (err: any) {
+    console.error('[Guillevin] Region selection error:', err.message);
+  }
 
   return true;
 }
