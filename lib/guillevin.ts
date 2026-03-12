@@ -125,15 +125,13 @@ export async function getGuillevinPrice(
     const loggedIn = await loginToGuillevin(page, username, password);
     if (!loggedIn) return null;
 
-    // Use Shopify JSON search API for reliable results
+    // Use Shopify JSON search API (server-side fetch)
     const searchQuery = product.replace(/"/g, '');
     try {
       const apiUrl = `https://www.guillevin.com/search/suggest.json?q=${encodeURIComponent(searchQuery)}&resources[type]=product&resources[limit]=3`;
-      const resp = await page.evaluate(async (url: string) => {
-        const r = await fetch(url);
-        return r.json();
-      }, apiUrl);
-      const products = resp?.resources?.results?.products;
+      const resp = await fetch(apiUrl);
+      const data = await resp.json();
+      const products = data?.resources?.results?.products;
       if (products && products.length > 0) {
         const match = products[0];
         const priceStr = match.price;
@@ -207,24 +205,23 @@ export async function placeGuillevinOrder(
     if (words.length > 2) searchQueries.push(words.slice(0, 3).join(' '));
     const uniqueQueries = [...new Set(searchQueries)];
 
-    // Use Shopify JSON search API — much more reliable than scraping HTML
+    // Use Shopify JSON search API (server-side fetch — no browser needed for search)
     let productUrl: string | null = null;
     for (const searchQuery of uniqueQueries) {
       log.push(`Searching via API: ${searchQuery}`);
       console.error(`[Guillevin] Searching via API: ${searchQuery}`);
       try {
         const apiUrl = `https://www.guillevin.com/search/suggest.json?q=${encodeURIComponent(searchQuery)}&resources[type]=product&resources[limit]=5`;
-        const resp = await page.evaluate(async (url: string) => {
-          const r = await fetch(url);
-          return r.json();
-        }, apiUrl);
-        const products = resp?.resources?.results?.products;
-        if (products && products.length > 0) {
-          // Try to find exact match first, then take first result
-          const exact = products.find((p: any) =>
-            p.title.toLowerCase() === searchQuery.toLowerCase()
+        const resp = await fetch(apiUrl);
+        const data = await resp.json();
+        const results = data?.resources?.results?.products;
+        if (results && results.length > 0) {
+          // Try to find exact match first (strip quotes for comparison), then take first result
+          const normalize = (s: string) => s.replace(/"/g, '').trim().toLowerCase();
+          const exact = results.find((p: any) =>
+            normalize(p.title) === normalize(searchQuery)
           );
-          const match = exact || products[0];
+          const match = exact || results[0];
           productUrl = match.url;
           log.push(`Product found: "${match.title}" → ${productUrl}`);
           console.error(`[Guillevin] Found: "${match.title}" → ${productUrl}`);
