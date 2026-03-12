@@ -1195,7 +1195,7 @@ export default function SettingsPage() {
 
           {/* Adresse du bureau + livraison par défaut */}
           <div className="mt-6 border-t border-gray-100 pt-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Livraison</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Adresse bureau</p>
             <form onSubmit={handleSaveDelivery} className="space-y-3">
               <input
                 type="text"
