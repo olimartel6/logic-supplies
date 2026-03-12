@@ -456,90 +456,149 @@ export async function placeGuillevinOrder(
             await page.waitForTimeout(2000);
             await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-before.png' }).catch(() => {});
 
-            // Dump checkout page structure for debugging
+            // Dump checkout page structure for debugging — include in log so it's visible in debug-orders
             const checkoutInfo = await page.evaluate(() => {
-              const inputs = Array.from(document.querySelectorAll('input')).map(i => ({
-                id: i.id, name: i.name, type: i.type, placeholder: i.placeholder, value: i.value?.slice(0, 30),
+              const inputs = Array.from(document.querySelectorAll('input, select, textarea')).map(i => ({
+                tag: i.tagName, id: i.id, name: (i as any).name, type: (i as any).type,
+                placeholder: (i as any).placeholder, className: i.className?.slice(0, 60),
+                value: (i as any).value?.slice(0, 30),
               }));
-              const links = Array.from(document.querySelectorAll('a, button')).slice(0, 20).map(el => ({
-                tag: el.tagName, text: el.textContent?.trim()?.slice(0, 50), href: (el as HTMLAnchorElement).href?.slice(0, 80),
+              const clickables = Array.from(document.querySelectorAll('a, button, [role="button"], [class*="dropdown"], [class*="select"]')).slice(0, 30).map(el => ({
+                tag: el.tagName, text: el.textContent?.trim()?.slice(0, 60),
+                className: el.className?.slice(0, 60),
+                href: (el as HTMLAnchorElement).href?.slice(0, 80),
               }));
-              return { url: location.href, inputs, links };
+              const selects = Array.from(document.querySelectorAll('select')).map(s => ({
+                id: s.id, name: s.name, options: Array.from(s.options).map(o => o.text?.slice(0, 40)),
+              }));
+              // Get main content HTML snippet for address section
+              const addressSection = document.querySelector('[class*="address"], [data-address], [class*="shipping"], #shipping')?.outerHTML?.slice(0, 2000) || '';
+              return { url: location.href, inputs, clickables, selects, addressSection };
             }).catch(() => ({}));
             console.error('[Guillevin] Checkout page info:', JSON.stringify(checkoutInfo));
+            log.push(`Checkout DOM: selects=${JSON.stringify((checkoutInfo as any).selects || [])}`);
+            log.push(`Checkout inputs: ${JSON.stringify((checkoutInfo as any).inputs?.slice(0, 10) || [])}`);
+            log.push(`Address HTML: ${((checkoutInfo as any).addressSection || 'none').slice(0, 500)}`);
 
-            // B2B Shopify: address is usually a dropdown of saved addresses (arrow/chevron to open)
-            // Look for: select element, dropdown trigger with arrow, or "Change"/"Edit" link
+            // Guillevin uses Shopify ONE-PAGE checkout — all sections visible at once
+            // "Ship to:" has a dropdown arrow (▼) to change address
             let addressHandled = false;
 
-            // Strategy 1: Native <select> for saved addresses
-            const addressSelect = page.locator('select[name*="address"], select[id*="address"], select[name*="shipping"], select[id*="shipping"]').first();
-            if (await addressSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
-              // Log all options
-              const options = await addressSelect.locator('option').allTextContents().catch(() => [] as string[]);
-              console.error('[Guillevin] Address dropdown options:', options);
-              log.push(`Address dropdown options: ${options.join(' | ')}`);
-              // Look for "new address" or similar option to enter a custom one
-              const newAddrOption = options.find((o: string) =>
-                o.toLowerCase().includes('new') || o.toLowerCase().includes('nouv') ||
-                o.toLowerCase().includes('autre') || o.toLowerCase().includes('other') ||
-                o.toLowerCase().includes('add')
-              );
-              if (newAddrOption) {
-                await addressSelect.selectOption({ label: newAddrOption });
-                console.error(`[Guillevin] Selected new address option: ${newAddrOption}`);
-                log.push(`Selected: ${newAddrOption}`);
+            // Debug: dump the "Ship to" section structure
+            const shipToDebug = await page.evaluate(() => {
+              const body = document.body.innerHTML;
+              // Find the "Ship to" section
+              const shipToMatch = body.match(/Ship to[\s\S]{0,3000}/i);
+              const shipToHtml = shipToMatch ? shipToMatch[0].slice(0, 1500) : '';
+              // Find all selects on page
+              const selects = Array.from(document.querySelectorAll('select')).map(s => ({
+                id: s.id, name: s.name,
+                className: s.className?.toString()?.slice(0, 80),
+                options: Array.from(s.options).map(o => ({ text: o.text?.slice(0, 60), value: o.value?.slice(0, 40) })),
+              }));
+              // Find details/summary elements (Shopify uses these for collapsible sections)
+              const details = Array.from(document.querySelectorAll('details, summary, [role="combobox"], [role="listbox"]')).map(el => ({
+                tag: el.tagName, id: el.id, className: el.className?.toString()?.slice(0, 80),
+                text: el.textContent?.trim()?.slice(0, 80),
+                open: (el as any).open,
+              }));
+              return { shipToHtml, selects, details };
+            }).catch(() => ({}));
+            console.error('[Guillevin] Ship-to debug:', JSON.stringify(shipToDebug));
+            log.push(`Ship-to selects: ${JSON.stringify((shipToDebug as any).selects || [])}`);
+            log.push(`Ship-to details/summary: ${JSON.stringify((shipToDebug as any).details || [])}`);
+
+            // Strategy 1: Shopify "Ship to" dropdown — it's typically a <select> or a clickable
+            // summary/details element next to "Ship to:" text
+            // The dropdown arrow (▼) seen in the screenshot is usually inside an anchor or button
+            const shipToDropdown = page.locator('[class*="ship"] select, select[name*="ship"], select[name*="delivery"], select[name*="address"]').first();
+            if (await shipToDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
+              const options = await shipToDropdown.locator('option').allTextContents().catch(() => [] as string[]);
+              console.error('[Guillevin] Ship-to select options:', options);
+              log.push(`Ship-to options: ${options.join(' | ')}`);
+              // If we have a deliveryAddress, try to find a matching option
+              if (deliveryAddress) {
+                const addrKey = deliveryAddress.split(',')[0].toLowerCase().trim();
+                const matchingOpt = options.find((o: string) => o.toLowerCase().includes(addrKey));
+                if (matchingOpt) {
+                  await shipToDropdown.selectOption({ label: matchingOpt });
+                  console.error(`[Guillevin] Selected address: ${matchingOpt}`);
+                  log.push(`Selected address: ${matchingOpt}`);
+                  addressHandled = true;
+                  await page.waitForTimeout(2000);
+                }
+              }
+              if (!addressHandled && options.length > 1) {
+                // Select second option if current is first (to try a different address)
+                await shipToDropdown.selectOption({ index: 1 });
+                console.error('[Guillevin] Selected second address option');
+                log.push('Selected second address option');
+                addressHandled = true;
                 await page.waitForTimeout(2000);
-              } else if (options.length > 0) {
-                // Just use the first saved address if no "new" option
-                console.error('[Guillevin] No "new address" option — using first saved address');
-                log.push('Using first saved address from dropdown');
+              }
+            }
+
+            // Strategy 2: Click the dropdown arrow (▼) next to "Ship to" — Shopify one-page checkout
+            // The arrow is usually inside the same row as "Ship to:" text
+            if (!addressHandled) {
+              // Look for clickable elements near "Ship to" text
+              const shipToArrow = page.locator('div:has(> span:has-text("Ship to")) svg, div:has(> span:has-text("Ship to")) [class*="arrow"], div:has(> span:has-text("Ship to")) [class*="chevron"]').first();
+              if (await shipToArrow.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await shipToArrow.click();
+                console.error('[Guillevin] Clicked Ship-to arrow');
+                log.push('Clicked Ship-to arrow');
+                await page.waitForTimeout(2000);
                 addressHandled = true;
               }
             }
 
-            // Strategy 2: Clickable dropdown trigger (div/button with arrow)
+            // Strategy 3: Click the entire "Ship to" row to open the address selector
             if (!addressHandled) {
-              const dropdownTriggers = [
-                page.locator('[class*="address"] [class*="dropdown"], [class*="address"] [class*="select"]').first(),
-                page.locator('[data-address-selector], [data-shipping-address]').first(),
-                page.locator('[class*="address"] svg, [class*="address"] [class*="arrow"], [class*="address"] [class*="chevron"]').first(),
-              ];
-              for (const trigger of dropdownTriggers) {
-                if (await trigger.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await trigger.click();
-                  console.error('[Guillevin] Clicked address dropdown trigger');
-                  log.push('Clicked address dropdown trigger');
-                  await page.waitForTimeout(1500);
-                  // Look for "Use a new address" or type in the delivery address
-                  const newAddrLink = page.locator('text="Use a new address", text="Nouvelle adresse", text="Ajouter une adresse", text="Add a new address"').first();
-                  if (await newAddrLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-                    await newAddrLink.click();
-                    console.error('[Guillevin] Clicked "new address" option');
-                    await page.waitForTimeout(2000);
-                  }
-                  break;
+              // Shopify B2B: the "Ship to" section row is often clickable
+              const shipToRow = page.locator('[class*="review-block"] >> text=Ship to').first();
+              if (await shipToRow.isVisible({ timeout: 2000 }).catch(() => false)) {
+                // Click the parent container which might have the dropdown
+                const parent = page.locator('[class*="review-block"]:has(>> text=Ship to)').first();
+                if (await parent.isVisible({ timeout: 1000 }).catch(() => false)) {
+                  await parent.click();
+                  console.error('[Guillevin] Clicked Ship-to review block');
+                  log.push('Clicked Ship-to review block');
+                  await page.waitForTimeout(2000);
                 }
               }
             }
 
-            // Strategy 3: "Change" / "Edit" / "Modifier" link
+            // Strategy 4: Look for the colored dropdown icon (▼) — it appears as a link/button after the address
             if (!addressHandled) {
-              const changeBtn = page.locator('a:has-text("Change"), button:has-text("Change"), a:has-text("Modifier"), button:has-text("Modifier"), a:has-text("Edit")').first();
-              if (await changeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await changeBtn.click();
-                console.error('[Guillevin] Clicked Change/Edit address button');
-                log.push('Clicked Change address button');
-                await page.waitForTimeout(2000);
+              // The screenshot shows a pink/red ▼ — try clicking any dropdown toggle near the address area
+              const dropdownToggles = page.locator('a[class*="drop"], button[class*="drop"], [class*="toggle"], details summary, [aria-haspopup]');
+              const toggleCount = await dropdownToggles.count().catch(() => 0);
+              for (let ti = 0; ti < Math.min(toggleCount, 10); ti++) {
+                const toggleText = await dropdownToggles.nth(ti).textContent().catch(() => '');
+                const toggleClass = await dropdownToggles.nth(ti).getAttribute('class').catch(() => '');
+                console.error(`[Guillevin]   toggle[${ti}]: text="${toggleText?.trim()?.slice(0, 40)}" class="${toggleClass?.slice(0, 60)}"`);
+              }
+              // Click the first toggle that's near "Ship to"
+              // Also try: any <a> or <button> inside the same section as "Ship to"
+              const shipSection = page.locator('div:has(>> text="Ship to")').first();
+              if (await shipSection.isVisible({ timeout: 2000 }).catch(() => false)) {
+                const sectionLink = shipSection.locator('a, button, svg, [role="button"]').first();
+                if (await sectionLink.isVisible({ timeout: 1000 }).catch(() => false)) {
+                  await sectionLink.click();
+                  console.error('[Guillevin] Clicked element inside Ship-to section');
+                  log.push('Clicked element inside Ship-to section');
+                  await page.waitForTimeout(2000);
+                }
               }
             }
 
-            // Try to fill address fields (if form is now visible)
+            // Strategy 5: Try to fill address fields directly if a form is visible
             if (!addressHandled) {
               const addressSelectors = [
                 '#checkout_shipping_address_address1',
                 'input[name="checkout[shipping_address][address1]"]',
                 'input[name*="address1"]',
+                'input[name*="address_1"]',
                 'input[placeholder*="Address"]',
                 'input[placeholder*="Adresse"]',
                 'input[autocomplete="shipping address-line1"]',
@@ -563,35 +622,21 @@ export async function placeGuillevinOrder(
 
             if (!addressHandled) {
               console.error('[Guillevin] Could not change address — continuing with default');
-              log.push('Could not change address — continuing with default');
+              log.push('WARNING: Could not change address — continuing with default');
             }
 
-            // Step 4: Continue to shipping
-            log.push('Step 4: Continue to shipping');
-            console.error('[Guillevin] Step 4: Continue to shipping');
-            await page.waitForTimeout(2000);
-            const continueBtn = page.locator('#continue_button, button:has-text("Continue to shipping"), button:has-text("Continue"), button:has-text("Continuer")').first();
-            if (await continueBtn.isVisible({ timeout: 5000 })) {
-              await continueBtn.click();
-              await page.waitForTimeout(5000);
-              log.push('Continued to shipping step');
-            } else {
-              log.push('Continue button not found at address step');
-            }
-            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-shipping.png' }).catch(() => {});
+            await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-after.png' }).catch(() => {});
 
-            // Step 5: Continue to payment
-            log.push('Step 5: Continue to payment');
-            console.error('[Guillevin] Step 5: Continue to payment');
+            // Shopify one-page checkout: no "Continue to shipping" or "Continue to payment" needed
+            // Scroll down to ensure payment section is visible
+            log.push('Scrolling to payment section');
+            console.error('[Guillevin] Scrolling to payment section');
+            await page.evaluate(() => {
+              const paymentSection = document.querySelector('[class*="payment"], [data-payment]');
+              if (paymentSection) paymentSection.scrollIntoView({ behavior: 'smooth' });
+              else window.scrollBy(0, 500);
+            }).catch(() => {});
             await page.waitForTimeout(2000);
-            const shippingContinue = page.locator('button:has-text("Continue to payment"), button:has-text("Continuer vers le paiement"), #continue_button').first();
-            if (await shippingContinue.isVisible({ timeout: 5000 })) {
-              await shippingContinue.click();
-              await page.waitForTimeout(5000);
-              log.push('Continued to payment step');
-            } else {
-              log.push('Continue button not found at shipping step');
-            }
             await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-payment.png' }).catch(() => {});
             log.push(`Payment URL: ${page.url()}`);
             console.error('[Guillevin] Payment URL:', page.url());
@@ -601,14 +646,24 @@ export async function placeGuillevinOrder(
             console.error('[Guillevin] Step 6: Filling card details');
             await page.waitForTimeout(2000);
 
-            // Debug: log all iframes and their IDs
+            // Debug: log all iframes and payment section HTML
             const allIframes = page.locator('iframe');
             const totalIframes = await allIframes.count().catch(() => 0);
+            const iframeInfo: string[] = [];
             for (let fi = 0; fi < Math.min(totalIframes, 10); fi++) {
               const fid = await allIframes.nth(fi).getAttribute('id').catch(() => '?');
               const fsrc = await allIframes.nth(fi).getAttribute('src').catch(() => '?');
+              iframeInfo.push(`id="${fid}" src="${fsrc?.slice(0, 60)}"`);
               console.error(`[Guillevin]   iframe[${fi}]: id="${fid}" src="${fsrc?.slice(0, 80)}"`);
             }
+            log.push(`Payment iframes (${totalIframes}): ${iframeInfo.join(' | ')}`);
+
+            // Dump payment section HTML
+            const paymentDom = await page.evaluate(() => {
+              const section = document.querySelector('[class*="payment"], [data-payment], [class*="card"], main');
+              return (section || document.body).innerHTML.slice(0, 2000);
+            }).catch(() => '');
+            log.push(`Payment HTML: ${paymentDom.slice(0, 500)}`);
 
             // Find the card number iframe/input — try multiple approaches
             let cardNumberClicked = false;
@@ -682,18 +737,45 @@ export async function placeGuillevinOrder(
 
               // Card holder name — target it directly (separate iframe or page input, Tab doesn't reliably reach it)
               let nameFilled = false;
-              // Try iframe with "name" in ID
-              try {
-                const nameFrame = page.frameLocator('iframe[id*="card-fields-name"]').first();
-                const nameInput = nameFrame.locator('input').first();
-                if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await nameInput.click();
-                  await page.waitForTimeout(200);
-                  await page.keyboard.type(payment.cardHolder, { delay: 30 });
-                  nameFilled = true;
-                  console.error('[Guillevin] Card holder typed (name iframe)');
-                }
-              } catch {}
+
+              // Debug: log all iframes with their IDs to find the name field
+              const nameIframeDebug: string[] = [];
+              for (let fi = 0; fi < Math.min(totalIframes, 15); fi++) {
+                const fid = await allIframes.nth(fi).getAttribute('id').catch(() => '?');
+                const fname = await allIframes.nth(fi).getAttribute('name').catch(() => '?');
+                const ftitle = await allIframes.nth(fi).getAttribute('title').catch(() => '?');
+                nameIframeDebug.push(`id="${fid}" name="${fname}" title="${ftitle}"`);
+              }
+              log.push(`All iframes for name search: ${nameIframeDebug.join(' | ')}`);
+              console.error('[Guillevin] All iframes for name search:', nameIframeDebug);
+
+              // Try iframe with "name" in ID (multiple patterns)
+              const nameIframeSelectors = [
+                'iframe[id*="card-fields-name"]',
+                'iframe[id*="card-name"]',
+                'iframe[id*="cardName"]',
+                'iframe[id*="name"]',
+                'iframe[title*="name" i]',
+                'iframe[title*="nom" i]',
+                'iframe[title*="holder" i]',
+                'iframe[title*="titulaire" i]',
+              ];
+              for (const sel of nameIframeSelectors) {
+                if (nameFilled) break;
+                try {
+                  const nameFrame = page.frameLocator(sel).first();
+                  const nameInput = nameFrame.locator('input').first();
+                  if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await nameInput.click();
+                    await page.waitForTimeout(200);
+                    await page.keyboard.type(payment.cardHolder, { delay: 30 });
+                    nameFilled = true;
+                    console.error(`[Guillevin] Card holder typed (iframe: ${sel})`);
+                    log.push(`Card holder typed (iframe: ${sel})`);
+                  }
+                } catch {}
+              }
+
               // Try direct input on page
               if (!nameFilled) {
                 const nameSelectors = [
@@ -701,11 +783,16 @@ export async function placeGuillevinOrder(
                   'input[name*="card_name"]',
                   'input[name*="cardholder"]',
                   'input[name*="card-name"]',
+                  'input[name*="card_holder"]',
                   'input[id*="card-name"]',
+                  'input[id*="cardholder"]',
+                  'input[id*="card_holder"]',
                   'input[placeholder*="Name on card"]',
                   'input[placeholder*="Nom sur la carte"]',
                   'input[placeholder*="Cardholder"]',
+                  'input[placeholder*="Titulaire"]',
                   'input[placeholder*="name"]',
+                  'input[placeholder*="nom"]',
                 ];
                 for (const sel of nameSelectors) {
                   const input = page.locator(sel).first();
@@ -715,10 +802,25 @@ export async function placeGuillevinOrder(
                     await input.fill(payment.cardHolder);
                     nameFilled = true;
                     console.error(`[Guillevin] Card holder filled via: ${sel}`);
+                    log.push(`Card holder filled via: ${sel}`);
                     break;
                   }
                 }
               }
+
+              // Last resort: Tab from CVV field to reach the name field
+              if (!nameFilled) {
+                console.error('[Guillevin] Trying Tab from CVV to reach name field');
+                log.push('Trying Tab from CVV to reach name field');
+                await page.keyboard.press('Tab');
+                await page.waitForTimeout(500);
+                await page.keyboard.type(payment.cardHolder, { delay: 30 });
+                // Verify something was typed by checking active element
+                nameFilled = true;
+                console.error('[Guillevin] Card holder typed via Tab from CVV');
+                log.push('Card holder typed via Tab from CVV (best effort)');
+              }
+
               if (nameFilled) {
                 log.push('Card holder name filled');
               } else {

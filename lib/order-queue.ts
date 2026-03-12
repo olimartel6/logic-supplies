@@ -67,7 +67,9 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
     supplier = ordered.supplier;
     reason = ordered.reason;
     orderStatus = result.success ? 'confirmed' : result.inCart ? 'pending' : 'failed';
-    orderError = result.error || null;
+    // Include the full log in the error message for debugging via debug-orders
+    const logStr = result.log?.length ? '\n--- LOG ---\n' + result.log.join('\n') : '';
+    orderError = result.error ? result.error + logStr : (logStr || null);
   } catch (err: any) {
     console.error('[OrderQueue] Job failed:', err);
     orderError = err?.message || 'Erreur inconnue';
