@@ -30,10 +30,11 @@ async function createGuillevinPage(browser: any) {
     (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {} };
 
     // Auto-accept Didomi cookie consent before SDK loads
-    window.didomiConfig = window.didomiConfig || {};
-    (window as any).didomiConfig.user = { externalConsent: { value: 'all', type: 'all' } };
-    window.didomiOnReady = window.didomiOnReady || [];
-    window.didomiOnReady.push(function(Didomi: any) {
+    const w = window as any;
+    w.didomiConfig = w.didomiConfig || {};
+    w.didomiConfig.user = { externalConsent: { value: 'all', type: 'all' } };
+    w.didomiOnReady = w.didomiOnReady || [];
+    w.didomiOnReady.push(function(Didomi: any) {
       try { Didomi.setUserAgreeToAll(); } catch {}
     });
   });
