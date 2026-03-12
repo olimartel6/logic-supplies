@@ -1193,45 +1193,53 @@ export default function SettingsPage() {
             </button>
           </form>
 
-          {/* Adresse du bureau + livraison par défaut */}
-          <div className="mt-6 border-t border-gray-100 pt-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Adresse bureau</p>
-            <form onSubmit={handleSaveDelivery} className="space-y-3">
+        </AccordionSection>
+
+        {/* ─── Livraison ─── */}
+        <AccordionSection
+          title="Livraison"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0H6.375m11.25 0h3.375a1.125 1.125 0 0 0 1.125-1.125v-3.375M3.375 14.25h17.25M21 8.625V6.375A1.125 1.125 0 0 0 19.875 5.25h-3.75L14.25 2.25H9.75L7.875 5.25h-3.75A1.125 1.125 0 0 0 3 6.375v2.25" /></svg>}
+          isOpen={openSection === 'livraison'}
+          onToggle={() => toggleSection('livraison')}
+        >
+          <form onSubmit={handleSaveDelivery} className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Adresse du bureau</p>
               <input
                 type="text"
-                placeholder="Adresse du bureau (ex: 123 rue Principale, Montréal, QC)"
+                placeholder="Ex: 123 rue Principale, Montréal, QC H2X 1Y6"
                 value={officeAddress}
                 onChange={e => setOfficeAddress(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Livraison par défaut</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDefaultDelivery('office')}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                  >
-                    Bureau
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDefaultDelivery('jobsite')}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                  >
-                    Chantier
-                  </button>
-                </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Livraison par défaut</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDefaultDelivery('office')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'office' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                >
+                  Bureau
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDefaultDelivery('jobsite')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition ${defaultDelivery === 'jobsite' ? 'bg-yellow-400 border-yellow-400 text-slate-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                >
+                  Chantier
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={savingDelivery}
-                className="w-full bg-gray-900 text-white font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-700 disabled:opacity-50 transition"
-              >
-                {savingDelivery ? t('saving') : deliverySaved ? '✅ ' + t('saved') : 'Sauvegarder'}
-              </button>
-            </form>
-          </div>
+            </div>
+            <button
+              type="submit"
+              disabled={savingDelivery}
+              className="w-full bg-yellow-400 text-slate-900 font-semibold py-2.5 rounded-xl text-sm hover:bg-yellow-300 disabled:opacity-50 transition"
+            >
+              {savingDelivery ? t('saving') : deliverySaved ? '✅ ' + t('saved') : 'Sauvegarder'}
+            </button>
+          </form>
         </AccordionSection>
 
         {/* ─── TESTER LES COMMANDES (admin only) ─── */}
