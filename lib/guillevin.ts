@@ -481,22 +481,59 @@ export async function placeGuillevinOrder(
               console.error(`[Guillevin] Parsed: street="${addrStreet}" city="${addrCity}" prov="${addrProvince}" postal="${addrPostal}"`);
             }
 
-            // Layout A: Click the "Ship to" collapsible button to expand address form
-            const shipToBtn = page.locator('#deliveryAddress-collapsible, button:has-text("Ship to")').first();
+            // Layout A: B2B one-page checkout with collapsible "Ship to"
+            // Flow: click ▼ to expand → click "Use a different address" → fill form
+            const shipToBtn = page.locator('#deliveryAddress-collapsible').first();
             if (await shipToBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
               const expanded = await shipToBtn.getAttribute('aria-expanded').catch(() => 'false');
               console.error(`[Guillevin] Ship-to collapsible found, expanded=${expanded}`);
               log.push(`Ship-to collapsible found, expanded=${expanded}`);
 
+              // Step A1: Click to expand the address panel
               if (expanded !== 'true') {
                 await shipToBtn.click();
                 console.error('[Guillevin] Clicked Ship-to to expand');
                 log.push('Clicked Ship-to to expand');
                 await page.waitForTimeout(3000);
               }
+
+              // Step A2: Click "Use a different address" link/button inside the expanded panel
+              const diffAddrBtn = page.locator(
+                'a:has-text("Use a different address"), button:has-text("Use a different address"), ' +
+                'a:has-text("different address"), button:has-text("different address"), ' +
+                'a:has-text("Utiliser une autre adresse"), button:has-text("Utiliser une autre adresse"), ' +
+                'a:has-text("autre adresse"), button:has-text("autre adresse"), ' +
+                'a:has-text("New address"), button:has-text("New address"), ' +
+                'a:has-text("Nouvelle adresse"), button:has-text("Nouvelle adresse"), ' +
+                'a:has-text("Add address"), button:has-text("Add address"), ' +
+                'a:has-text("Change address"), button:has-text("Change address"), ' +
+                'a:has-text("Changer"), button:has-text("Changer")'
+              ).first();
+              if (await diffAddrBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await diffAddrBtn.click();
+                console.error('[Guillevin] Clicked "Use a different address"');
+                log.push('Clicked "Use a different address"');
+                await page.waitForTimeout(3000);
+              } else {
+                // Log what's visible in the panel for debugging
+                const panelLinks = await page.evaluate(() => {
+                  return Array.from(document.querySelectorAll('a, button')).filter(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.height > 0 && rect.width > 0;
+                  }).map(el => ({
+                    tag: el.tagName,
+                    text: el.textContent?.trim()?.slice(0, 80),
+                    href: (el as HTMLAnchorElement).href?.slice(0, 120),
+                  })).filter(el => el.text && el.text.length > 0);
+                }).catch(() => []);
+                console.error('[Guillevin] Visible links/buttons after expand:', JSON.stringify(panelLinks.slice(0, 15)));
+                log.push(`Panel links: ${JSON.stringify(panelLinks.slice(0, 10))}`);
+              }
+
+              await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-expanded.png' }).catch(() => {});
             }
 
-            // Now fill the address form fields (visible in both layouts A and B)
+            // Now fill the address form fields (visible after clicking "Use a different address" or in multi-step layout)
             // Helper to fill a field
             const fillField = async (selector: string, value: string, fieldName: string): Promise<boolean> => {
               if (!value) return false;
