@@ -140,34 +140,44 @@ export async function triggerApproval(
   let payment: PaymentInfo | undefined;
   const pm = db.prepare('SELECT card_holder, card_number_encrypted, card_expiry, card_last4, card_cvv_encrypted FROM company_payment_methods WHERE company_id = ?').get(companyId) as any;
   if (pm) {
-    payment = {
-      cardHolder: pm.card_holder,
-      cardNumber: decrypt(pm.card_number_encrypted),
-      cardExpiry: pm.card_expiry,
-      cardCvv: decrypt(pm.card_cvv_encrypted),
-    };
+    try {
+      payment = {
+        cardHolder: pm.card_holder,
+        cardNumber: decrypt(pm.card_number_encrypted),
+        cardExpiry: pm.card_expiry,
+        cardCvv: decrypt(pm.card_cvv_encrypted),
+      };
+    } catch (err) {
+      console.error('[triggerApproval] Erreur déchiffrement paiement:', err);
+      // Continue without payment — job will fail gracefully instead of never being created
+    }
   }
 
   // Enqueue order job instead of executing directly (with retry support)
-  const jobPayload = JSON.stringify({
-    product: request.product,
-    quantity: request.quantity,
-    unit: request.unit,
-    supplier: request.supplier || null,
-    preference,
-    jobSiteAddress: request.job_site_address || '',
-    jobSiteName: request.job_site_name || '',
-    deliveryAddress: deliveryAddress || '',
-    payment,
-    workerEmail: request.worker_email || '',
-    workerName: request.worker_name || '',
-    workerLanguage: request.worker_language || 'fr',
-    officeComment: office_comment,
-    ...(dryRun ? { dryRun: true } : {}),
-  });
+  try {
+    const jobPayload = JSON.stringify({
+      product: request.product,
+      quantity: request.quantity,
+      unit: request.unit,
+      supplier: request.supplier || null,
+      preference,
+      jobSiteAddress: request.job_site_address || '',
+      jobSiteName: request.job_site_name || '',
+      deliveryAddress: deliveryAddress || '',
+      payment,
+      workerEmail: request.worker_email || '',
+      workerName: request.worker_name || '',
+      workerLanguage: request.worker_language || 'fr',
+      officeComment: office_comment,
+      ...(dryRun ? { dryRun: true } : {}),
+    });
 
-  db.prepare(`
-    INSERT INTO order_jobs (company_id, request_id, status, payload)
-    VALUES (?, ?, 'pending', ?)
-  `).run(companyId, requestId, jobPayload);
+    db.prepare(`
+      INSERT INTO order_jobs (company_id, request_id, status, payload)
+      VALUES (?, ?, 'pending', ?)
+    `).run(companyId, requestId, jobPayload);
+  } catch (err) {
+    console.error('[triggerApproval] Erreur création order_job:', err);
+    throw err; // Re-throw so caller knows approval partially failed
+  }
 }

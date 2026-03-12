@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
+import { triggerApproval } from '@/lib/approval';
 
 export async function GET() {
   const ctx = await getTenantContext();
@@ -61,5 +62,60 @@ export async function GET() {
     "SELECT 1 FROM company_payment_methods WHERE company_id = ?"
   ).get(cid);
 
-  return NextResponse.json({ requests, jobs, attempts, supplierOrders, guillevinAccount, hasPayment });
+  // Find stuck requests (approved but no order_job)
+  const stuckRequests = db.prepare(`
+    SELECT r.id, r.product, r.supplier, r.quantity
+    FROM requests r
+    LEFT JOIN order_jobs oj ON oj.request_id = r.id AND oj.company_id = r.company_id
+    WHERE r.company_id = ? AND r.status = 'approved' AND oj.id IS NULL
+    ORDER BY r.created_at DESC LIMIT 10
+  `).all(cid);
+
+  return NextResponse.json({ requests, jobs, attempts, supplierOrders, guillevinAccount, hasPayment, stuckRequests });
+}
+
+// POST — Retry stuck approved requests (re-trigger job creation)
+export async function POST(req: NextRequest) {
+  const ctx = await getTenantContext();
+  if ('error' in ctx) return ctx.error;
+  if (ctx.role !== 'admin' && ctx.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Admin seulement' }, { status: 403 });
+  }
+
+  const db = getDb();
+  const cid = ctx.companyId;
+  if (!cid) {
+    return NextResponse.json({ error: 'Aucune compagnie' }, { status: 400 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const requestId = body.requestId;
+
+  if (!requestId) {
+    return NextResponse.json({ error: 'requestId requis' }, { status: 400 });
+  }
+
+  // Verify the request is approved and has no job
+  const request = db.prepare(
+    "SELECT id, status FROM requests WHERE id = ? AND company_id = ? AND status = 'approved'"
+  ).get(requestId, cid) as any;
+
+  if (!request) {
+    return NextResponse.json({ error: 'Demande non trouvée ou pas approuvée' }, { status: 404 });
+  }
+
+  const existingJob = db.prepare(
+    "SELECT id FROM order_jobs WHERE request_id = ? AND company_id = ?"
+  ).get(requestId, cid);
+
+  if (existingJob) {
+    return NextResponse.json({ error: 'Un job existe déjà pour cette demande' }, { status: 400 });
+  }
+
+  try {
+    await triggerApproval(requestId, cid, db);
+    return NextResponse.json({ ok: true, message: 'Job créé avec succès' });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err?.message || 'Erreur' }, { status: 500 });
+  }
 }

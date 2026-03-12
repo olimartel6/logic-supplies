@@ -35,7 +35,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (status === 'approved') {
-    await triggerApproval(parseInt(id, 10), ctx.companyId, db, delivery_override, office_comment);
+    try {
+      await triggerApproval(parseInt(id, 10), ctx.companyId, db, delivery_override, office_comment);
+    } catch (err) {
+      console.error('[PATCH /api/requests] triggerApproval failed:', err);
+      return NextResponse.json({ error: 'Approbation enregistrée mais erreur lors de la création de la commande. Vérifiez les logs.' }, { status: 500 });
+    }
   } else {
     // rejected
     db.prepare(`
