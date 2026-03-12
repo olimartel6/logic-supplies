@@ -83,21 +83,27 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     const afterUrl = page.url();
     const errorText = await page.locator('[id*="error"], [class*="error"], [role="alert"]').first()
       .textContent({ timeout: 2000 }).catch(() => '');
-    console.log(`[Guillevin] Login failed — URL: ${afterUrl}, error: ${errorText}`);
+    console.error(`[Guillevin] Login failed — URL: ${afterUrl}, error: ${errorText}`);
+    await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-fail.png' }).catch(() => {});
     throw new Error(
       errorText?.trim()
         ? `Guillevin: ${errorText.trim()}`
-        : 'Identifiants Guillevin invalides'
+        : `Identifiants Guillevin invalides (URL: ${afterUrl.slice(0, 100)})`
     );
   }
 
   await page.waitForTimeout(3000);
   const url = page.url();
-  console.log('[Guillevin] Final URL:', url);
+  console.error('[Guillevin] Final URL:', url);
   // Success if redirected to guillevin.com or Shopify account (shop 60111716441)
   // Check for /login or /u/login path — but NOT new_login query param
   const isLoginPage = url.includes('/u/login') || url.includes('/account/login') || url.match(/\/login(?:\?|$)/);
-  return (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !isLoginPage;
+  const success = (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !isLoginPage;
+  if (!success) {
+    console.error(`[Guillevin] Login check failed — url=${url}, isLoginPage=${isLoginPage}`);
+    await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-check.png' }).catch(() => {});
+  }
+  return success;
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
