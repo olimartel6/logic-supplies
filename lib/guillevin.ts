@@ -106,17 +106,30 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     return false;
   }
 
-  // Step 3: Accept cookie consent (Didomi) — appears after login redirect
+  // Step 3: Accept cookie consent (Didomi API) — appears after login redirect
   try {
-    const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept all"), button:has-text("J\'accepte"), .didomi-continue-without-agreeing').first();
-    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await cookieBtn.click();
-      console.error('[Guillevin] Cookie consent accepted');
-      await page.waitForTimeout(2000);
-    }
-  } catch {}
+    await page.evaluate(() => {
+      if ((window as any).Didomi) {
+        (window as any).Didomi.setUserAgreeToAll();
+      }
+    });
+    console.error('[Guillevin] Cookie consent accepted via Didomi API');
+    await page.waitForTimeout(2000);
+  } catch {
+    // Fallback: try clicking the button directly
+    try {
+      const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept")').first();
+      if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await cookieBtn.click();
+        console.error('[Guillevin] Cookie consent accepted via button click');
+        await page.waitForTimeout(2000);
+      }
+    } catch {}
+  }
 
   // Step 4: Choose region (appears after cookies)
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-after-cookies.png' }).catch(() => {});
   try {
     const regionOption = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), [data-province="QC"], [data-value="QC"]').first();
     if (await regionOption.isVisible({ timeout: 5000 }).catch(() => false)) {
@@ -124,13 +137,8 @@ async function loginToGuillevin(page: any, username: string, password: string): 
       console.error('[Guillevin] Region selected: Québec');
       await page.waitForTimeout(2000);
     } else {
-      // Try closing the region popup
-      const regionClose = page.locator('.modal-close, button[aria-label="Close"], .popup-close, [class*="modal"] button:has-text("×"), [class*="modal"] button:has-text("Fermer")').first();
-      if (await regionClose.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await regionClose.click();
-        console.error('[Guillevin] Region popup dismissed');
-        await page.waitForTimeout(1000);
-      }
+      console.error('[Guillevin] No region popup found, taking screenshot');
+      await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-no-region.png' }).catch(() => {});
     }
   } catch {}
 
