@@ -167,32 +167,57 @@ export async function placeGuillevinOrder(
     }
     log.push('Login successful');
 
-    // Build search query: try SKU from catalog first
-    let searchQuery = product;
+    // Build search queries: try SKU first, then variations of the product name
+    const searchQueries: string[] = [];
     try {
       const { getDb } = await import('./db');
       const row = (
         getDb().prepare("SELECT sku FROM products WHERE name = ? AND supplier = 'guillevin' LIMIT 1").get(product) ||
         getDb().prepare("SELECT sku FROM products WHERE name = ? LIMIT 1").get(product)
       ) as { sku: string } | undefined;
-      if (row?.sku) searchQuery = row.sku.split('/')[0];
+      if (row?.sku) searchQueries.push(row.sku.split('/')[0]);
     } catch {}
+    // Add the full product name
+    searchQueries.push(product);
+    // Add simplified versions: extract model/size terms (e.g., "EMT 1-1/2" from "CONDUIT EMT 1-1/2\"")
+    const words = product.replace(/"/g, '').split(/\s+/);
+    const modelWord = words.find(w => /\d/.test(w) && w.length >= 3);
+    if (modelWord) {
+      const idx = words.indexOf(modelWord);
+      // Include the word before the model number for context (e.g., "EMT 1-1/2")
+      const prefix = idx > 0 ? words[idx - 1] + ' ' : '';
+      searchQueries.push(prefix + modelWord);
+    }
+    // First 2-3 words as fallback
+    if (words.length > 2) searchQueries.push(words.slice(0, 3).join(' '));
+    // Deduplicate
+    const uniqueQueries = [...new Set(searchQueries)];
 
-    // Search for product
-    log.push(`Searching for product: ${searchQuery}`);
-    await page.goto(
-      `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(searchQuery)}`,
-      { waitUntil: 'domcontentloaded', timeout: 30000 }
-    );
-    console.error(`[Guillevin] Searching for: ${searchQuery}`);
-    // Guillevin is a Shopify SPA — wait for product results to render
-    await page.waitForTimeout(5000);
+    let foundProduct = false;
+    for (const searchQuery of uniqueQueries) {
+      log.push(`Searching for: ${searchQuery}`);
+      await page.goto(
+        `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(searchQuery)}`,
+        { waitUntil: 'domcontentloaded', timeout: 30000 }
+      );
+      console.error(`[Guillevin] Searching for: ${searchQuery}`);
+      await page.waitForTimeout(5000);
 
-    // Click first product result — Shopify themes use various product link patterns
+      const firstProduct = page.locator(
+        'a[href*="/products/"], .product-card a, .card__heading a, h3 a, [class*="product"] a[href*="/"]'
+      ).first();
+      if (await firstProduct.isVisible({ timeout: 8000 }).catch(() => false)) {
+        foundProduct = true;
+        log.push(`Product found with query: ${searchQuery}`);
+        break;
+      }
+      log.push(`No results for: ${searchQuery}`);
+    }
+
     const firstProduct = page.locator(
       'a[href*="/products/"], .product-card a, .card__heading a, h3 a, [class*="product"] a[href*="/"]'
     ).first();
-    if (await firstProduct.isVisible({ timeout: 8000 }).catch(() => false)) {
+    if (foundProduct) {
       log.push('Product found in search results, navigating to product page');
       await firstProduct.click();
       console.error(`[Guillevin] Navigating to product page`);
