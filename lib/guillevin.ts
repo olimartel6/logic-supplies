@@ -28,7 +28,24 @@ async function createGuillevinPage(browser: any) {
     Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
     Object.defineProperty(navigator, 'languages', { get: () => ['fr-CA', 'fr', 'en-US', 'en'] });
     (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {} };
+
+    // Auto-accept Didomi cookie consent before SDK loads
+    window.didomiConfig = window.didomiConfig || {};
+    (window as any).didomiConfig.user = { externalConsent: { value: 'all', type: 'all' } };
+    window.didomiOnReady = window.didomiOnReady || [];
+    window.didomiOnReady.push(function(Didomi: any) {
+      try { Didomi.setUserAgreeToAll(); } catch {}
+    });
   });
+
+  // Pre-set Didomi consent cookie so popup never shows
+  await context.addCookies([{
+    name: 'didomi_token',
+    value: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3MTAwMDAwMDAsImV4cCI6MTgwMDAwMDAwMCwidmVuZG9ycyI6eyJlbmFibGVkIjpbXX0sInB1cnBvc2VzIjp7ImVuYWJsZWQiOltdfSwidmVyc2lvbiI6Mn0',
+    domain: '.guillevin.com',
+    path: '/',
+  }]);
+
   return context.newPage();
 }
 
