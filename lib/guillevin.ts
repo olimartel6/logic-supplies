@@ -159,6 +159,23 @@ async function handleRegionPopup(page: any): Promise<void> {
 // Guillevin login redirects to Auth0 (gic.ca.auth0.com).
 // Single-page form with email + password fields both visible.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
+  // Retry login up to 2 times (Cloudflare/Auth0 can be flaky)
+  for (let loginAttempt = 0; loginAttempt < 2; loginAttempt++) {
+    if (loginAttempt > 0) {
+      console.error(`[Guillevin] Login retry #${loginAttempt + 1}`);
+    }
+    try {
+      const result = await _doLogin(page, username, password);
+      if (result) return true;
+    } catch (err: any) {
+      console.error(`[Guillevin] Login attempt ${loginAttempt + 1} error: ${err.message}`);
+      if (loginAttempt === 1) throw err; // re-throw on last attempt
+    }
+  }
+  return false;
+}
+
+async function _doLogin(page: any, username: string, password: string): Promise<boolean> {
   // Step 1: Navigate to login page
   await page.goto('https://www.guillevin.com/account/login', {
     waitUntil: 'domcontentloaded',
@@ -178,25 +195,53 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   }
   await page.waitForTimeout(3000);
 
-  console.error('[Guillevin] Login URL:', page.url());
+  const loginUrl = page.url();
+  console.error('[Guillevin] Login URL:', loginUrl);
+  await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-page.png' }).catch(() => {});
 
   // Step 2: Auth0 login form: input#username (email) + input#password
+  // First dismiss any overlay/popup that might block the form
+  await _dismissOverlays(page);
+
   const emailField = page.locator('input#username').first();
-  await emailField.waitFor({ state: 'visible', timeout: 15000 });
+  if (!await emailField.isVisible({ timeout: 15000 }).catch(() => false)) {
+    // Maybe we're already logged in (redirected past Auth0)
+    if (!loginUrl.includes('auth0')) {
+      console.error('[Guillevin] No Auth0 form — may already be logged in, URL:', loginUrl);
+      // Verify by navigating to account page
+      await page.goto('https://www.guillevin.com/account', { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(3000);
+      const accountUrl = page.url();
+      if (!accountUrl.includes('/login') && !accountUrl.includes('auth0')) {
+        console.error('[Guillevin] Already logged in — account URL:', accountUrl);
+        await _handlePostLogin(page);
+        return true;
+      }
+    }
+    console.error('[Guillevin] Email field not found, URL:', page.url());
+    await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-no-email.png' }).catch(() => {});
+    return false;
+  }
+
   await emailField.click();
+  await page.waitForTimeout(200);
   await emailField.fill(username);
-  console.log('[Guillevin] Email filled');
+  console.error('[Guillevin] Email filled');
 
   const passwordField = page.locator('input#password').first();
   await passwordField.waitFor({ state: 'visible', timeout: 5000 });
   await passwordField.click();
+  await page.waitForTimeout(200);
   await passwordField.fill(password);
-  console.log('[Guillevin] Password filled');
+  console.error('[Guillevin] Password filled');
+
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-filled.png' }).catch(() => {});
 
   // Click "Continuer" submit button
   const submitBtn = page.locator('button:has-text("Continuer"), button:has-text("Continue"), button[type="submit"]').first();
   await submitBtn.click();
-  console.log('[Guillevin] Submit clicked, waiting for redirect...');
+  console.error('[Guillevin] Submit clicked, waiting for redirect...');
 
   // Wait for redirect away from Auth0 (goes to guillevin.com or shopify.com/60111716441)
   const redirected = await page.waitForFunction(
@@ -218,44 +263,99 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   }
 
   await page.waitForTimeout(3000);
+
+  // Wait for page to fully load after redirect
   const url = page.url();
-  console.error('[Guillevin] Final URL:', url);
-  // Success if redirected to guillevin.com or Shopify account (shop 60111716441)
-  // Check for /login or /u/login path — but NOT new_login query param
-  const isLoginPage = url.includes('/u/login') || url.includes('/account/login') || url.match(/\/login(?:\?|$)/);
-  const success = (url.includes('guillevin.com') || url.includes('shopify.com/60111716441')) && !isLoginPage;
-  if (!success) {
-    console.error(`[Guillevin] Login check failed — url=${url}, isLoginPage=${isLoginPage}`);
+  console.error('[Guillevin] Post-login URL:', url);
+  await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-post-login.png' }).catch(() => {});
+
+  // Wait for a second Cloudflare challenge if it appears after redirect
+  for (let i = 0; i < 30; i++) {
+    const title = await page.title().catch(() => '');
+    const isChallenge = title.length < 5 || title.toLowerCase().includes('instant') || title.toLowerCase().includes('moment');
+    if (!isChallenge) break;
+    if (i === 29) {
+      console.error('[Guillevin] Post-login CF challenge stuck');
+      return false;
+    }
+    await page.waitForTimeout(2000);
+  }
+
+  // Verify we're on guillevin.com (not stuck on login)
+  const finalUrl = page.url();
+  console.error('[Guillevin] Final URL:', finalUrl);
+  const isLoginPage = finalUrl.includes('/u/login') || finalUrl.includes('/account/login') || finalUrl.match(/\/login(?:\?|$)/);
+  const onGuillevin = finalUrl.includes('guillevin.com') || finalUrl.includes('shopify.com/60111716441');
+  if (!onGuillevin || isLoginPage) {
+    console.error(`[Guillevin] Login check failed — url=${finalUrl}, isLoginPage=${isLoginPage}`);
     await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-check.png' }).catch(() => {});
     return false;
   }
 
-  // Step 3: Accept cookie consent (Didomi API) — appears after login redirect
+  // Verify we're actually logged in by checking for account indicators
+  const isLoggedIn = await page.evaluate(() => {
+    const body = document.body?.textContent || '';
+    // Look for logged-in indicators: account menu, logout link, user name
+    const loggedInSignals = [
+      document.querySelector('a[href*="/account"]'),
+      document.querySelector('a[href*="logout"]'),
+      document.querySelector('[class*="logged-in"]'),
+      document.querySelector('[class*="customer"]'),
+      body.includes('My Account') || body.includes('Mon compte'),
+    ];
+    return loggedInSignals.some(Boolean);
+  }).catch(() => false);
+  console.error(`[Guillevin] Logged-in verification: ${isLoggedIn}`);
+
+  if (!isLoggedIn) {
+    // Try navigating to account page as a second check
+    await page.goto('https://www.guillevin.com/account', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+    const accountUrl = page.url();
+    if (accountUrl.includes('/login') || accountUrl.includes('auth0')) {
+      console.error(`[Guillevin] NOT logged in — account redirected to: ${accountUrl}`);
+      await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-not-logged.png' }).catch(() => {});
+      return false;
+    }
+    console.error('[Guillevin] Account page accessible — login confirmed');
+  }
+
+  await _handlePostLogin(page);
+  return true;
+}
+
+// Dismiss overlays that might block interaction (Didomi, region popup, etc.)
+async function _dismissOverlays(page: any): Promise<void> {
+  // Dismiss Didomi cookie consent via JS
   try {
     await page.evaluate(() => {
       if ((window as any).Didomi) {
         (window as any).Didomi.setUserAgreeToAll();
       }
+      // Also try removing the overlay DOM elements
+      document.querySelectorAll('#didomi-host, #didomi-notice, .didomi-popup-container').forEach(el => el.remove());
     });
-    console.error('[Guillevin] Cookie consent accepted via Didomi API');
-    await page.waitForTimeout(2000);
-  } catch {
-    // Fallback: try clicking the button directly
-    try {
-      const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept")').first();
-      if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await cookieBtn.click();
-        console.error('[Guillevin] Cookie consent accepted via button click');
-        await page.waitForTimeout(2000);
-      }
-    } catch {}
-  }
+  } catch {}
 
-  // Step 4: Handle region popup (if it appears here)
-  await page.waitForTimeout(2000);
+  // Click dismiss button as fallback
+  try {
+    const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept")').first();
+    if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await cookieBtn.click();
+      await page.waitForTimeout(500);
+    }
+  } catch {}
+}
+
+// Post-login: handle cookie consent + region popup
+async function _handlePostLogin(page: any): Promise<void> {
+  // Accept cookie consent (Didomi API) — appears after login redirect
+  await _dismissOverlays(page);
+  await page.waitForTimeout(1000);
+
+  // Handle region popup (if it appears here)
   await handleRegionPopup(page);
-
-  return true;
+  await page.waitForTimeout(1000);
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
