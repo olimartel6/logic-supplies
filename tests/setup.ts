@@ -143,7 +143,7 @@ function createTestDb(): Database.Database {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL REFERENCES companies(id),
       job_site_id INTEGER REFERENCES job_sites(id),
-      type TEXT NOT NULL CHECK(type IN ('80_percent', '100_percent', 'large_order')),
+      type TEXT NOT NULL CHECK(type IN ('80_percent', '100_percent', 'large_order', 'order_failure')),
       amount REAL,
       message TEXT,
       seen INTEGER DEFAULT 0,

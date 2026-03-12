@@ -421,7 +421,7 @@ function initDb(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL REFERENCES companies(id),
       job_site_id INTEGER REFERENCES job_sites(id),
-      type TEXT NOT NULL CHECK(type IN ('80_percent', '100_percent', 'large_order')),
+      type TEXT NOT NULL CHECK(type IN ('80_percent', '100_percent', 'large_order', 'order_failure')),
       amount REAL,
       message TEXT,
       seen INTEGER DEFAULT 0,
@@ -833,6 +833,31 @@ function initDb(db: Database.Database) {
 
   // --- Onboarding wizard ---
   try { db.exec('ALTER TABLE company_settings ADD COLUMN onboarding_dismissed INTEGER DEFAULT 0'); } catch {}
+
+  // --- Migrate budget_alerts to support order_failure type ---
+  try {
+    const hasOrderFailure = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE name = 'budget_alerts' AND sql LIKE '%order_failure%'"
+    ).get();
+    if (!hasOrderFailure) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS budget_alerts_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          company_id INTEGER NOT NULL REFERENCES companies(id),
+          job_site_id INTEGER REFERENCES job_sites(id),
+          type TEXT NOT NULL CHECK(type IN ('80_percent', '100_percent', 'large_order', 'order_failure')),
+          amount REAL,
+          message TEXT,
+          seen INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO budget_alerts_new SELECT * FROM budget_alerts;
+        DROP TABLE budget_alerts;
+        ALTER TABLE budget_alerts_new RENAME TO budget_alerts;
+        CREATE INDEX IF NOT EXISTS idx_budget_alerts_company ON budget_alerts(company_id);
+      `);
+    }
+  } catch {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS request_photos (

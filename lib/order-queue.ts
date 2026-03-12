@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { selectAndOrder } from './supplier-router';
 import { sendOrderConfirmationEmail, sendCartNotificationEmail, sendOrderFailureEmail, sendOrderTrackingEmail } from './email';
+import { sendPushToUser } from './push';
 import { randomUUID } from 'crypto';
 import type { PaymentInfo } from './lumen';
 
@@ -144,14 +145,32 @@ export async function processOrderJob(db: Database.Database, job: any): Promise<
         VALUES (?, ?, ?, NULL, 'failed', ?)
       `).run(job.company_id, job.request_id, supplier, orderError);
 
-      // Notify office of final failure
-      const officeUsers = db.prepare("SELECT email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(job.company_id) as { email: string; language: string }[];
+      // Notify office of final failure — email + push + in-app alert
+      const officeUsers = db.prepare("SELECT id, email, language FROM users WHERE role IN ('office', 'admin') AND company_id = ?").all(job.company_id) as { id: number; email: string; language: string }[];
       for (const u of officeUsers) {
         sendOrderFailureEmail(u.email, {
           product: payload.product, quantity: payload.quantity, unit: payload.unit,
           jobSite: payload.jobSiteName, errorMessage: orderError || 'Erreur inconnue',
         }, payload.dryRun).catch(console.error);
+
+        // Push notification
+        sendPushToUser(u.id,
+          'Commande échouée',
+          `${payload.product} (${payload.quantity} ${payload.unit}) — ${orderError || 'Erreur inconnue'}`,
+          { type: 'order_failure', requestId: String(job.request_id) },
+        ).catch(console.error);
       }
+
+      // In-app alert (visible on dashboard)
+      const jobSite = db.prepare("SELECT id FROM job_sites WHERE company_id = ? AND name = ? LIMIT 1")
+        .get(job.company_id, payload.jobSiteName) as { id: number } | undefined;
+      db.prepare(
+        "INSERT INTO budget_alerts (company_id, job_site_id, type, message) VALUES (?, ?, 'order_failure', ?)"
+      ).run(
+        job.company_id,
+        jobSite?.id || null,
+        `Commande échouée: ${payload.product} (${payload.quantity} ${payload.unit}) — ${orderError || 'Erreur inconnue'}`,
+      );
     } else {
       // Exponential backoff: 5min, 15min, 45min
       const backoffMinutes = 5 * Math.pow(3, currentAttempts - 1);
