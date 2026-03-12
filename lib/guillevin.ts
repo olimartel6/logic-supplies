@@ -451,9 +451,9 @@ export async function placeGuillevinOrder(
             console.error('[Guillevin] Checkout URL:', page.url());
 
             // Step 3: Fill shipping address
-            // Guillevin uses Shopify ONE-PAGE B2B checkout
-            // "Ship to" is a collapsible button: id="deliveryAddress-collapsible", aria-expanded="false"
-            // Clicking it reveals address options (saved company locations)
+            // Guillevin Shopify checkout has TWO layouts:
+            //   A) B2B one-page: collapsible #deliveryAddress-collapsible → click to expand → form appears
+            //   B) Multi-step: full address form directly visible (#shipping-address1, name="city", etc.)
             log.push('Step 3: Handling shipping address');
             console.error('[Guillevin] Step 3: Handling shipping address');
             await page.waitForTimeout(2000);
@@ -461,57 +461,117 @@ export async function placeGuillevinOrder(
 
             let addressHandled = false;
 
-            // Click the "Ship to" collapsible button to expand address options
+            // Parse delivery address into components: "123 Rue Example, Ville, QC G1Y 3K6"
+            let addrStreet = '', addrCity = '', addrProvince = 'QC', addrPostal = '';
+            if (deliveryAddress) {
+              const parts = deliveryAddress.split(',').map(s => s.trim());
+              addrStreet = parts[0] || '';
+              addrCity = parts[1] || '';
+              // Last part might be "QC G1Y 3K6" or "QC" or "G1Y 3K6"
+              const lastPart = parts[parts.length - 1] || '';
+              const postalMatch = lastPart.match(/([A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
+              if (postalMatch) addrPostal = postalMatch[1];
+              const provMatch = lastPart.match(/\b(QC|ON|BC|AB|MB|SK|NB|NS|PE|NL|NT|NU|YT)\b/i);
+              if (provMatch) addrProvince = provMatch[1].toUpperCase();
+              // If city is in the province/postal part, extract it
+              if (parts.length >= 3) {
+                addrCity = parts[1] || '';
+              }
+              log.push(`Parsed address: street="${addrStreet}" city="${addrCity}" prov="${addrProvince}" postal="${addrPostal}"`);
+              console.error(`[Guillevin] Parsed: street="${addrStreet}" city="${addrCity}" prov="${addrProvince}" postal="${addrPostal}"`);
+            }
+
+            // Layout A: Click the "Ship to" collapsible button to expand address form
             const shipToBtn = page.locator('#deliveryAddress-collapsible, button:has-text("Ship to")').first();
-            if (await shipToBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            if (await shipToBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
               const expanded = await shipToBtn.getAttribute('aria-expanded').catch(() => 'false');
-              console.error(`[Guillevin] Ship-to button found, expanded=${expanded}`);
-              log.push(`Ship-to button found, expanded=${expanded}`);
+              console.error(`[Guillevin] Ship-to collapsible found, expanded=${expanded}`);
+              log.push(`Ship-to collapsible found, expanded=${expanded}`);
 
               if (expanded !== 'true') {
                 await shipToBtn.click();
                 console.error('[Guillevin] Clicked Ship-to to expand');
                 log.push('Clicked Ship-to to expand');
-                await page.waitForTimeout(2000);
+                await page.waitForTimeout(3000);
+              }
+            }
+
+            // Now fill the address form fields (visible in both layouts A and B)
+            // Helper to fill a field
+            const fillField = async (selector: string, value: string, fieldName: string): Promise<boolean> => {
+              if (!value) return false;
+              const field = page.locator(selector).first();
+              if (await field.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await field.click({ clickCount: 3 });
+                await page.waitForTimeout(200);
+                await field.fill(value);
+                await page.waitForTimeout(300);
+                // Press Escape to close any autocomplete dropdown
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(200);
+                console.error(`[Guillevin] Filled ${fieldName}: "${value}"`);
+                log.push(`Filled ${fieldName}: "${value}"`);
+                return true;
+              }
+              return false;
+            };
+
+            // Fill address line 1
+            const streetFilled = await fillField('#shipping-address1, input[name="address1"], input[autocomplete="shipping address-line1"]', addrStreet, 'address1');
+
+            // Fill city
+            if (streetFilled) {
+              await fillField('input[name="city"], input[autocomplete="shipping address-level2"]', addrCity, 'city');
+
+              // Select province
+              if (addrProvince) {
+                const zoneSelect = page.locator('select[name="zone"], select[autocomplete="shipping address-level1"]').first();
+                if (await zoneSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await zoneSelect.selectOption({ value: addrProvince });
+                  console.error(`[Guillevin] Selected province: ${addrProvince}`);
+                  log.push(`Selected province: ${addrProvince}`);
+                  await page.waitForTimeout(300);
+                }
               }
 
-              // After expanding, dump what's inside the collapsible panel
-              const panelContent = await page.evaluate(() => {
-                const panel = document.querySelector('#deliveryAddress-collapsible-control, [id*="deliveryAddress"][id*="control"]');
-                if (panel) return panel.outerHTML?.slice(0, 3000);
-                // Fallback: look for newly visible address elements
-                const newElements = Array.from(document.querySelectorAll('input[name*="address"], select, [role="radio"], [role="listbox"], [role="option"]')).map(el => ({
-                  tag: el.tagName, id: el.id, name: (el as any).name, role: el.getAttribute('role'),
-                  text: el.textContent?.trim()?.slice(0, 80),
-                  type: (el as any).type,
-                }));
-                return JSON.stringify(newElements);
-              }).catch(() => 'evaluate failed');
-              console.error('[Guillevin] Address panel content:', panelContent?.slice(0, 500));
-              log.push(`Address panel: ${panelContent?.slice(0, 300) || 'empty'}`);
+              // Fill postal code
+              await fillField('input[name="postalCode"], input[autocomplete="shipping postal-code"]', addrPostal, 'postalCode');
 
-              // Look for address selection options inside the expanded panel
-              // Shopify B2B: may show radio buttons, links, or a dropdown
-              const addressOptions = page.locator('#deliveryAddress-collapsible-control a, #deliveryAddress-collapsible-control button, [id*="deliveryAddress"] a, [id*="deliveryAddress"] button').first();
-              if (await addressOptions.isVisible({ timeout: 3000 }).catch(() => false)) {
-                const optionText = await addressOptions.textContent().catch(() => '');
-                console.error(`[Guillevin] Address option found: "${optionText?.trim()?.slice(0, 60)}"`);
-                // Don't click yet — just log what options are available
-                log.push(`Address option: ${optionText?.trim()?.slice(0, 60)}`);
-              }
-
-              // Note: Shopify B2B address is tied to company location and may not be freely editable
-              // The address dropdown typically only allows selecting between saved company locations
-              // For now, we log the current address and continue
-              const currentAddr = await shipToBtn.textContent().catch(() => '');
-              log.push(`Current ship-to address: ${currentAddr?.replace(/Ship to/i, '').trim()?.slice(0, 100)}`);
               addressHandled = true;
-            } else {
-              console.error('[Guillevin] Ship-to button not found');
-              log.push('Ship-to button not found');
+            }
+
+            if (!addressHandled) {
+              console.error('[Guillevin] Address form fields not found — continuing with default');
+              log.push('WARNING: Address form fields not found — continuing with default');
+              // Log what's on the page for debugging
+              const pageInputs = await page.evaluate(() => {
+                return Array.from(document.querySelectorAll('input, select')).slice(0, 15).map(el => ({
+                  tag: el.tagName, id: el.id, name: (el as any).name, type: (el as any).type,
+                  visible: (el as HTMLElement).offsetHeight > 0,
+                }));
+              }).catch(() => []);
+              log.push(`Page inputs: ${JSON.stringify(pageInputs)}`);
             }
 
             await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-address-after.png' }).catch(() => {});
+
+            // If multi-step checkout, click Continue/Submit to proceed to payment
+            const continueBtn = page.locator('#continue_button, button[type="submit"]:has-text("Continue"), button:has-text("Continue to shipping"), button:has-text("Continuer")').first();
+            if (await continueBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+              await continueBtn.click();
+              console.error('[Guillevin] Clicked Continue button');
+              log.push('Clicked Continue to next step');
+              await page.waitForTimeout(5000);
+
+              // May need to click Continue again (shipping → payment)
+              const continueBtn2 = page.locator('button[type="submit"]:has-text("Continue"), button:has-text("Continue to payment"), button:has-text("Continuer")').first();
+              if (await continueBtn2.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await continueBtn2.click();
+                console.error('[Guillevin] Clicked Continue to payment');
+                log.push('Clicked Continue to payment');
+                await page.waitForTimeout(5000);
+              }
+            }
 
             // Step 4: Fill card details
             // Shopify PCI-compliant iframes — each field is in its own iframe:
