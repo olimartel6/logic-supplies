@@ -131,11 +131,20 @@ function nearestBranch(branches: Branch[], jobLat: number, jobLng: number): { di
 function getActiveAccounts(companyId: number | null): SupplierAccount[] {
   const db = getDb();
   const rows = db.prepare('SELECT supplier, username, password_encrypted FROM supplier_accounts WHERE active = 1 AND company_id = ?').all(companyId) as any[];
-  return rows.map(row => ({
-    supplier: row.supplier as SupplierKey,
-    username: row.username,
-    password: decrypt(row.password_encrypted),
-  }));
+  const accounts: SupplierAccount[] = [];
+  for (const row of rows) {
+    try {
+      accounts.push({
+        supplier: row.supplier as SupplierKey,
+        username: row.username,
+        password: decrypt(row.password_encrypted),
+      });
+    } catch (err) {
+      console.error(`[getActiveAccounts] Erreur déchiffrement mot de passe ${row.supplier}:`, err);
+      // Skip this account — likely ENCRYPTION_KEY mismatch
+    }
+  }
+  return accounts;
 }
 
 /**
