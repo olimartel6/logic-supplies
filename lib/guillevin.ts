@@ -146,31 +146,45 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   }
 
   // Step 4: Choose region from dropdown (Atlantique, Ontario, Québec, Prairies, Rocheuses, Pacifique)
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
   try {
-    // Try selecting "Québec" from a <select> dropdown
-    const selectEl = page.locator('select').filter({ has: page.locator('option:has-text("Québec")') }).first();
-    if (await selectEl.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await selectEl.selectOption({ label: 'Québec' });
-      console.error('[Guillevin] Region selected via dropdown: Québec');
-      await page.waitForTimeout(1000);
-      // Click submit/confirm button if present
-      const confirmBtn = page.locator('button[type="submit"], button:has-text("Confirmer"), button:has-text("OK"), button:has-text("Soumettre"), button:has-text("Continuer"), input[type="submit"]').first();
-      if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await confirmBtn.click();
-        console.error('[Guillevin] Region confirmed');
-      }
+    // Find and click "Québec" anywhere on the page — works for any dropdown type
+    const quebecEl = page.getByText('Québec', { exact: true }).first();
+    if (await quebecEl.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await quebecEl.click();
+      console.error('[Guillevin] Clicked Québec');
       await page.waitForTimeout(2000);
     } else {
-      // Try clicking "Québec" as a link/button/option directly
-      const regionLink = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), option:has-text("Québec"), [data-region="Québec"]').first();
-      if (await regionLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await regionLink.click();
-        console.error('[Guillevin] Region clicked: Québec');
-        await page.waitForTimeout(2000);
+      // Maybe the dropdown needs to be opened first — click any dropdown trigger
+      const dropdownTrigger = page.locator('select, [class*="dropdown"], [class*="select"], [role="combobox"], [role="listbox"], button:has-text("Région"), button:has-text("Region"), button:has-text("Choisir")').first();
+      if (await dropdownTrigger.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await dropdownTrigger.click();
+        console.error('[Guillevin] Dropdown opened');
+        await page.waitForTimeout(1000);
+        // Now click Québec
+        const qcOption = page.getByText('Québec', { exact: true }).first();
+        if (await qcOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await qcOption.click();
+          console.error('[Guillevin] Clicked Québec after opening dropdown');
+        }
       } else {
-        console.error('[Guillevin] No region selector found');
+        // Last resort: try native select
+        const selectEl = page.locator('select').first();
+        if (await selectEl.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await selectEl.selectOption({ label: 'Québec' });
+          console.error('[Guillevin] Selected Québec via native select');
+        } else {
+          console.error('[Guillevin] No region selector found');
+        }
       }
+      await page.waitForTimeout(2000);
+    }
+    // Click confirm/submit button if present
+    const confirmBtn = page.locator('button[type="submit"], button:has-text("Confirmer"), button:has-text("OK"), button:has-text("Continuer"), button:has-text("Enregistrer"), input[type="submit"]').first();
+    if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await confirmBtn.click();
+      console.error('[Guillevin] Region confirmed');
+      await page.waitForTimeout(2000);
     }
   } catch (err: any) {
     console.error('[Guillevin] Region selection error:', err.message);
