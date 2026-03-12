@@ -125,20 +125,37 @@ export async function getGuillevinPrice(
     const loggedIn = await loginToGuillevin(page, username, password);
     if (!loggedIn) return null;
 
-    // Use Shopify search
-    await page.goto(
-      `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(product)}`,
-      { waitUntil: 'domcontentloaded', timeout: 30000 }
-    );
-    await page.waitForTimeout(2000);
-
-    // Look for first price element on results page
-    const priceEl = page.locator('[class*="price"]:not([class*="compare"])').first();
-    if (await priceEl.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const text = await priceEl.textContent().catch(() => '');
-      const match = text?.match(/[\d]+[.,][\d]{2}/);
-      if (match) return parseFloat(match[0].replace(',', '.'));
-    }
+    // Use Shopify JSON search API for reliable results
+    const searchQuery = product.replace(/"/g, '');
+    try {
+      const apiUrl = `https://www.guillevin.com/search/suggest.json?q=${encodeURIComponent(searchQuery)}&resources[type]=product&resources[limit]=3`;
+      const resp = await page.evaluate(async (url: string) => {
+        const r = await fetch(url);
+        return r.json();
+      }, apiUrl);
+      const products = resp?.resources?.results?.products;
+      if (products && products.length > 0) {
+        const match = products[0];
+        const priceStr = match.price;
+        if (priceStr) {
+          const price = parseFloat(priceStr) / 100; // Shopify prices in cents
+          if (price > 0) return price;
+        }
+        // If API price is 0 (B2B), navigate to product page to get price
+        if (match.url) {
+          await page.goto(`https://www.guillevin.com${match.url}`, {
+            waitUntil: 'domcontentloaded', timeout: 30000,
+          });
+          await page.waitForTimeout(3000);
+          const priceEl = page.locator('[class*="price"]:not([class*="compare"])').first();
+          if (await priceEl.isVisible({ timeout: 3000 }).catch(() => false)) {
+            const text = await priceEl.textContent().catch(() => '');
+            const priceMatch = text?.match(/[\d]+[.,][\d]{2}/);
+            if (priceMatch) return parseFloat(priceMatch[0].replace(',', '.'));
+          }
+        }
+      }
+    } catch {}
     return null;
   } catch {
     return null;
@@ -177,51 +194,57 @@ export async function placeGuillevinOrder(
       ) as { sku: string } | undefined;
       if (row?.sku) searchQueries.push(row.sku.split('/')[0]);
     } catch {}
-    // Add the full product name
-    searchQueries.push(product);
-    // Add simplified versions: extract model/size terms (e.g., "EMT 1-1/2" from "CONDUIT EMT 1-1/2\"")
+    // Add the full product name (without trailing quotes)
+    searchQueries.push(product.replace(/"/g, ''));
+    // Add simplified versions: extract model/size terms
     const words = product.replace(/"/g, '').split(/\s+/);
     const modelWord = words.find(w => /\d/.test(w) && w.length >= 3);
     if (modelWord) {
       const idx = words.indexOf(modelWord);
-      // Include the word before the model number for context (e.g., "EMT 1-1/2")
       const prefix = idx > 0 ? words[idx - 1] + ' ' : '';
       searchQueries.push(prefix + modelWord);
     }
-    // First 2-3 words as fallback
     if (words.length > 2) searchQueries.push(words.slice(0, 3).join(' '));
-    // Deduplicate
     const uniqueQueries = [...new Set(searchQueries)];
 
-    let foundProduct = false;
+    // Use Shopify JSON search API — much more reliable than scraping HTML
+    let productUrl: string | null = null;
     for (const searchQuery of uniqueQueries) {
-      log.push(`Searching for: ${searchQuery}`);
-      await page.goto(
-        `https://www.guillevin.com/search?type=product&q=${encodeURIComponent(searchQuery)}`,
-        { waitUntil: 'domcontentloaded', timeout: 30000 }
-      );
-      console.error(`[Guillevin] Searching for: ${searchQuery}`);
-      await page.waitForTimeout(5000);
-
-      const firstProduct = page.locator(
-        'a[href*="/products/"], .product-card a, .card__heading a, h3 a, [class*="product"] a[href*="/"]'
-      ).first();
-      if (await firstProduct.isVisible({ timeout: 8000 }).catch(() => false)) {
-        foundProduct = true;
-        log.push(`Product found with query: ${searchQuery}`);
-        break;
+      log.push(`Searching via API: ${searchQuery}`);
+      console.error(`[Guillevin] Searching via API: ${searchQuery}`);
+      try {
+        const apiUrl = `https://www.guillevin.com/search/suggest.json?q=${encodeURIComponent(searchQuery)}&resources[type]=product&resources[limit]=5`;
+        const resp = await page.evaluate(async (url: string) => {
+          const r = await fetch(url);
+          return r.json();
+        }, apiUrl);
+        const products = resp?.resources?.results?.products;
+        if (products && products.length > 0) {
+          // Try to find exact match first, then take first result
+          const exact = products.find((p: any) =>
+            p.title.toLowerCase() === searchQuery.toLowerCase()
+          );
+          const match = exact || products[0];
+          productUrl = match.url;
+          log.push(`Product found: "${match.title}" → ${productUrl}`);
+          console.error(`[Guillevin] Found: "${match.title}" → ${productUrl}`);
+          break;
+        }
+        log.push(`No API results for: ${searchQuery}`);
+      } catch (err: any) {
+        log.push(`API search error: ${err.message}`);
+        console.error(`[Guillevin] API search error:`, err.message);
       }
-      log.push(`No results for: ${searchQuery}`);
     }
 
-    const firstProduct = page.locator(
-      'a[href*="/products/"], .product-card a, .card__heading a, h3 a, [class*="product"] a[href*="/"]'
-    ).first();
-    if (foundProduct) {
-      log.push('Product found in search results, navigating to product page');
-      await firstProduct.click();
-      console.error(`[Guillevin] Navigating to product page`);
-      await page.waitForTimeout(2000);
+    if (productUrl) {
+      // Navigate directly to product page
+      log.push(`Navigating to product page: ${productUrl}`);
+      await page.goto(`https://www.guillevin.com${productUrl}`, {
+        waitUntil: 'domcontentloaded', timeout: 30000,
+      });
+      console.error(`[Guillevin] Navigating to: ${productUrl}`);
+      await page.waitForTimeout(3000);
 
       // Set quantity if input is present
       const qtyInput = page.locator(
