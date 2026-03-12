@@ -35,8 +35,8 @@ async function createGuillevinPage(browser: any) {
 // Guillevin login redirects to Auth0 (gic.ca.auth0.com).
 // Single-page form with email + password fields both visible.
 async function loginToGuillevin(page: any, username: string, password: string): Promise<boolean> {
-  // Step 1: Go to homepage first to handle popups before login redirect
-  await page.goto('https://www.guillevin.com', {
+  // Step 1: Navigate to login page
+  await page.goto('https://www.guillevin.com/account/login', {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
@@ -52,52 +52,11 @@ async function loginToGuillevin(page: any, username: string, password: string): 
     if (i === 59) throw new Error('Cloudflare challenge non résolu après 2 minutes');
     await page.waitForTimeout(2000);
   }
-  await page.waitForTimeout(2000);
-
-  console.error('[Guillevin] Homepage URL:', page.url());
-
-  // Step 2: Accept cookie consent (Didomi) — must be done first
-  try {
-    const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept all"), button:has-text("J\'accepte"), .didomi-continue-without-agreeing').first();
-    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await cookieBtn.click();
-      console.error('[Guillevin] Cookie consent accepted');
-      await page.waitForTimeout(2000);
-    }
-  } catch {}
-
-  // Step 3: Handle region selector (appears after cookies)
-  try {
-    // Wait for region popup to appear
-    await page.waitForTimeout(2000);
-    // Try clicking a region option directly
-    const regionOption = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), [data-province="QC"], [data-value="QC"]').first();
-    if (await regionOption.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await regionOption.click();
-      console.error('[Guillevin] Region selected: Québec');
-      await page.waitForTimeout(2000);
-    } else {
-      // Try closing the region popup with a close/dismiss button
-      const regionClose = page.locator('.modal-close, button[aria-label="Close"], .popup-close, [class*="modal"] button:has-text("×"), [class*="modal"] button:has-text("Fermer")').first();
-      if (await regionClose.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await regionClose.click();
-        console.error('[Guillevin] Region popup dismissed');
-        await page.waitForTimeout(1000);
-      }
-    }
-  } catch {}
-
-  // Step 4: Navigate to login page
-  console.error('[Guillevin] Navigating to login page...');
-  await page.goto('https://www.guillevin.com/account/login', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  });
   await page.waitForTimeout(3000);
 
   console.error('[Guillevin] Login URL:', page.url());
 
-  // Auth0 login form: input#username (email) + input#password
+  // Step 2: Auth0 login form: input#username (email) + input#password
   const emailField = page.locator('input#username').first();
   await emailField.waitFor({ state: 'visible', timeout: 15000 });
   await emailField.click();
@@ -144,8 +103,38 @@ async function loginToGuillevin(page: any, username: string, password: string): 
   if (!success) {
     console.error(`[Guillevin] Login check failed — url=${url}, isLoginPage=${isLoginPage}`);
     await page.screenshot({ path: process.cwd() + '/public/debug-guillevin-login-check.png' }).catch(() => {});
+    return false;
   }
-  return success;
+
+  // Step 3: Accept cookie consent (Didomi) — appears after login redirect
+  try {
+    const cookieBtn = page.locator('#didomi-notice-agree-button, button:has-text("Accepter"), button:has-text("Accept all"), button:has-text("J\'accepte"), .didomi-continue-without-agreeing').first();
+    if (await cookieBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await cookieBtn.click();
+      console.error('[Guillevin] Cookie consent accepted');
+      await page.waitForTimeout(2000);
+    }
+  } catch {}
+
+  // Step 4: Choose region (appears after cookies)
+  try {
+    const regionOption = page.locator('a:has-text("Québec"), button:has-text("Québec"), li:has-text("Québec"), [data-province="QC"], [data-value="QC"]').first();
+    if (await regionOption.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await regionOption.click();
+      console.error('[Guillevin] Region selected: Québec');
+      await page.waitForTimeout(2000);
+    } else {
+      // Try closing the region popup
+      const regionClose = page.locator('.modal-close, button[aria-label="Close"], .popup-close, [class*="modal"] button:has-text("×"), [class*="modal"] button:has-text("Fermer")').first();
+      if (await regionClose.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await regionClose.click();
+        console.error('[Guillevin] Region popup dismissed');
+        await page.waitForTimeout(1000);
+      }
+    }
+  } catch {}
+
+  return true;
 }
 
 export async function testGuillevinConnection(username: string, password: string): Promise<ConnectionResult> {
