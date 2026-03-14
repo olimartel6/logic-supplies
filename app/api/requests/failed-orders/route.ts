@@ -14,7 +14,7 @@ export async function GET() {
            r.product, r.quantity, r.unit
     FROM order_jobs oj
     LEFT JOIN requests r ON oj.request_id = r.id
-    WHERE oj.company_id = ? AND oj.status = 'failed'
+    WHERE oj.company_id = ? AND oj.status = 'failed' AND COALESCE(oj.dismissed, 0) = 0
     ORDER BY oj.created_at DESC LIMIT 10
   `).all(ctx.companyId);
 

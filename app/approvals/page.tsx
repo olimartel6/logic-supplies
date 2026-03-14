@@ -431,7 +431,10 @@ function ApprovalsContent() {
                 Commandes échouées ({failedOrders.length})
               </p>
               <button
-                onClick={() => setFailedDismissed(true)}
+                onClick={() => {
+                  setFailedDismissed(true);
+                  fetch('/api/requests/failed-orders/dismiss', { method: 'POST' });
+                }}
                 className="text-red-400 hover:text-red-600 text-lg leading-none"
               >
                 ×

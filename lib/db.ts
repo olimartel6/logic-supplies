@@ -990,6 +990,9 @@ function initDb(db: Database.Database) {
     db.exec('ALTER TABLE requests ADD COLUMN worker_id INTEGER REFERENCES users(id)');
   }
 
+  // ── order_jobs: add dismissed column ──
+  try { db.exec('ALTER TABLE order_jobs ADD COLUMN dismissed INTEGER DEFAULT 0'); } catch {}
+
   // ── Supplier order modes (account vs PDF) ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS supplier_order_modes (
