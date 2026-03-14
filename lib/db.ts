@@ -990,6 +990,34 @@ function initDb(db: Database.Database) {
     db.exec('ALTER TABLE requests ADD COLUMN worker_id INTEGER REFERENCES users(id)');
   }
 
+  // ── Supplier order modes (account vs PDF) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS supplier_order_modes (
+      company_id INTEGER NOT NULL,
+      supplier TEXT NOT NULL,
+      order_mode TEXT NOT NULL DEFAULT 'account' CHECK(order_mode IN ('account', 'pdf')),
+      rep_email TEXT,
+      PRIMARY KEY (company_id, supplier)
+    )
+  `);
+
+  // Migrate existing lumen_rep_email to new table
+  try {
+    const companies = db.prepare(
+      "SELECT company_id, lumen_rep_email FROM company_settings WHERE lumen_rep_email IS NOT NULL AND lumen_rep_email != ''"
+    ).all() as { company_id: number; lumen_rep_email: string }[];
+    for (const c of companies) {
+      const exists = db.prepare(
+        "SELECT 1 FROM supplier_order_modes WHERE company_id = ? AND supplier = 'lumen'"
+      ).get(c.company_id);
+      if (!exists) {
+        db.prepare(
+          "INSERT INTO supplier_order_modes (company_id, supplier, order_mode, rep_email) VALUES (?, 'lumen', 'pdf', ?)"
+        ).run(c.company_id, c.lumen_rep_email);
+      }
+    }
+  } catch {}
+
   scheduleBackup();
   // Lazy import to avoid circular dependency (job-runner → db)
   import('./job-runner').then(m => m.ensureJobRunnerStarted()).catch(() => {});

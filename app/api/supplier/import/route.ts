@@ -3,7 +3,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { importLumenCatalog, getCatalogStats } from '@/lib/lumen-catalog';
 import { importCanacCatalog, getCanacCatalogStats } from '@/lib/canac-catalog';
 import { importHomeDepotCatalog, getHomeDepotCatalogStats } from '@/lib/homedepot-catalog';
-import { importGuillevinCatalog, getGuillevinCatalogStats } from '@/lib/guillevin-catalog';
+import { importGuillevinCatalog, getGuillevinCatalogStats, enrichGuillevinPrices } from '@/lib/guillevin-catalog';
 import { importJsvCatalog, getJsvCatalogStats } from '@/lib/jsv-catalog';
 import { importWestburneCatalog, getWestburneCatalogStats } from '@/lib/westburne-catalog';
 import { importBmrCatalog, getBmrCatalogStats } from '@/lib/bmr-catalog';
@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
           stats = getHomeDepotCatalogStats();
         } else if (supplier === 'guillevin') {
           result = await importGuillevinCatalog((progress) => send(progress), companyId);
+          send({ category: 'Enrichissement des prix...', imported: 0, total: 0, done: false });
+          const enrichResult = await enrichGuillevinPrices(companyId!, (p) => send(p));
+          if (enrichResult.error) send({ category: 'Prix', imported: 0, total: 0, done: true, error: enrichResult.error });
+          result.total += enrichResult.updated;
           stats = getGuillevinCatalogStats();
         } else if (supplier === 'jsv') {
           result = await importJsvCatalog((progress) => send(progress), companyId);

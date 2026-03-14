@@ -2,7 +2,7 @@ import { requireSuperAdmin } from '@/lib/tenant';
 import { importLumenCatalog, getCatalogStats } from '@/lib/lumen-catalog';
 import { importCanacCatalog, getCanacCatalogStats } from '@/lib/canac-catalog';
 import { importHomeDepotCatalog, getHomeDepotCatalogStats } from '@/lib/homedepot-catalog';
-import { importGuillevinCatalog, getGuillevinCatalogStats } from '@/lib/guillevin-catalog';
+import { importGuillevinCatalog, getGuillevinCatalogStats, enrichGuillevinPrices } from '@/lib/guillevin-catalog';
 import { importJsvCatalog, getJsvCatalogStats } from '@/lib/jsv-catalog';
 import { importWestburneCatalog, getWestburneCatalogStats } from '@/lib/westburne-catalog';
 import { importNedcoCatalog, getNedcoCatalogStats } from '@/lib/nedco-catalog';
@@ -41,6 +41,10 @@ export async function POST() {
             stats = getHomeDepotCatalogStats();
           } else if (supplier === 'guillevin') {
             result = await importGuillevinCatalog((p) => send({ supplier, ...p }), SUPERADMIN_COMPANY_ID);
+            send({ supplier, category: 'Enrichissement des prix...', imported: 0, total: 0, done: false });
+            const enrichResult = await enrichGuillevinPrices(SUPERADMIN_COMPANY_ID, (p) => send({ supplier, ...p }));
+            if (enrichResult.error) send({ supplier, category: 'Prix', imported: 0, total: 0, done: true, error: enrichResult.error });
+            result.total += enrichResult.updated;
             stats = getGuillevinCatalogStats();
           } else if (supplier === 'jsv') {
             result = await importJsvCatalog((p) => send({ supplier, ...p }), SUPERADMIN_COMPANY_ID);

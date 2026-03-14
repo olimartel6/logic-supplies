@@ -144,20 +144,28 @@ function SupplierSection({
   supplierKey,
   label,
   showManualSession,
+  showOrderMode,
   theme,
   buttonClass = 'bg-blue-600 hover:bg-blue-700',
   visible = false,
   toggling = false,
   onToggleVisible,
+  orderMode: initialOrderMode,
+  repEmail: initialRepEmail,
+  onOrderModeChange,
 }: {
   supplierKey: string;
   label: string;
   showManualSession?: boolean;
+  showOrderMode?: boolean;
   theme: SectionTheme;
   buttonClass?: string;
   visible?: boolean;
   toggling?: boolean;
   onToggleVisible?: (v: boolean) => void;
+  orderMode?: 'account' | 'pdf';
+  repEmail?: string;
+  onOrderModeChange?: (mode: 'account' | 'pdf', repEmail: string) => void;
 }) {
   const t = useT();
   const [account, setAccount] = useState<Account | null>(null);
@@ -171,6 +179,13 @@ function SupplierSection({
   const [manualSession, setManualSession] = useState(false);
   const [manualSessionResult, setManualSessionResult] = useState<boolean | null>(null);
   const [manualSessionError, setManualSessionError] = useState<string | null>(null);
+  const [localMode, setLocalMode] = useState<'account' | 'pdf'>(initialOrderMode || 'account');
+  const [localRepEmail, setLocalRepEmail] = useState(initialRepEmail || '');
+  const [savingRepEmail, setSavingRepEmail] = useState(false);
+  const [repEmailSaved, setRepEmailSaved] = useState(false);
+
+  useEffect(() => { setLocalMode(initialOrderMode || 'account'); }, [initialOrderMode]);
+  useEffect(() => { setLocalRepEmail(initialRepEmail || ''); }, [initialRepEmail]);
 
   useEffect(() => {
     fetch(`/api/supplier/account?supplier=${supplierKey}`).then(r => r.json()).then((a: Account | null) => {
@@ -225,6 +240,21 @@ function SupplierSection({
 
   const cardClass = `${theme.bg} rounded-2xl border ${theme.border} shadow-sm p-5 mb-4`;
 
+  function handleModeChange(mode: 'account' | 'pdf') {
+    setLocalMode(mode);
+    onOrderModeChange?.(mode, localRepEmail);
+  }
+
+  async function handleSaveRepEmailLocal(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingRepEmail(true);
+    setRepEmailSaved(false);
+    onOrderModeChange?.(localMode, localRepEmail);
+    setSavingRepEmail(false);
+    setRepEmailSaved(true);
+    setTimeout(() => setRepEmailSaved(false), 3000);
+  }
+
   return (
     <div className={cardClass}>
       <div className="flex items-center gap-3 mb-4">
@@ -233,8 +263,8 @@ function SupplierSection({
         </span>
         <div className="flex-1">
           <h2 className={`font-semibold ${theme.heading}`}>{label}</h2>
-          <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
-            {account ? '● Compte configuré' : '● Non connecté'}
+          <p className={`text-xs font-medium ${account ? 'text-green-600' : localMode === 'pdf' && localRepEmail ? 'text-blue-600' : 'text-gray-400'}`}>
+            {account ? '● Compte configuré' : localMode === 'pdf' && localRepEmail ? '● PDF par email' : '● Non connecté'}
           </p>
         </div>
         {onToggleVisible && (
@@ -252,66 +282,132 @@ function SupplierSection({
         )}
       </div>
 
-      <form onSubmit={handleSave} className="space-y-3">
-        <div>
-          <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Nom d&apos;utilisateur {label}</label>
-          <input
-            type="text"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            required
-            className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="ton@email.com"
-          />
-        </div>
-        <div>
-          <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Mot de passe {label}</label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required={!account}
-            className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder={account ? '••••••• (laisser vide pour conserver)' : '••••••••'}
-          />
-        </div>
-        {saved && <p className="text-green-600 text-sm">✅ Sauvegardé avec succès</p>}
-        {testError && testResult === false && <p className="text-red-600 text-sm">❌ {testError}</p>}
-        {manualSessionResult === true && <p className="text-green-600 text-sm">✅ Session enregistrée — connexion automatique activée</p>}
-        {manualSessionError && manualSessionResult === false && <p className="text-red-600 text-sm">❌ {manualSessionError}</p>}
-        <div className="flex gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleTest}
-            disabled={testing || !account}
-            className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
-          >
-            {testing ? '⏳ Test...' : testResult === true ? '✅ Connecté' : testResult === false ? '❌ Échec' : 'Tester la connexion'}
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className={`flex-1 ${buttonClass} text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition`}
-          >
-            {saving ? t('saving') : 'Sauvegarder'}
-          </button>
-        </div>
-        {showManualSession && account && (
-          <div className="pt-2 border-t border-gray-200 mt-2">
-            <p className="text-xs text-gray-500 mb-2">
-              Home Depot bloque les connexions automatiques. Une fenêtre Chrome normale s&apos;ouvre — connectez-vous, puis <strong>fermez la fenêtre Chrome</strong> quand vous avez terminé.
-            </p>
+      {/* Mode selector for suppliers that support PDF */}
+      {showOrderMode && (
+        <div className="mb-4">
+          <p className="text-xs font-medium text-gray-500 mb-2">Mode de commande</p>
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleManualSession}
-              disabled={manualSession}
-              className="w-full border border-orange-300 text-orange-700 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-orange-50 disabled:opacity-50 transition"
+              onClick={() => handleModeChange('account')}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition ${
+                localMode === 'account'
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
             >
-              {manualSession ? '⏳ Chrome ouvert — connectez-vous puis fermez la fenêtre...' : '🔑 Connexion manuelle Home Depot (ouvre Chrome)'}
+              <span className="flex items-center justify-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
+                Connecter le compte
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('pdf')}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition ${
+                localMode === 'pdf'
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
+                Bon de commande PDF
+              </span>
             </button>
           </div>
-        )}
-      </form>
+        </div>
+      )}
+
+      {/* Account credentials form */}
+      {(!showOrderMode || localMode === 'account') && (
+        <form onSubmit={handleSave} className="space-y-3">
+          <div>
+            <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Nom d&apos;utilisateur {label}</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="ton@email.com"
+            />
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${theme.subtext} mb-1`}>Mot de passe {label}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required={!account}
+              className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={account ? '••••••• (laisser vide pour conserver)' : '••••••••'}
+            />
+          </div>
+          {saved && <p className="text-green-600 text-sm">Sauvegardé avec succès</p>}
+          {testError && testResult === false && <p className="text-red-600 text-sm">{testError}</p>}
+          {manualSessionResult === true && <p className="text-green-600 text-sm">Session enregistrée — connexion automatique activée</p>}
+          {manualSessionError && manualSessionResult === false && <p className="text-red-600 text-sm">{manualSessionError}</p>}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={testing || !account}
+              className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
+            >
+              {testing ? 'Test...' : testResult === true ? 'Connecté' : testResult === false ? 'Échec' : 'Tester la connexion'}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className={`flex-1 ${buttonClass} text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition`}
+            >
+              {saving ? t('saving') : 'Sauvegarder'}
+            </button>
+          </div>
+          {showManualSession && account && (
+            <div className="pt-2 border-t border-gray-200 mt-2">
+              <p className="text-xs text-gray-500 mb-2">
+                Home Depot bloque les connexions automatiques. Une fenêtre Chrome normale s&apos;ouvre — connectez-vous, puis <strong>fermez la fenêtre Chrome</strong> quand vous avez terminé.
+              </p>
+              <button
+                type="button"
+                onClick={handleManualSession}
+                disabled={manualSession}
+                className="w-full border border-orange-300 text-orange-700 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-orange-50 disabled:opacity-50 transition"
+              >
+                {manualSession ? 'Chrome ouvert — connectez-vous puis fermez la fenêtre...' : 'Connexion manuelle Home Depot (ouvre Chrome)'}
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* PDF rep email form */}
+      {showOrderMode && localMode === 'pdf' && (
+        <div>
+          <p className="text-xs text-gray-500 mb-3">
+            Sparky enverra un bon de commande PDF au représentant {label} par email.
+          </p>
+          <form onSubmit={handleSaveRepEmailLocal} className="flex gap-2">
+            <input
+              type="email"
+              value={localRepEmail}
+              onChange={e => { setLocalRepEmail(e.target.value); setRepEmailSaved(false); }}
+              placeholder={`representant@${supplierKey}.ca`}
+              required
+              className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={savingRepEmail}
+              className={`${buttonClass} text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition whitespace-nowrap`}
+            >
+              {savingRepEmail ? '...' : repEmailSaved ? 'Sauvegardé' : 'Sauvegarder'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -344,6 +440,8 @@ export default function SettingsPage() {
 
   const [supplierVisibility, setSupplierVisibility] = useState<SupplierVisibility[]>([]);
   const [togglingSupplier, setTogglingSupplier] = useState<string | null>(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [supplierOrderModes, setSupplierOrderModes] = useState<Record<string, { orderMode: 'account' | 'pdf'; repEmail: string }>>({});
 
   const [billingLoading, setBillingLoading] = useState(false);
 
@@ -401,6 +499,11 @@ export default function SettingsPage() {
       if (a) { setAccount(a); setUsername(a.username); }
     });
     fetch('/api/supplier/visibility').then(r => r.json()).then(setSupplierVisibility);
+    fetch('/api/supplier/order-mode').then(r => r.json()).then((rows: { supplier: string; order_mode: string; rep_email: string | null }[]) => {
+      const map: Record<string, { orderMode: 'account' | 'pdf'; repEmail: string }> = {};
+      for (const r of rows) map[r.supplier] = { orderMode: r.order_mode as 'account' | 'pdf', repEmail: r.rep_email || '' };
+      setSupplierOrderModes(map);
+    });
     fetch('/api/supplier/preference').then(r => r.json()).then((data: { preference: 'cheapest' | 'fastest'; lumenRepEmail?: string; largeOrderThreshold?: number; officeAddress?: string; defaultDelivery?: 'office' | 'jobsite'; googleReviewUrl?: string; companyLogoUrl?: string; marketingEnabled?: boolean }) => {
       if (data?.preference) setPreference(data.preference);
       if (data?.lumenRepEmail !== undefined) setLumenRepEmail(data.lumenRepEmail);
@@ -442,6 +545,15 @@ export default function SettingsPage() {
     setTestResult(data.success);
     setTestError(data.error || null);
     setTesting(false);
+  }
+
+  async function handleOrderModeChange(supplier: string, mode: 'account' | 'pdf', repEmail: string) {
+    setSupplierOrderModes(prev => ({ ...prev, [supplier]: { orderMode: mode, repEmail } }));
+    await fetch('/api/supplier/order-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ supplier, orderMode: mode, repEmail }),
+    });
   }
 
   async function handleToggleVisibility(supplier: string, visible: boolean) {
@@ -725,242 +837,64 @@ export default function SettingsPage() {
             {savingPreference && <p className="text-xs text-gray-400 mt-2 text-center">{t('saving')}</p>}
           </div>
 
+          {/* ─── Recherche fournisseurs ─── */}
+          <div className="relative mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+            <input
+              type="text"
+              value={supplierSearch}
+              onChange={e => setSupplierSearch(e.target.value)}
+              placeholder="Rechercher un fournisseur..."
+              className="w-full border border-gray-200 bg-gray-50 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition"
+            />
+          </div>
+
           {/* ─── Supplier credential forms grid ─── */}
-          <div className="md:grid md:grid-cols-2 md:gap-4">
+          {(() => {
+            const PDF_SUPPLIERS = new Set(['lumen', 'guillevin', 'westburne', 'nedco', 'futech', 'deschenes']);
+            const allSuppliers: { key: string; label: string; theme: SectionTheme; labelColor: string; showManualSession?: boolean; showOrderMode?: boolean }[] = [
+              { key: 'lumen', label: 'Lumen', theme: themes.red, labelColor: 'text-red-400', showOrderMode: true },
+              { key: 'canac', label: 'Canac', theme: themes.blue, labelColor: 'text-blue-400' },
+              { key: 'homedepot', label: 'Home Depot', theme: themes.orange, labelColor: 'text-orange-400', showManualSession: true },
+              { key: 'guillevin', label: 'Guillevin', theme: themes.gray, labelColor: 'text-gray-400', showOrderMode: true },
+              { key: 'bmr', label: 'BMR', theme: themes.green, labelColor: 'text-lime-500' },
+              { key: 'jsv', label: 'JSV', theme: themes.yellow, labelColor: 'text-yellow-500' },
+              { key: 'westburne', label: 'Westburne', theme: themes.red, labelColor: 'text-red-700', showOrderMode: true },
+              { key: 'nedco', label: 'Nedco', theme: themes.pink, labelColor: 'text-pink-500', showOrderMode: true },
+              { key: 'futech', label: 'Futech', theme: themes.indigo, labelColor: 'text-indigo-500', showOrderMode: true },
+              { key: 'deschenes', label: 'Deschênes', theme: themes.teal, labelColor: 'text-teal-500', showOrderMode: true },
+              { key: 'rona', label: 'Rona', theme: themes.purple, labelColor: 'text-purple-500' },
+            ];
+            const q = supplierSearch.toLowerCase().trim();
+            const filtered = q ? allSuppliers.filter(s => s.label.toLowerCase().includes(q) || s.key.toLowerCase().includes(q)) : allSuppliers;
 
-          {/* ─── LUMEN ─── */}
-          <div>
-          <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2 px-1">Lumen</p>
+            if (filtered.length === 0) {
+              return <p className="text-sm text-gray-400 text-center py-6">Aucun fournisseur trouvé pour &laquo; {supplierSearch} &raquo;</p>;
+            }
 
-          {/* Lumen credentials */}
-          <div className={`${lumenTheme.bg} rounded-2xl border ${lumenTheme.border} shadow-sm p-5 mb-4`}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-red-700"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
-              </span>
-              <div className="flex-1">
-                <h2 className={`font-semibold ${lumenTheme.heading}`}>Lumen — Compte</h2>
-                <p className={`text-xs font-medium ${account ? 'text-green-600' : 'text-gray-400'}`}>
-                  {account ? '● Compte configuré' : '● Non connecté'}
-                </p>
+            return (
+              <div className="md:grid md:grid-cols-2 md:gap-4">
+                {filtered.map(s => (
+                  <div key={s.key}>
+                    <p className={`text-xs font-bold ${s.labelColor} uppercase tracking-widest mb-2 px-1`}>{s.label}</p>
+                    <SupplierSection
+                      supplierKey={s.key}
+                      label={s.label}
+                      showManualSession={s.showManualSession}
+                      showOrderMode={s.showOrderMode}
+                      theme={s.theme}
+                      visible={supplierVisibility.find(v => v.supplier === s.key)?.visible ?? false}
+                      toggling={togglingSupplier === s.key}
+                      onToggleVisible={v => handleToggleVisibility(s.key, v)}
+                      orderMode={supplierOrderModes[s.key]?.orderMode}
+                      repEmail={supplierOrderModes[s.key]?.repEmail}
+                      onOrderModeChange={(mode, email) => handleOrderModeChange(s.key, mode, email)}
+                    />
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-gray-400">Catalogue</span>
-                <button
-                  type="button"
-                  onClick={() => handleToggleVisibility('lumen', !(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false))}
-                  disabled={togglingSupplier === 'lumen'}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false) ? 'bg-blue-600' : 'bg-gray-200'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${(supplierVisibility.find(v => v.supplier === 'lumen')?.visible ?? false) ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-            </div>
-            <form onSubmit={handleSave} className="space-y-3">
-              <div>
-                <label className={`block text-sm font-medium ${lumenTheme.subtext} mb-1`}>Nom d&apos;utilisateur Lumen</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                  placeholder="ton@email.com"
-                />
-              </div>
-              <div>
-                <label className={`block text-sm font-medium ${lumenTheme.subtext} mb-1`}>Mot de passe Lumen</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required={!account}
-                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                  placeholder={account ? '••••••• (laisser vide pour conserver)' : '••••••••'}
-                />
-              </div>
-              {saved && <p className="text-green-600 text-sm">✅ Sauvegardé avec succès</p>}
-              {testError && testResult === false && <p className="text-red-600 text-sm">❌ {testError}</p>}
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTest}
-                  disabled={testing || !account}
-                  className="flex-1 border border-gray-300 bg-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 transition"
-                >
-                  {testing ? '⏳ Test...' : testResult === true ? '✅ Connecté' : testResult === false ? '❌ Échec' : 'Tester la connexion'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition"
-                >
-                  {saving ? t('saving') : 'Sauvegarder'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Lumen rep email */}
-          <div className={`${lumenTheme.bg} rounded-2xl border ${lumenTheme.border} shadow-sm p-5 mb-4`}>
-            <h2 className={`font-semibold ${lumenTheme.heading} mb-1 flex items-center gap-2`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
-              Représentant Lumen
-            </h2>
-            <p className="text-xs text-gray-500 mb-3">
-              Email du représentant Lumen pour l&apos;envoi des bons de commande PDF.
-            </p>
-            <form onSubmit={handleSaveRepEmail} className="flex gap-2">
-              <input
-                type="email"
-                value={lumenRepEmail}
-                onChange={e => { setLumenRepEmail(e.target.value); setRepEmailSaved(false); }}
-                placeholder="representant@lumen.ca"
-                className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-              />
-              <button
-                type="submit"
-                disabled={savingRepEmail}
-                className="bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition whitespace-nowrap"
-              >
-                {savingRepEmail ? '...' : repEmailSaved ? '✅' : 'Sauvegarder'}
-              </button>
-            </form>
-          </div>
-          </div>
-
-          {/* ─── CANAC ─── */}
-          <div>
-          <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2 px-1">Canac</p>
-          <SupplierSection
-            supplierKey="canac"
-            label="Canac"
-            theme={themes.blue}
-            visible={supplierVisibility.find(v => v.supplier === 'canac')?.visible ?? false}
-            toggling={togglingSupplier === 'canac'}
-            onToggleVisible={v => handleToggleVisibility('canac', v)}
-          />
-          </div>
-
-          {/* ─── HOME DEPOT ─── */}
-          <div>
-          <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-2 px-1">Home Depot</p>
-          <SupplierSection
-            supplierKey="homedepot"
-            label="Home Depot"
-            showManualSession
-            theme={themes.orange}
-            visible={supplierVisibility.find(v => v.supplier === 'homedepot')?.visible ?? false}
-            toggling={togglingSupplier === 'homedepot'}
-            onToggleVisible={v => handleToggleVisibility('homedepot', v)}
-          />
-          </div>
-
-          {/* ─── GUILLEVIN ─── */}
-          <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Guillevin</p>
-          <SupplierSection
-            supplierKey="guillevin"
-            label="Guillevin"
-            theme={themes.gray}
-            visible={supplierVisibility.find(v => v.supplier === 'guillevin')?.visible ?? false}
-            toggling={togglingSupplier === 'guillevin'}
-            onToggleVisible={v => handleToggleVisibility('guillevin', v)}
-          />
-          </div>
-
-          {/* ─── BMR ─── */}
-          <div>
-          <p className="text-xs font-bold text-lime-500 uppercase tracking-widest mb-2 px-1">BMR</p>
-          <SupplierSection
-            supplierKey="bmr"
-            label="BMR"
-            theme={themes.green}
-            visible={supplierVisibility.find(v => v.supplier === 'bmr')?.visible ?? false}
-            toggling={togglingSupplier === 'bmr'}
-            onToggleVisible={v => handleToggleVisibility('bmr', v)}
-          />
-          </div>
-
-          {/* ─── JSV ─── */}
-          <div>
-          <p className="text-xs font-bold text-yellow-500 uppercase tracking-widest mb-2 px-1">JSV</p>
-          <SupplierSection
-            supplierKey="jsv"
-            label="JSV"
-            theme={themes.yellow}
-            visible={supplierVisibility.find(v => v.supplier === 'jsv')?.visible ?? false}
-            toggling={togglingSupplier === 'jsv'}
-            onToggleVisible={v => handleToggleVisibility('jsv', v)}
-          />
-          </div>
-
-          {/* ─── WESTBURNE ─── */}
-          <div>
-          <p className="text-xs font-bold text-red-700 uppercase tracking-widest mb-2 px-1">Westburne</p>
-          <SupplierSection
-            supplierKey="westburne"
-            label="Westburne"
-            theme={themes.red}
-            visible={supplierVisibility.find(v => v.supplier === 'westburne')?.visible ?? false}
-            toggling={togglingSupplier === 'westburne'}
-            onToggleVisible={v => handleToggleVisibility('westburne', v)}
-          />
-          </div>
-
-          {/* ─── NEDCO ─── */}
-          <div>
-          <p className="text-xs font-bold text-pink-500 uppercase tracking-widest mb-2 px-1">Nedco</p>
-          <SupplierSection
-            supplierKey="nedco"
-            label="Nedco"
-            theme={themes.pink}
-            visible={supplierVisibility.find(v => v.supplier === 'nedco')?.visible ?? false}
-            toggling={togglingSupplier === 'nedco'}
-            onToggleVisible={v => handleToggleVisibility('nedco', v)}
-          />
-          </div>
-
-          {/* ─── FUTECH ─── */}
-          <div>
-          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 px-1">Futech</p>
-          <SupplierSection
-            supplierKey="futech"
-            label="Futech"
-            theme={themes.indigo}
-            visible={supplierVisibility.find(v => v.supplier === 'futech')?.visible ?? false}
-            toggling={togglingSupplier === 'futech'}
-            onToggleVisible={v => handleToggleVisibility('futech', v)}
-          />
-          </div>
-
-          {/* ─── DESCHÊNES ─── */}
-          <div>
-          <p className="text-xs font-bold text-teal-500 uppercase tracking-widest mb-2 px-1">Deschênes</p>
-          <SupplierSection
-            supplierKey="deschenes"
-            label="Deschênes"
-            theme={themes.teal}
-            visible={supplierVisibility.find(v => v.supplier === 'deschenes')?.visible ?? false}
-            toggling={togglingSupplier === 'deschenes'}
-            onToggleVisible={v => handleToggleVisibility('deschenes', v)}
-          />
-          </div>
-
-          {/* ─── RONA ─── */}
-          <div>
-          <p className="text-xs font-bold text-purple-500 uppercase tracking-widest mb-2 px-1">Rona</p>
-          <SupplierSection
-            supplierKey="rona"
-            label="Rona"
-            theme={themes.purple}
-            visible={supplierVisibility.find(v => v.supplier === 'rona')?.visible ?? false}
-            toggling={togglingSupplier === 'rona'}
-            onToggleVisible={v => handleToggleVisibility('rona', v)}
-          />
-          </div>
-
-          </div>
+            );
+          })()}
           {/* end supplier credential forms grid */}
         </AccordionSection>
 
